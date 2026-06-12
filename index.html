@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<meta name="theme-color" content="#ff5a8a">
+<title>Wisthailon & Amanda 💕</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@500;700&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --rosa:#ff5a8a; --rosa-claro:#ffd9e3; --rosa-bg:#fff5f8;
+  --vinho:#b5274e; --dourado:#e6a23c; --texto:#5b3a45;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  font-family:'Poppins',sans-serif;color:var(--texto);
+  background:linear-gradient(180deg,#fff5f8 0%,#ffe9f0 50%,#ffdde8 100%);
+  overflow-x:hidden;
+}
+.cursive{font-family:'Dancing Script',cursive}
+h1,h2{font-family:'Dancing Script',cursive;color:var(--vinho);line-height:1.1}
+
+/* ===== HEARTS BACKGROUND ===== */
+#hearts{position:fixed;inset:0;pointer-events:none;z-index:1;overflow:hidden}
+.float-heart{position:absolute;bottom:-40px;font-size:20px;animation:rise linear forwards;opacity:.8}
+@keyframes rise{to{transform:translateY(-110vh) rotate(360deg);opacity:0}}
+
+/* ===== INTRO / ENVELOPE ===== */
+#intro{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center;padding:24px;
+  background:radial-gradient(circle at 50% 35%,#ffe0ea,#ffc2d6);transition:opacity .8s,visibility .8s}
+#intro.hide{opacity:0;visibility:hidden}
+#intro p{font-size:1.05rem;margin-bottom:6px;color:var(--vinho)}
+#intro h1{font-size:2.6rem;margin:6px 0 26px}
+.envelope{width:200px;height:140px;position:relative;cursor:pointer;filter:drop-shadow(0 12px 20px rgba(181,39,78,.35));
+  animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+.envelope .body{position:absolute;inset:0;background:#ff7ba0;border-radius:10px}
+.envelope .flap{position:absolute;top:0;left:0;width:0;height:0;
+  border-left:100px solid transparent;border-right:100px solid transparent;
+  border-top:80px solid #ff96b4;border-radius:6px;transform-origin:top;z-index:3}
+.envelope .heart-seal{position:absolute;top:46px;left:50%;transform:translateX(-50%);font-size:34px;z-index:4}
+.tap-hint{margin-top:22px;font-size:.95rem;color:var(--vinho);opacity:.85;animation:blink 1.6s infinite}
+@keyframes blink{50%{opacity:.35}}
+
+/* ===== SECTIONS ===== */
+section{position:relative;z-index:2;padding:70px 20px;max-width:900px;margin:0 auto}
+.reveal{opacity:0;transform:translateY(40px);transition:all .9s ease}
+.reveal.in{opacity:1;transform:none}
+.sub{text-align:center;font-size:.8rem;letter-spacing:3px;text-transform:uppercase;color:var(--rosa);margin-bottom:6px}
+
+/* HERO */
+#hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+#hero h1{font-size:3.4rem;margin:10px 0}
+.big-heart{font-size:4rem;animation:beat 1.3s ease-in-out infinite}
+@keyframes beat{0%,100%{transform:scale(1)}25%{transform:scale(1.18)}40%{transform:scale(1)}}
+#hero .tag{font-size:1.05rem;max-width:520px;margin-top:14px;color:var(--texto)}
+.scroll-down{margin-top:40px;font-size:1.8rem;color:var(--rosa);animation:down 1.6s infinite}
+@keyframes down{0%,100%{transform:translateY(0)}50%{transform:translateY(10px)}}
+
+/* COUNTER */
+#counter{text-align:center}
+.counter-grid{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:26px}
+.cbox{background:#fff;border-radius:18px;padding:18px 14px;min-width:80px;
+  box-shadow:0 10px 24px rgba(181,39,78,.12)}
+.cbox .num{font-size:2rem;font-weight:600;color:var(--vinho)}
+.cbox .lbl{font-size:.72rem;letter-spacing:1px;text-transform:uppercase;color:var(--rosa)}
+
+/* TIMELINE */
+.timeline{position:relative;margin-top:36px;padding-left:34px}
+.timeline::before{content:"";position:absolute;left:10px;top:6px;bottom:6px;width:3px;
+  background:linear-gradient(var(--rosa),var(--rosa-claro))}
+.tl-item{position:relative;margin-bottom:40px}
+.tl-item::before{content:"💗";position:absolute;left:-34px;top:0;font-size:1.1rem;
+  background:var(--rosa-bg);border-radius:50%}
+.tl-date{display:inline-block;background:var(--rosa);color:#fff;font-size:.78rem;
+  padding:4px 12px;border-radius:20px;margin-bottom:8px;font-weight:500}
+.tl-item h2{font-size:1.7rem;margin-bottom:6px}
+.tl-item p{font-size:.98rem;line-height:1.65}
+.tl-item img{width:100%;max-width:320px;border-radius:16px;margin-top:12px;
+  box-shadow:0 10px 24px rgba(181,39,78,.18)}
+
+/* GALLERY */
+.gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:30px}
+.gallery img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:14px;cursor:pointer;
+  transition:transform .3s;box-shadow:0 6px 16px rgba(181,39,78,.12)}
+.gallery img:active{transform:scale(.96)}
+@media(max-width:520px){.gallery{grid-template-columns:repeat(2,1fr)}}
+
+/* VIDEO */
+#video video{width:100%;border-radius:20px;margin-top:26px;box-shadow:0 14px 30px rgba(181,39,78,.2)}
+
+/* MOTIVOS */
+.motivos{display:flex;flex-direction:column;gap:14px;margin-top:30px}
+.motivo{background:#fff;border-radius:16px;padding:16px 20px;cursor:pointer;
+  box-shadow:0 8px 18px rgba(181,39,78,.1);transition:transform .25s}
+.motivo:active{transform:scale(.98)}
+.motivo .q{font-weight:600;color:var(--vinho)}
+.motivo .a{max-height:0;overflow:hidden;transition:max-height .5s ease,margin .4s;font-size:.95rem;line-height:1.6}
+.motivo.open .a{max-height:200px;margin-top:10px}
+
+/* LETTER */
+#carta{text-align:center}
+.carta-box{background:#fff;border-radius:22px;padding:30px 24px;margin-top:24px;
+  box-shadow:0 16px 36px rgba(181,39,78,.16);font-size:1.05rem;line-height:1.9}
+.carta-box .assinatura{font-family:'Dancing Script',cursive;font-size:1.8rem;color:var(--vinho);margin-top:18px}
+
+/* FINAL */
+#final{text-align:center;min-height:80vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#final h1{font-size:2.8rem}
+.btn-coracao{margin-top:24px;background:var(--rosa);color:#fff;border:none;font-size:1.05rem;
+  padding:14px 30px;border-radius:30px;cursor:pointer;font-family:'Poppins';font-weight:500;
+  box-shadow:0 10px 24px rgba(255,90,138,.4);transition:transform .2s}
+.btn-coracao:active{transform:scale(.95)}
+footer{text-align:center;padding:24px;font-size:.8rem;color:var(--rosa);z-index:2;position:relative}
+
+/* LIGHTBOX */
+#lightbox{position:fixed;inset:0;background:rgba(60,10,25,.92);z-index:60;display:none;
+  align-items:center;justify-content:center;padding:20px}
+#lightbox.show{display:flex}
+#lightbox img{max-width:100%;max-height:88vh;border-radius:14px}
+#lightbox .close{position:absolute;top:18px;right:24px;color:#fff;font-size:2rem;cursor:pointer}
+
+/* MUSIC */
+#music-btn{position:fixed;bottom:18px;right:18px;z-index:55;background:#fff;border:none;
+  width:50px;height:50px;border-radius:50%;font-size:1.3rem;cursor:pointer;
+  box-shadow:0 8px 20px rgba(181,39,78,.3)}
+</style>
+</head>
+<body>
+
+<div id="hearts"></div>
+
+<!-- INTRO -->
+<div id="intro">
+  <p>Tem uma surpresa esperando por você...</p>
+  <h1>Minha Baybinha 💌</h1>
+  <div class="envelope" id="envelope">
+    <div class="body"></div>
+    <div class="flap" id="flap"></div>
+    <div class="heart-seal">❤️</div>
+  </div>
+  <div class="tap-hint">toque no envelope para abrir 👆</div>
+</div>
+
+<!-- HERO -->
+<section id="hero">
+  <div class="big-heart">💖</div>
+  <p class="sub">Feliz Dia dos Namorados</p>
+  <h1>Wisthailon &amp; Amanda</h1>
+  <p class="tag">Patinho e Baybinha — dois corações que se encontraram e nunca mais quiseram se soltar.</p>
+  <div class="scroll-down">⌄</div>
+</section>
+
+<!-- COUNTER -->
+<section id="counter" class="reveal">
+  <p class="sub">Nosso tempo juntos</p>
+  <h2>Cada segundo ao seu lado vale a vida inteira</h2>
+  <div class="counter-grid" id="counterGrid"></div>
+  <p style="margin-top:18px;font-size:.95rem">desde o dia em que você disse <strong>sim</strong> 💍 — 06 de dezembro</p>
+</section>
+
+<!-- TIMELINE -->
+<section class="reveal">
+  <p class="sub">Nossa história</p>
+  <h2 style="text-align:center;margin-bottom:10px">Como o destino nos uniu</h2>
+  <div class="timeline">
+    <div class="tl-item">
+      <span class="tl-date">21 de setembro</span>
+      <h2>Onde tudo começou</h2>
+      <p>Foi num retiro que os nossos olhos se cruzaram pela primeira vez. Eu nem imaginava
+      que ali, naquele lugar tão especial, Deus estava colocando no meu caminho a pessoa que
+      mudaria a minha vida pra sempre. Você chegou de mansinho e iluminou tudo. 🙏✨</p>
+    </div>
+    <div class="tl-item">
+      <span class="tl-date">28 de setembro</span>
+      <h2>Nosso primeiro encontro</h2>
+      <p>Sete dias depois, a gente saiu pela primeira vez. Meu coração batia tão forte que eu
+      tinha certeza que você ouvia! Foi aí que entendi: eu queria todos os próximos encontros
+      da minha vida ao seu lado. 🥰</p>
+      <img src="assets/fotos/foto1.jpg" alt="nós dois" loading="lazy">
+    </div>
+    <div class="tl-item">
+      <span class="tl-date">06 de dezembro</span>
+      <h2>O grande pedido</h2>
+      <p>O dia em que eu criei coragem, olhei nos seus olhos e te pedi em namoro. Quando você
+      disse <strong>sim</strong>, eu me tornei o homem mais feliz do mundo. Desde então, é você
+      e eu contra o mundo, baybinha. 💗</p>
+      <img src="assets/fotos/foto6.jpg" alt="pedido" loading="lazy">
+    </div>
+  </div>
+</section>
+
+<!-- GALLERY -->
+<section class="reveal">
+  <p class="sub">Nossos momentos</p>
+  <h2 style="text-align:center">Pedacinhos da nossa felicidade</h2>
+  <div class="gallery" id="gallery"></div>
+</section>
+
+<!-- VIDEO -->
+<section id="video" class="reveal">
+  <p class="sub">Pra ver e sorrir</p>
+  <h2 style="text-align:center">Um momento nosso 🎥</h2>
+  <video controls playsinline preload="metadata" poster="assets/fotos/foto5.jpg">
+    <source src="assets/video.mp4" type="video/mp4">
+    Seu navegador não suporta vídeo.
+  </video>
+</section>
+
+<!-- MOTIVOS -->
+<section class="reveal">
+  <p class="sub">Toque para revelar</p>
+  <h2 style="text-align:center">Motivos que eu te amo</h2>
+  <div class="motivos" id="motivos">
+    <div class="motivo"><div class="q">💕 O seu sorriso</div><div class="a">Aquele sorriso que ilumina qualquer dia ruim e me faz esquecer todos os problemas. É a minha parte favorita do mundo.</div></div>
+    <div class="motivo"><div class="q">🤗 O seu abraço</div><div class="a">No seu abraço eu encontro o meu lugar favorito do mundo — meu porto seguro, minha casa.</div></div>
+    <div class="motivo"><div class="q">😍 O seu jeitinho</div><div class="a">Cada manha, cada carinho, cada "patinho" que você me chama. Eu amo cada detalhe de quem você é.</div></div>
+    <div class="motivo"><div class="q">🌅 O nosso futuro</div><div class="a">Porque quando eu penso no amanhã, em todos os planos e sonhos, é o seu rosto que eu vejo do meu lado.</div></div>
+  </div>
+</section>
+
+<!-- CARTA -->
+<section id="carta" class="reveal">
+  <p class="sub">Do meu coração pro seu</p>
+  <h2>Minha cartinha pra você</h2>
+  <div class="carta-box">
+    Minha baybinha,<br><br>
+    Obrigado por ter dito sim, por escolher caminhar ao meu lado todos os dias e por
+    transformar a minha vida em algo muito mais bonito. Com você eu aprendi que amar de
+    verdade é simples assim: é querer estar perto, é cuidar, é sonhar junto.<br><br>
+    Que a gente comemore muitos e muitos Dias dos Namorados juntos, de mãos dadas, do nosso
+    jeitinho. Eu te amo mais do que as palavras conseguem dizer.
+    <div class="assinatura">Seu patinho, pra sempre 💗</div>
+  </div>
+</section>
+
+<!-- FINAL -->
+<section id="final" class="reveal">
+  <div class="big-heart">❤️</div>
+  <h1>Eu te amo, Amanda</h1>
+  <p class="tag">Feliz Dia dos Namorados, minha baybinha.</p>
+  <button class="btn-coracao" id="amorBtn">Aperta aqui 💞</button>
+</section>
+
+<footer>Feito com muito amor 💕 por Wisthailon, para Amanda</footer>
+
+<button id="music-btn" title="Música">🔇</button>
+
+<!-- LIGHTBOX -->
+<div id="lightbox"><span class="close">&times;</span><img id="lbimg" src="" alt=""></div>
+
+<script>
+/* ---- Fotos da galeria ---- */
+const fotos=[1,2,3,4,5,6,7,8,9,10,11,12,13,14];
+const gal=document.getElementById('gallery');
+fotos.forEach(n=>{
+  const img=document.createElement('img');
+  img.src='assets/fotos/foto'+n+'.jpg';img.loading='lazy';img.alt='foto '+n;
+  img.onclick=()=>{document.getElementById('lbimg').src=img.src;document.getElementById('lightbox').classList.add('show')};
+  gal.appendChild(img);
+});
+document.getElementById('lightbox').onclick=e=>{if(e.target.id!=='lbimg')document.getElementById('lightbox').classList.remove('show')};
+
+/* ---- Intro / envelope ---- */
+const intro=document.getElementById('intro');
+document.getElementById('envelope').onclick=()=>{
+  document.getElementById('flap').style.transform='rotateX(180deg)';
+  setTimeout(()=>{intro.classList.add('hide');startHearts();},700);
+};
+
+/* ---- Contador de tempo ---- */
+const inicio=new Date('2025-12-06T00:00:00');
+function tick(){
+  const diff=Date.now()-inicio.getTime();
+  const s=Math.floor(diff/1000);
+  const dias=Math.floor(s/86400);
+  const h=Math.floor(s%86400/3600);
+  const m=Math.floor(s%3600/60);
+  const seg=s%60;
+  const grid=document.getElementById('counterGrid');
+  const data=[[dias,'Dias'],[h,'Horas'],[m,'Minutos'],[seg,'Segundos']];
+  grid.innerHTML=data.map(d=>`<div class="cbox"><div class="num">${d[0]}</div><div class="lbl">${d[1]}</div></div>`).join('');
+}
+setInterval(tick,1000);tick();
+
+/* ---- Motivos ---- */
+document.querySelectorAll('.motivo').forEach(el=>el.onclick=()=>el.classList.toggle('open'));
+
+/* ---- Reveal on scroll ---- */
+const obs=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('in')}),{threshold:.15});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+
+/* ---- Corações flutuantes ---- */
+const emojis=['💖','💗','💕','❤️','💞','🌸','✨'];
+let heartsOn=false;
+function spawnHeart(x){
+  const h=document.createElement('div');
+  h.className='float-heart';h.textContent=emojis[Math.floor(Math.random()*emojis.length)];
+  h.style.left=(x??Math.random()*100+'vw');
+  if(typeof x==='number')h.style.left=x+'px';
+  h.style.fontSize=(14+Math.random()*22)+'px';
+  h.style.animationDuration=(5+Math.random()*5)+'s';
+  document.getElementById('hearts').appendChild(h);
+  setTimeout(()=>h.remove(),10000);
+}
+function startHearts(){if(heartsOn)return;heartsOn=true;setInterval(()=>spawnHeart(),700);}
+/* coração ao tocar a tela */
+document.addEventListener('click',e=>{for(let i=0;i<4;i++)setTimeout(()=>spawnHeart(e.clientX),i*80)});
+
+/* ---- Botão de amor (explosão) ---- */
+document.getElementById('amorBtn').onclick=()=>{
+  for(let i=0;i<40;i++)setTimeout(()=>spawnHeart(),i*40);
+};
+
+/* ---- Música (opcional, gerada) ---- */
+let audioCtx,playing=false;
+document.getElementById('music-btn').onclick=function(){
+  if(!audioCtx)audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  playing=!playing;this.textContent=playing?'🔊':'🔇';
+  if(playing)playMelody();
+};
+function playMelody(){
+  if(!playing)return;
+  const notes=[523,587,659,587,523,659,784,659];
+  let t=audioCtx.currentTime;
+  notes.forEach((f,i)=>{
+    const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+    o.type='sine';o.frequency.value=f;o.connect(g);g.connect(audioCtx.destination);
+    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.12,t+.05);
+    g.gain.linearRampToValueAtTime(0,t+.45);
+    o.start(t);o.stop(t+.5);t+=.5;
+  });
+  setTimeout(playMelody,notes.length*500+200);
+}
+</script>
+</body>
+</html>
