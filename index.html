@@ -248,6 +248,7 @@ footer{text-align:center;padding:24px;font-size:.8rem;color:var(--rosa);z-index:
 
 <footer>Feito com muito amor 💕 por Wisthailon, para Amanda</footer>
 
+<audio id="bgm" loop preload="auto" src="assets/musica.mp3"></audio>
 <button id="music-btn" title="Música">🔇</button>
 
 <!-- LIGHTBOX -->
@@ -255,7 +256,7 @@ footer{text-align:center;padding:24px;font-size:.8rem;color:var(--rosa);z-index:
 
 <script>
 /* ---- Fotos da galeria ---- */
-const fotos=[1,2,3,4,5,6,7,8,9,10,11,12,13,14];
+const fotos=[1,2,3,4,5,6];
 const gal=document.getElementById('gallery');
 fotos.forEach(n=>{
   const img=document.createElement('img');
@@ -269,7 +270,7 @@ document.getElementById('lightbox').onclick=e=>{if(e.target.id!=='lbimg')documen
 const intro=document.getElementById('intro');
 document.getElementById('envelope').onclick=()=>{
   document.getElementById('flap').style.transform='rotateX(180deg)';
-  setTimeout(()=>{intro.classList.add('hide');startHearts();},700);
+  setTimeout(()=>{intro.classList.add('hide');startHearts();playMusic();},700);
 };
 
 /* ---- Contador de tempo ---- */
@@ -316,26 +317,15 @@ document.getElementById('amorBtn').onclick=()=>{
   for(let i=0;i<40;i++)setTimeout(()=>spawnHeart(),i*40);
 };
 
-/* ---- Música (opcional, gerada) ---- */
-let audioCtx,playing=false;
-document.getElementById('music-btn').onclick=function(){
-  if(!audioCtx)audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-  playing=!playing;this.textContent=playing?'🔊':'🔇';
-  if(playing)playMelody();
+/* ---- Música de violino (Salut d'Amour - Elgar, domínio público) ---- */
+const bgm=document.getElementById('bgm');
+const mbtn=document.getElementById('music-btn');
+bgm.volume=0.55;
+function playMusic(){bgm.play().then(()=>{mbtn.textContent='🎻'}).catch(()=>{mbtn.textContent='🔇'});}
+mbtn.onclick=function(){
+  if(bgm.paused){bgm.play();this.textContent='🎻';}
+  else{bgm.pause();this.textContent='🔇';}
 };
-function playMelody(){
-  if(!playing)return;
-  const notes=[523,587,659,587,523,659,784,659];
-  let t=audioCtx.currentTime;
-  notes.forEach((f,i)=>{
-    const o=audioCtx.createOscillator(),g=audioCtx.createGain();
-    o.type='sine';o.frequency.value=f;o.connect(g);g.connect(audioCtx.destination);
-    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.12,t+.05);
-    g.gain.linearRampToValueAtTime(0,t+.45);
-    o.start(t);o.stop(t+.5);t+=.5;
-  });
-  setTimeout(playMelody,notes.length*500+200);
-}
 </script>
 </body>
 </html>
