@@ -1,0 +1,205 @@
+// Estado global: sessao, presenca do outro, avisos e o canal de tempo real.
+//
+// O WebSocket vive aqui, num lugar so, e reconecta sozinho com espera crescente.
+// Quem quiser reagir a um evento chama `subscribe(evento, callback)` — assim cada
+// tela escuta o que lhe interessa sem abrir conexao propria.
+
+import { create } from 'zustand'
+import { api, getToken, setToken, wsUrl } from './api'
+
+let socket = null
+let retry = 0
+let reconnectTimer = null
+let pingTimer = null
+const listeners = new Map()
+
+export function subscribe(event, handler) {
+  if (!listeners.has(event)) listeners.set(event, new Set())
+  listeners.get(event).add(handler)
+  return () => listeners.get(event)?.delete(handler)
+}
+
+function emit(event, data) {
+  listeners.get(event)?.forEach((fn) => {
+    try {
+      fn(data)
+    } catch (err) {
+      console.error('listener quebrou', event, err)
+    }
+  })
+  listeners.get('*')?.forEach((fn) => fn({ event, data }))
+}
+
+export const useStore = create((set, get) => ({
+  ready: false,
+  user: null,
+  partner: null,
+  balance: 0,
+  couple: { start_date: '', name: 'Nosso app' },
+  cyclePrivacy: { share: 'resumo' },
+  pushEnabled: false,
+  vapidKey: '',
+  online: [],
+  unread: 0,
+  connection: 'offline',
+
+  async boot() {
+    if (!getToken()) {
+      set({ ready: true, user: null })
+      return
+    }
+    try {
+      await get().refreshMe()
+      get().connect()
+      get().refreshUnread()
+    } catch {
+      setToken('')
+      set({ user: null })
+    } finally {
+      set({ ready: true })
+    }
+  },
+
+  async refreshMe() {
+    const me = await api.get('/api/me')
+    set({
+      user: me.user,
+      partner: me.partner,
+      balance: me.balance,
+      couple: me.couple,
+      cyclePrivacy: me.cycle_privacy,
+      pushEnabled: me.push_enabled,
+      vapidKey: me.vapid_public_key,
+    })
+    return me
+  },
+
+  async refreshUnread() {
+    try {
+      const data = await api.get('/api/notifications?limit=1')
+      set({ unread: data.unread })
+    } catch {
+      /* sem rede: mantem o que tinha */
+    }
+  },
+
+  async login(slug, password) {
+    const data = await api.post('/api/auth/login', { slug, password })
+    setToken(data.token)
+    await get().refreshMe()
+    get().connect()
+    get().refreshUnread()
+    set({ ready: true })
+    return data.user
+  },
+
+  logout() {
+    setToken('')
+    get().disconnect()
+    set({ user: null, partner: null, balance: 0, online: [], unread: 0 })
+  },
+
+  setBalance(balance) {
+    set({ balance })
+  },
+
+  // ---------------------------------------------------------------- tempo real
+  connect() {
+    const token = getToken()
+    if (!token || socket) return
+    set({ connection: 'conectando' })
+    let ws
+    try {
+      ws = new WebSocket(wsUrl(token))
+    } catch {
+      get().scheduleReconnect()
+      return
+    }
+    socket = ws
+
+    ws.onopen = () => {
+      retry = 0
+      set({ connection: 'online' })
+      clearInterval(pingTimer)
+      // ping periodico: proxy costuma matar conexao parada em 60s
+      pingTimer = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) ws.send('ping')
+      }, 25000)
+    }
+
+    ws.onmessage = (raw) => {
+      let message
+      try {
+        message = JSON.parse(raw.data)
+      } catch {
+        return
+      }
+      if (message.event === 'presence') set({ online: message.data.online || [] })
+      if (message.event === 'notification') {
+        set({ unread: get().unread + 1 })
+      }
+      if (message.event === 'wallet' && message.data?.balance !== undefined) {
+        set({ balance: message.data.balance })
+      }
+      emit(message.event, message.data)
+    }
+
+    ws.onclose = () => {
+      socket = null
+      clearInterval(pingTimer)
+      set({ connection: 'offline' })
+      if (getToken()) get().scheduleReconnect()
+    }
+
+    ws.onerror = () => {
+      try {
+        ws.close()
+      } catch {
+        /* ja fechou */
+      }
+    }
+  },
+
+  scheduleReconnect() {
+    clearTimeout(reconnectTimer)
+    // espera crescente ate 15s: sem isso, celular sem sinal vira metralhadora
+    const wait = Math.min(1000 * 2 ** retry, 15000)
+    retry += 1
+    reconnectTimer = setTimeout(() => get().connect(), wait)
+  },
+
+  disconnect() {
+    clearTimeout(reconnectTimer)
+    clearInterval(pingTimer)
+    retry = 0
+    if (socket) {
+      const ws = socket
+      socket = null
+      try {
+        ws.close()
+      } catch {
+        /* ja fechou */
+      }
+    }
+    set({ connection: 'offline' })
+  },
+}))
+
+// O celular fecha a conexao quando o app vai pro segundo plano. Ao voltar, o
+// estado precisa ser re-sincronizado — senao a tela mostra dado de meia hora atras.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return
+    const store = useStore.getState()
+    if (!store.user) return
+    store.connect()
+    store.refreshMe().catch(() => {})
+    store.refreshUnread()
+    emit('resumed', null)
+  })
+}
+
+export function partnerOnline() {
+  const { partner, online } = useStore.getState()
+  return !!partner && online.includes(partner.id)
+}

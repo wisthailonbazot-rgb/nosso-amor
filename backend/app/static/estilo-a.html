@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Direção A — Livro de histórias</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#fff4e8; --paper-2:#ffe9d6; --ink:#4a3b37; --ink-soft:#8d7a70;
+  --rose:#e8879b; --rose-deep:#c9607a; --sage:#9cbf9a; --sky:#a8cde0;
+  --mustard:#f2b33d; --cream:#fffaf3; --line:#e6cdb8;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:'Nunito',system-ui,sans-serif;
+  max-width:420px;margin-inline:auto;padding:18px 16px 40px;
+}
+/* grão de papel: é o que tira o ar de "interface gerada" */
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:99;opacity:.5;
+  mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/><feColorMatrix type='saturate' values='0'/></filter><rect width='180' height='180' filter='url(%23n)' opacity='.32'/></svg>");
+}
+h1,h2,h3,.display{font-family:'Baloo 2',cursive;font-weight:800;margin:0}
+.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);font-weight:700}
+
+/* cartão de papel recortado: sombra em camadas + cantos irregulares */
+.card{
+  background:var(--cream);border:2px solid var(--ink);
+  border-radius:26px 22px 28px 20px;
+  padding:18px;margin-bottom:16px;position:relative;
+  box-shadow:0 3px 0 var(--ink), 0 10px 22px rgba(74,59,55,.16);
+}
+.card.tilt{transform:rotate(-.7deg)}
+.card.tilt2{transform:rotate(.5deg)}
+.tape{
+  position:absolute;top:-11px;left:50%;transform:translateX(-50%) rotate(-2deg);
+  width:82px;height:22px;background:rgba(242,179,61,.55);
+  border:1px solid rgba(74,59,55,.18);border-radius:2px;
+}
+.row{display:flex;align-items:center;gap:12px}
+.between{justify-content:space-between}
+
+.counter{font-family:'Baloo 2';font-size:64px;line-height:.95;color:var(--rose-deep);
+  text-shadow:2px 3px 0 var(--paper-2)}
+.heart-chip{display:inline-flex;align-items:center;gap:6px;background:var(--rose);
+  color:#fff;border:2px solid var(--ink);border-radius:999px;padding:5px 13px;
+  font-weight:700;box-shadow:0 2px 0 var(--ink)}
+
+.btn{font-family:'Baloo 2';font-weight:700;font-size:16px;border:2px solid var(--ink);
+  background:var(--mustard);color:var(--ink);border-radius:16px;padding:10px 18px;
+  box-shadow:0 3px 0 var(--ink);cursor:pointer}
+.btn.rose{background:var(--rose);color:#fff}
+
+.scene{border:2px solid var(--ink);border-radius:22px;overflow:hidden;
+  box-shadow:0 3px 0 var(--ink),0 12px 24px rgba(74,59,55,.18);background:#f6d9bd}
+.caption{font-size:13px;color:var(--ink-soft);margin:8px 2px 22px}
+
+.tabbar{position:sticky;bottom:0;display:flex;justify-content:space-around;
+  background:var(--cream);border:2px solid var(--ink);border-radius:20px;padding:8px 4px;
+  box-shadow:0 3px 0 var(--ink);margin-top:20px}
+.tabbar div{text-align:center;font-size:10px;font-weight:700;color:var(--ink-soft)}
+.tabbar div.on{color:var(--rose-deep)}
+.tabbar svg{display:block;margin:0 auto 2px}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes sway{0%,100%{transform:rotate(-1.5deg)}50%{transform:rotate(1.5deg)}}
+@keyframes blink{0%,92%,100%{transform:scaleY(1)}96%{transform:scaleY(.1)}}
+@keyframes drift{from{transform:translate(0,0)}to{transform:translate(18px,-26px)}}
+</style>
+</head>
+<body>
+
+<div class="eyebrow">Direção A</div>
+<h1 style="font-size:30px;margin-bottom:2px">Livro de histórias</h1>
+<p class="caption">Papel recortado, contorno desenhado à mão, grão por cima de tudo.</p>
+
+<div class="card tilt">
+  <div class="tape"></div>
+  <div style="text-align:center">
+    <div class="eyebrow">juntos há</div>
+    <div class="counter">555</div>
+    <div style="font-size:14px;color:var(--ink-soft)">dias — desde 14 de fevereiro</div>
+  </div>
+</div>
+
+<div class="card tilt2">
+  <div class="row between">
+    <div class="row">
+      <!-- avatar desenhado, não emoji -->
+      <svg width="46" height="46" viewBox="0 0 46 46">
+        <circle cx="23" cy="23" r="21" fill="#ffd9c0" stroke="#4a3b37" stroke-width="2"/>
+        <path d="M8 20c2-9 8-13 15-13s13 4 15 13c-4-3-9-4-15-4s-11 1-15 4z" fill="#4a3b37"/>
+        <circle cx="17" cy="25" r="2.2" fill="#4a3b37"/><circle cx="29" cy="25" r="2.2" fill="#4a3b37"/>
+        <path d="M19 31q4 3 8 0" stroke="#4a3b37" stroke-width="2" fill="none" stroke-linecap="round"/>
+        <circle cx="13" cy="29" r="3" fill="#e8879b" opacity=".5"/>
+        <circle cx="33" cy="29" r="3" fill="#e8879b" opacity=".5"/>
+      </svg>
+      <div>
+        <div class="display" style="font-size:19px">Ele</div>
+        <div style="font-size:12px;color:var(--sage);font-weight:700">● online agora</div>
+      </div>
+    </div>
+    <button class="btn rose">Conversar</button>
+  </div>
+</div>
+
+<div class="row between" style="margin:24px 2px 8px">
+  <h2 style="font-size:22px">Nossa casa</h2>
+  <span class="heart-chip">♥ 1240</span>
+</div>
+
+<!-- ================= CENÁRIO: quarto em casa de bonecas ================= -->
+<div class="scene">
+<svg viewBox="0 0 390 300" width="100%">
+  <defs>
+    <linearGradient id="wallA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f7dfe6"/><stop offset="1" stop-color="#efc9d5"/>
+    </linearGradient>
+    <pattern id="wallpaperA" width="26" height="34" patternUnits="userSpaceOnUse">
+      <rect width="26" height="34" fill="url(#wallA)"/>
+      <g fill="#e0a8bc" opacity=".75">
+        <circle cx="13" cy="9" r="2.4"/>
+        <path d="M13 13c2 3 2 5 0 7-2-2-2-4 0-7z"/>
+      </g>
+    </pattern>
+    <linearGradient id="floorA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d6a273"/><stop offset="1" stop-color="#c08a5c"/>
+    </linearGradient>
+    <linearGradient id="beamA" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff3c4" stop-opacity=".75"/>
+      <stop offset="1" stop-color="#fff3c4" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="lampA"><stop offset="0" stop-color="#ffe9a8" stop-opacity=".9"/>
+      <stop offset="1" stop-color="#ffe9a8" stop-opacity="0"/></radialGradient>
+    <filter id="softA"><feGaussianBlur stdDeviation="6"/></filter>
+  </defs>
+
+  <!-- parede -->
+  <rect width="390" height="205" fill="url(#wallpaperA)"/>
+  <!-- rodameio -->
+  <rect y="150" width="390" height="55" fill="#f3e3d2"/>
+  <rect y="148" width="390" height="6" fill="#e2c8ae"/>
+  <g stroke="#e2c8ae" stroke-width="2" fill="none">
+    <rect x="16" y="162" width="58" height="32" rx="4"/>
+    <rect x="96" y="162" width="58" height="32" rx="4"/>
+    <rect x="236" y="162" width="58" height="32" rx="4"/>
+    <rect x="316" y="162" width="58" height="32" rx="4"/>
+  </g>
+
+  <!-- piso em perspectiva -->
+  <path d="M0 205 H390 V300 H0 Z" fill="url(#floorA)"/>
+  <g stroke="#a9764c" stroke-width="1.4" opacity=".55">
+    <path d="M0 205 L-40 300 M56 205 L36 300 M112 205 L112 300 M168 205 L188 300
+             M224 205 L264 300 M280 205 L340 300 M336 205 L416 300"/>
+    <path d="M0 232 H390 M0 262 H390"/>
+  </g>
+  <rect y="203" width="390" height="6" fill="#8f6440"/>
+
+  <!-- janela com cortina e luz -->
+  <g>
+    <rect x="196" y="34" width="104" height="86" rx="6" fill="#bfe0ef" stroke="#4a3b37" stroke-width="3"/>
+    <path d="M196 96 q26-20 52-8 t52-6 v38 h-104z" fill="#a9d3c4"/>
+    <circle cx="272" cy="56" r="10" fill="#fff6cf"/>
+    <path d="M248 34v86M196 77h104" stroke="#4a3b37" stroke-width="3"/>
+    <path d="M186 28h124v10H186z" fill="#8f6440" stroke="#4a3b37" stroke-width="2"/>
+    <g style="animation:sway 6s ease-in-out infinite;transform-origin:200px 38px">
+      <path d="M192 38q14 40 4 84h-14V38z" fill="#f6bfae" stroke="#4a3b37" stroke-width="2"/>
+    </g>
+    <g style="animation:sway 6.6s ease-in-out infinite;transform-origin:300px 38px">
+      <path d="M308 38q-14 40-4 84h14V38z" fill="#f6bfae" stroke="#4a3b37" stroke-width="2"/>
+    </g>
+  </g>
+  <path d="M200 120 L300 120 L360 300 L150 300 Z" fill="url(#beamA)"/>
+
+  <!-- quadro do casal -->
+  <g transform="rotate(-3 70 62)">
+    <rect x="38" y="34" width="64" height="56" rx="3" fill="#fffaf3" stroke="#4a3b37" stroke-width="3"/>
+    <rect x="45" y="41" width="50" height="42" fill="#cfe4d8"/>
+    <circle cx="60" cy="62" r="9" fill="#ffd9c0" stroke="#4a3b37" stroke-width="2"/>
+    <circle cx="80" cy="62" r="9" fill="#f6c9b0" stroke="#4a3b37" stroke-width="2"/>
+    <path d="M70 52c3-4 9-1 0 6-9-7-3-10 0-6z" fill="#e8879b"/>
+  </g>
+
+  <!-- prateleira -->
+  <g>
+    <rect x="118" y="70" width="62" height="7" rx="2" fill="#c08a5c" stroke="#4a3b37" stroke-width="2"/>
+    <rect x="124" y="52" width="8" height="18" fill="#e8879b" stroke="#4a3b37" stroke-width="1.6"/>
+    <rect x="134" y="46" width="8" height="24" fill="#9cbf9a" stroke="#4a3b37" stroke-width="1.6"/>
+    <rect x="144" y="56" width="8" height="14" fill="#f2b33d" stroke="#4a3b37" stroke-width="1.6"/>
+    <path d="M162 70c-6 0-9-5-5-9 3-3 8-2 9 2 3-3 8-1 8 3s-4 4-12 4z" fill="#9cbf9a" stroke="#4a3b37" stroke-width="1.6"/>
+  </g>
+
+  <!-- tapete -->
+  <ellipse cx="176" cy="262" rx="118" ry="34" fill="#e8879b" opacity=".85" stroke="#4a3b37" stroke-width="2"/>
+  <ellipse cx="176" cy="262" rx="88" ry="24" fill="none" stroke="#fffaf3" stroke-width="3" opacity=".8"/>
+  <ellipse cx="176" cy="262" rx="56" ry="14" fill="none" stroke="#fffaf3" stroke-width="3" opacity=".55"/>
+
+  <!-- sofá -->
+  <g>
+    <ellipse cx="88" cy="272" rx="72" ry="10" fill="#4a3b37" opacity=".16"/>
+    <rect x="24" y="196" width="128" height="46" rx="14" fill="#9cbf9a" stroke="#4a3b37" stroke-width="3"/>
+    <rect x="30" y="224" width="116" height="42" rx="13" fill="#b3d3b0" stroke="#4a3b37" stroke-width="3"/>
+    <rect x="18" y="220" width="20" height="46" rx="9" fill="#8bae89" stroke="#4a3b37" stroke-width="3"/>
+    <rect x="138" y="220" width="20" height="46" rx="9" fill="#8bae89" stroke="#4a3b37" stroke-width="3"/>
+    <rect x="46" y="204" width="34" height="26" rx="7" fill="#f2b33d" stroke="#4a3b37" stroke-width="2.4" transform="rotate(-8 63 217)"/>
+    <rect x="96" y="204" width="34" height="26" rx="7" fill="#e8879b" stroke="#4a3b37" stroke-width="2.4" transform="rotate(7 113 217)"/>
+    <rect x="32" y="262" width="8" height="12" rx="3" fill="#8f6440" stroke="#4a3b37" stroke-width="2"/>
+    <rect x="136" y="262" width="8" height="12" rx="3" fill="#8f6440" stroke="#4a3b37" stroke-width="2"/>
+  </g>
+
+  <!-- abajur com brilho -->
+  <g>
+    <circle cx="342" cy="196" r="46" fill="url(#lampA)"/>
+    <rect x="336" y="206" width="12" height="56" fill="#c08a5c" stroke="#4a3b37" stroke-width="2"/>
+    <path d="M322 206l8-24h24l8 24z" fill="#ffe0a3" stroke="#4a3b37" stroke-width="2.4"/>
+    <ellipse cx="342" cy="266" rx="22" ry="7" fill="#c08a5c" stroke="#4a3b37" stroke-width="2"/>
+  </g>
+
+  <!-- planta -->
+  <g style="animation:float 5s ease-in-out infinite">
+    <path d="M196 262c-14 0-22-10-16-18 5-6 13-4 16 3 3-9 12-11 17-4 6 8-3 19-17 19z" fill="#7fae7d" stroke="#4a3b37" stroke-width="2.4"/>
+    <path d="M206 244v20" stroke="#4a3b37" stroke-width="2"/>
+    <path d="M192 262h28l-4 22h-20z" fill="#e0785f" stroke="#4a3b37" stroke-width="2.4"/>
+  </g>
+
+  <!-- o bichinho: dorme no tapete -->
+  <g transform="translate(252,248)">
+    <ellipse cx="18" cy="26" rx="30" ry="7" fill="#4a3b37" opacity=".16"/>
+    <path d="M-8 22q-4-22 14-24t22 14q2 12-10 12z" fill="#f6cf8e" stroke="#4a3b37" stroke-width="2.6"/>
+    <path d="M28 14q14-4 16 6t-14 6" fill="#f6cf8e" stroke="#4a3b37" stroke-width="2.6"/>
+    <circle cx="10" cy="6" r="13" fill="#ffdda1" stroke="#4a3b37" stroke-width="2.6"/>
+    <path d="M1 -4l-3-9 9 4z" fill="#ffdda1" stroke="#4a3b37" stroke-width="2.4"/>
+    <path d="M19 -4l3-9-9 4z" fill="#ffdda1" stroke="#4a3b37" stroke-width="2.4"/>
+    <path d="M5 6q2 2 4 0M15 6q2 2 4 0" stroke="#4a3b37" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <path d="M8 11q2 2 4 0" stroke="#4a3b37" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    <circle cx="1" cy="10" r="3" fill="#e8879b" opacity=".55"/>
+    <circle cx="19" cy="10" r="3" fill="#e8879b" opacity=".55"/>
+    <text x="26" y="-12" font-family="Baloo 2" font-size="15" fill="#8d7a70" style="animation:float 3s ease-in-out infinite">z</text>
+    <text x="36" y="-22" font-family="Baloo 2" font-size="11" fill="#8d7a70" style="animation:float 3.6s ease-in-out infinite">z</text>
+  </g>
+
+  <!-- poeirinha na luz -->
+  <g fill="#fff6cf" opacity=".85">
+    <circle cx="240" cy="200" r="2"><animate attributeName="cy" values="210;150;210" dur="9s" repeatCount="indefinite"/></circle>
+    <circle cx="276" cy="230" r="1.6"><animate attributeName="cy" values="240;170;240" dur="11s" repeatCount="indefinite"/></circle>
+    <circle cx="308" cy="180" r="1.8"><animate attributeName="cy" values="195;140;195" dur="8s" repeatCount="indefinite"/></circle>
+  </g>
+</svg>
+</div>
+<p class="caption">O cômodo é um SVG só: papel de parede padronizado, piso em fuga,
+cortina balançando, poeira na luz e o bichinho cochilando no tapete.</p>
+
+<div class="tabbar">
+  <div class="on"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#c9607a" stroke-width="2.2" stroke-linejoin="round"><path d="M3 11l9-8 9 8v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>Início</div>
+  <div><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8d7a70" stroke-width="2.2"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>Ciclo</div>
+  <div><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8d7a70" stroke-width="2.2" stroke-linejoin="round"><path d="M21 12a8 8 0 01-11.6 7.1L3 21l1.9-6.4A8 8 0 1121 12z"/></svg>Chat</div>
+  <div><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8d7a70" stroke-width="2.2"><rect x="2" y="7" width="20" height="12" rx="5"/><path d="M7 11v4M5 13h4M16 12h.01M19 15h.01"/></svg>Jogos</div>
+  <div><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8d7a70" stroke-width="2.2"><ellipse cx="12" cy="16" rx="5" ry="4"/><circle cx="6" cy="9" r="2"/><circle cx="18" cy="9" r="2"/><circle cx="9.5" cy="5.5" r="2"/><circle cx="14.5" cy="5.5" r="2"/></svg>Bichinho</div>
+</div>
+
+</body>
+</html>

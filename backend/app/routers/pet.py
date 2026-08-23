@@ -1,0 +1,463 @@
+"""O bichinho.
+
+As regras de fome, sujeira e evolucao NAO moram aqui: moram em `pet_care.py`,
+que e testado com o relogio adiantado. Este arquivo e so a porta HTTP — le o
+bichinho, envelhece ate agora, aplica o cuidado e conta pro outro pelo WebSocket.
+
+Duas travas que valem repetir, porque sao do tipo que some sem ninguem ver:
+
+1. Toda leitura passa por `apply_decay` ANTES de responder. Se a fome so caisse
+   quando alguem abre a tela, quem nunca abre teria um bichinho eterno.
+2. O item so sai do inventario DEPOIS de o efeito ser calculado, na mesma
+   transacao. Comida que some sem alimentar e o bug classico deste modulo.
+"""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from .. import catalog, missions, pet_care, push
+from ..clock import utcnow
+from ..db import get_db
+from ..models import HouseMess, Pet, PetInteraction, Room, ShopItem, User
+from ..realtime import publish
+from ..schemas import moment_iso
+from ..security import current_user, partner_of
+from .shop import owns, take_from_inventory
+
+router = APIRouter(prefix="/api/pet", tags=["bichinho"])
+
+
+class ChooseIn(BaseModel):
+    species: str = Field(min_length=1, max_length=30)
+    name: str = Field(min_length=1, max_length=40)
+
+
+class RenameIn(BaseModel):
+    name: str = Field(min_length=1, max_length=40)
+
+
+class ItemIn(BaseModel):
+    code: str = Field(min_length=1, max_length=60)
+
+
+class AccessoryIn(BaseModel):
+    code: str = Field(default="", max_length=60)
+
+
+class MoveIn(BaseModel):
+    room_code: str = Field(min_length=1, max_length=40)
+
+
+class AdoptIn(BaseModel):
+    species: str = Field(min_length=1, max_length=30)
+
+
+class GameIn(BaseModel):
+    score: int = Field(ge=0, le=12)
+    duration_ms: int = Field(ge=5000, le=60000)
+
+
+def get_pet(db: Session) -> Pet:
+    pet = db.query(Pet).order_by(Pet.id).first()
+    if pet is None:  # o seed cria; isto e cinto de seguranca
+        pet = Pet(id=1, name="", species="", appearance_config={})
+        db.add(pet)
+        db.flush()
+    return pet
+
+
+def _item(db: Session, code: str, subcategory: str | None = None) -> ShopItem:
+    item = db.query(ShopItem).filter(ShopItem.code == code).first()
+    if item is None or item.category != "pet":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Esse item não é do bichinho")
+    if subcategory and item.subcategory != subcategory:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{item.name} não serve pra isso")
+    return item
+
+
+def pet_out(db: Session, pet: Pet) -> dict:
+    mess = pet_care.pending_mess(db)
+    rooms = {r.id: r for r in db.query(Room).all()}
+    progress = pet_care.level_progress(int(pet.xp or 0))
+    species = pet_care.species_of(pet)
+    return {
+        "chosen": bool(pet.species),
+        "name": pet.name,
+        "species": pet.species,
+        "species_name": species.get("name", ""),
+        "tagline": species.get("tagline", ""),
+        "colors": species.get("colors", []),
+        "appearance": pet.appearance_config or {},
+        "accessories": pet.accessories or {},
+        "room_code": pet.room_code or "sala",
+        "stats": {stat: getattr(pet, stat) for stat in pet_care.STATS},
+        # Quanto tempo falta pra cada atributo zerar. E o que deixa o dono
+        # entender que aquilo anda sozinho, em vez de descobrir depois.
+        "empty_in_hours": {
+            stat: pet_care.hours_until_empty(pet, stat) for stat in pet_care.STATS
+        },
+        "sick": bool(pet.sick),
+        "mood": pet_care.mood_of(pet, len(mess)),
+        "level": progress["level"],
+        "stage": pet_care.stage_for(progress["level"]),
+        "xp": int(pet.xp or 0),
+        "xp_into": progress["into"],
+        "xp_need": progress["need"],
+        "xp_ratio": progress["ratio"],
+        "mess_count": len(mess),
+        "mess": [
+            {
+                "id": m.id,
+                "room_code": rooms[m.room_id].code if m.room_id in rooms else "",
+                "col": m.col,
+                "row": m.row,
+                "kind": m.kind,
+                "created_at": moment_iso(m.created_at),
+            }
+            for m in mess
+        ],
+        "born_at": moment_iso(pet.born_at),
+        "last_interaction_at": moment_iso(pet.last_interaction_at),
+        "can_cuddle_at": moment_iso(_cuddle_ready(pet)),
+        "toy_ready": {
+            code: moment_iso(pet_care.toy_ready_at(pet, code))
+            for code in (pet.toy_cooldowns or {})
+        },
+    }
+
+
+def _cuddle_ready(pet: Pet):
+    from datetime import timedelta
+
+    if not pet.last_petted_at:
+        return None
+    return pet.last_petted_at + timedelta(minutes=pet_care.PET_COOLDOWN_MIN)
+
+
+def _log(db: Session, pet: Pet, user: User, action: str, code: str, effect: dict) -> None:
+    db.add(
+        PetInteraction(
+            pet_id=pet.id, user_id=user.id, action=action, item_code=code, effect=effect
+        )
+    )
+
+
+def _respond(db: Session, pet: Pet, extra: dict | None = None) -> dict:
+    db.commit()
+    body = pet_out(db, pet)
+    publish("pet", body)
+    return {**(extra or {}), "pet": body}
+
+
+# ------------------------------------------------------------------ leitura
+@router.get("/species")
+def species_list() -> dict:
+    """As especies pra escolher. Nao sao skins: cada uma tem ritmo proprio."""
+    return {
+        "species": [
+            {
+                "code": s["code"],
+                "name": s["name"],
+                "tagline": s["tagline"],
+                "colors": s["colors"],
+                # Fica visivel ANTES de escolher: o ritmo faz parte da escolha.
+                "traits": {
+                    "hunger": s["hunger"],
+                    "hygiene": s["hygiene"],
+                    "energy": s["energy"],
+                    "happiness": s["happiness"],
+                    "mess_rate": s["mess_rate"],
+                },
+            }
+            for s in catalog.PET_SPECIES
+        ]
+    }
+
+
+@router.get("")
+def read(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    pet = get_pet(db)
+    report = pet_care.apply_decay(db, pet)
+    db.commit()
+    body = pet_out(db, pet)
+    if report["mess_born"]:
+        # o outro precisa ver a sujeira aparecer sem recarregar
+        publish("pet", body)
+    return {"pet": body, "since": report}
+
+
+@router.get("/items")
+def items(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    """O que voces tem pra cuidar dele. A tela nao inventa: a lista vem daqui."""
+    pet = get_pet(db)
+    pet_care.apply_decay(db, pet)
+    db.commit()
+    rows = (
+        db.query(ShopItem)
+        .filter(ShopItem.category == "pet", ShopItem.active.is_(True))
+        .order_by(ShopItem.sort_order)
+        .all()
+    )
+    now = utcnow()
+    out = []
+    for item in rows:
+        quantity = owns(db, user, item)
+        ready = pet_care.toy_ready_at(pet, item.code)
+        out.append(
+            {
+                "code": item.code,
+                "name": item.name,
+                "subcategory": item.subcategory,
+                "price": item.price,
+                "consumable": item.consumable,
+                "quantity": quantity,
+                "effect": item.item_metadata or {},
+                "ready_at": moment_iso(ready),
+                "ready": quantity > 0 and (ready is None or ready <= now),
+            }
+        )
+    return {"items": out}
+
+
+# ------------------------------------------------------------------ escolha
+@router.post("/choose")
+def choose(payload: ChooseIn, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    pet = get_pet(db)
+    if pet.species:
+        # Trocar de especie zeraria a progressao do casal, e um toque errado
+        # apagaria meses de cuidado. Renomear pode; trocar de bicho, nao.
+        raise HTTPException(status.HTTP_409_CONFLICT, f"{pet.name} já é de vocês.")
+    if payload.species not in catalog.PET_SPECIES_BY_CODE:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Essa espécie não existe")
+
+    now = utcnow()
+    pet.species = payload.species
+    pet.name = payload.name.strip()
+    pet.born_at = now
+    pet.last_decay_at = now  # o relogio dele so comeca a correr agora
+    pet.mess_debt = 0.0
+    pet.decay_residue = {}
+    for stat in pet_care.STATS:
+        setattr(pet, stat, 80)
+
+    partner = partner_of(db, user)
+    if partner:
+        push.send_to_user(
+            db,
+            partner.id,
+            title="Temos um bichinho!",
+            body=f"{user.name} escolheu {pet.name}, um {catalog.PET_SPECIES_BY_CODE[payload.species]['name'].lower()}",
+            url="/pet",
+            kind="pet",
+        )
+    return _respond(db, pet)
+
+
+@router.patch("")
+def rename(payload: RenameIn, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    pet = get_pet(db)
+    if not pet.species:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Escolham o bichinho primeiro")
+    pet_care.apply_decay(db, pet)
+    pet.name = payload.name.strip()
+    return _respond(db, pet)
+
+
+@router.post("/adopt")
+def adopt(payload: AdoptIn, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    if payload.species not in catalog.PET_SPECIES_BY_CODE:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Essa espécie não existe")
+    item = db.query(ShopItem).filter(ShopItem.code == f"pet_especie_{payload.species}").first()
+    if item is None or owns(db, user, item) < 1:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Adote essa espécie na loja primeiro")
+    pet = get_pet(db)
+    pet_care.apply_decay(db, pet)
+    pet.species = payload.species
+    if not pet.name:
+        pet.name = catalog.PET_SPECIES_BY_CODE[payload.species]["name"]
+        pet.born_at = utcnow()
+        pet.last_decay_at = utcnow()
+        for stat_name in pet_care.STATS:
+            setattr(pet, stat_name, 80)
+    return _respond(db, pet)
+
+
+@router.post("/move")
+def move(payload: MoveIn, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    """Leva o bichinho pra outro comodo. Ele passa a sujar LA."""
+    pet = get_pet(db)
+    if not pet.species:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Escolham o bichinho primeiro")
+    room = db.query(Room).filter(Room.code == payload.room_code).first()
+    if room is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Esse cômodo não existe")
+    if not room.unlocked:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{room.name} ainda está trancado")
+    pet_care.apply_decay(db, pet)
+    pet.room_code = room.code
+    return _respond(db, pet)
+
+
+# ------------------------------------------------------------------ cuidado
+def _require_pet(db: Session) -> Pet:
+    pet = get_pet(db)
+    if not pet.species:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Escolham o bichinho primeiro")
+    pet_care.apply_decay(db, pet)
+    return pet
+
+
+@router.post("/feed")
+def feed(payload: ItemIn, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    pet = _require_pet(db)
+    item = _item(db, payload.code, "comida")
+    effect = dict(item.item_metadata or {})
+    if "hunger" in effect and pet.hunger >= 100:
+        # Empanturrar nao pode gastar o item a toa.
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{pet.name} está sem fome nenhuma")
+    if "hygiene" in effect and "hunger" not in effect and pet.hygiene >= 100:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{pet.name} já está limpinho")
+
+    action = "bathe" if "hygiene" in effect and "hunger" not in effect else "feed"
+    result = pet_care.touch(db, pet, effect, action)
+    take_from_inventory(db, user, item, 1)
+    _log(db, pet, user, action, item.code, result["applied"])
+    missions.record(db, "pet_feed" if action == "feed" else "pet_clean")
+    return _respond(db, pet, {"used": item.name, **result})
+
+
+@router.post("/bathe")
+def bathe(payload: ItemIn, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    """Banho e a mesma mecanica de comida: gasta um item. Rota separada so pra
+    tela ficar honesta sobre o que esta fazendo."""
+    return feed(payload, user, db)
+
+
+@router.post("/play")
+def play(payload: ItemIn, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    pet = _require_pet(db)
+    item = _item(db, payload.code, "brinquedo")
+    if owns(db, user, item) <= 0:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Vocês não têm {item.name}")
+
+    now = utcnow()
+    ready = pet_care.toy_ready_at(pet, item.code)
+    if ready is not None and ready > now:
+        minutes = int((ready - now).total_seconds() // 60) + 1
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"{pet.name} já cansou de {item.name.lower()}. Volta em {minutes} min.",
+        )
+
+    effect = dict(item.item_metadata or {})
+    cooldown = int(effect.pop("cooldown_min", 30))
+    if effect.get("energy", 0) < 0 and pet.energy < abs(int(effect["energy"])):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, f"{pet.name} está sem energia pra brincar"
+        )
+
+    result = pet_care.touch(db, pet, effect, "play")
+    pet_care.set_toy_cooldown(pet, item.code, cooldown, now)
+    _log(db, pet, user, "play", item.code, result["applied"])
+    missions.record(db, "pet_play")
+    return _respond(db, pet, {"used": item.name, **result})
+
+
+@router.post("/game")
+def game(payload: GameIn, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    """Uma partida curta de pegar a bolinha.
+
+    Pontuação e duração têm teto/piso no schema; descanso impede transformar o
+    minigame em torneira infinita de XP. É brincadeira com o pet, não caça-níquel.
+    """
+    pet = _require_pet(db)
+    now = utcnow()
+    code = "game_bolinha"
+    ready = pet_care.toy_ready_at(pet, code)
+    if ready and ready > now:
+        raise HTTPException(status.HTTP_409_CONFLICT, "A bolinha está descansando. Volta em dois minutos.")
+    if pet.energy < 8:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{pet.name} está sem energia para brincar")
+
+    happiness = min(18, 4 + payload.score)
+    result = pet_care.touch(
+        db, pet, {"happiness": happiness, "energy": -8}, "play", now
+    )
+    pet_care.set_toy_cooldown(pet, code, 2, now)
+    effect = {**result, "score": payload.score, "duration_ms": payload.duration_ms}
+    _log(db, pet, user, "play", code, effect)
+    missions.record(db, "pet_game")
+    return _respond(db, pet, effect)
+
+
+@router.post("/cuddle")
+def cuddle(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    """Carinho de graca — com hora marcada.
+
+    Existe de proposito COM descanso de 4 horas: um afago ilimitado seria o
+    "botao sem consequencia" que foi descartado na decisao da secao 8.2, e
+    esvaziaria o motivo de comprar comida e brinquedo.
+    """
+    pet = _require_pet(db)
+    now = utcnow()
+    ready = _cuddle_ready(pet)
+    if ready is not None:
+        if ready.tzinfo is None:
+            ready = ready.replace(tzinfo=now.tzinfo)
+        if ready > now:
+            minutes = int((ready - now).total_seconds() // 60) + 1
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"{pet.name} já recebeu carinho. Daqui a {minutes} min ele quer de novo.",
+            )
+    result = pet_care.touch(db, pet, {"happiness": 4}, "pet", now)
+    pet.last_petted_at = now
+    _log(db, pet, user, "pet", "", result["applied"])
+    return _respond(db, pet, result)
+
+
+@router.post("/accessory")
+def accessory(payload: AccessoryIn, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    """Veste (ou tira) um acessorio. Posse conferida NO SERVIDOR.
+
+    Esconder o botao na tela nao e seguranca — a mesma regra ja vale pro avatar.
+    """
+    pet = _require_pet(db)
+    worn = dict(pet.accessories or {})
+    if not payload.code:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Diga qual acessório tirar")
+
+    item = _item(db, payload.code, "acessorio")
+    meta = item.item_metadata or {}
+    slot = meta.get("slot")
+    if not slot:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Esse acessório não tem lugar")
+
+    if worn.get(slot) == item.code:
+        worn[slot] = ""  # clicar de novo tira
+    else:
+        if owns(db, user, item) <= 0:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, f"Vocês não têm {item.name}")
+        worn[slot] = item.code
+    pet.accessories = worn
+    return _respond(db, pet)
+
+
+@router.post("/mess/{mess_id}/clean")
+def clean(mess_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    """Limpa UMA sujeira. De graca, mas alguem tem que fazer."""
+    pet = _require_pet(db)
+    mess = db.get(HouseMess, mess_id)
+    if mess is None or mess.cleaned_at is not None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Essa sujeira já foi limpa")
+    mess.cleaned_at = utcnow()
+    mess.cleaned_by = user.id
+    result = pet_care.touch(db, pet, {"happiness": 2}, "clean")
+    _log(db, pet, user, "clean", mess.kind, result["applied"])
+    missions.record(db, "pet_clean")
+    body = _respond(db, pet, result)
+    publish("house", {"reason": "mess"})
+    return body

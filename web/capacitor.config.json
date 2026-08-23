@@ -1,0 +1,12 @@
+{
+  "appId": "com.nossoapp.casal",
+  "appName": "Nosso app",
+  "webDir": "dist",
+  "server": {
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#fffaf3"
+  }
+}

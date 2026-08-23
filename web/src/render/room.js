@@ -1,0 +1,198 @@
+// Desenha o cômodo inteiro: paredes, piso, móveis e os realces do editor.
+//
+// A ordem importa e não é negociável em isométrico: parede do fundo, piso, e só
+// então os móveis, do mais distante pro mais perto. Se um móvel for pintado antes
+// da parede, ele aparece atravessando a parede.
+
+import { FACE_LEFT, FACE_RIGHT, TH, TW, TZ, project, roomMetrics, tileDiamond, depthSort } from './iso'
+import { drawItem } from './furniture'
+import { shade } from './pixel'
+import { Painter } from './pixel'
+import { drawPet } from './PetCanvas'
+
+export const WALL_HEIGHT = 3 // em unidades de altura
+
+export const FLOOR_STYLES = {
+  madeira: { base: '#b07a4e', alt: '#a06f45', line: '#7d5232', plank: true },
+  ceramica: { base: '#e3ded4', alt: '#d8d2c6', line: '#bdb5a6', plank: false },
+  tapete: { base: '#b45f8a', alt: '#a9537f', line: '#8c4268', plank: false },
+  padrao: { base: '#9c6f4b', alt: '#8f6543', line: '#6d4a30', plank: true },
+  grama: { base: '#79a85f', alt: '#72a057', line: '#5d8648', plank: false },
+  pedra: { base: '#aaa69f', alt: '#9d9992', line: '#77736d', plank: false },
+}
+
+export const WALL_STYLES = {
+  rosa: { base: '#f0cdd9', motif: '#e0a8bc' },
+  azul: { base: '#cfe0f5', motif: '#a6c1e4' },
+  verde: { base: '#d3e8d0', motif: '#a9cfa5' },
+  padrao: { base: '#e8dccd', motif: '#d0bda6' },
+}
+
+// ------------------------------------------------------------------ paredes
+function drawWalls(p, cols, rows, origin, style) {
+  const wall = WALL_STYLES[style] || WALL_STYLES.padrao
+  const top = WALL_HEIGHT
+  const P = (c, r, z) => project(c, r, z, origin)
+
+  // parede que corre no eixo das linhas (fica à esquerda na tela)
+  const leftWall = [P(0, 0, top), P(0, rows, top), P(0, rows, 0), P(0, 0, 0)]
+  // parede que corre no eixo das colunas (fica à direita na tela)
+  const rightWall = [P(0, 0, top), P(cols, 0, top), P(cols, 0, 0), P(0, 0, 0)]
+
+  p.fillPoly(leftWall, shade(wall.base, FACE_RIGHT + 0.1))
+  p.fillPoly(rightWall, shade(wall.base, FACE_LEFT + 0.06))
+
+  // papel de parede: o motivo é projetado na própria parede, então acompanha a
+  // inclinação em vez de parecer um adesivo colado por cima
+  const motifLeft = shade(wall.motif, FACE_RIGHT + 0.1)
+  const motifRight = shade(wall.motif, FACE_LEFT + 0.06)
+  for (let r = 0.5; r < rows; r += 1) {
+    for (let z = 0.4; z < top; z += 0.55) {
+      const [x, y] = P(0, r, z)
+      motif(p, x, y, motifLeft)
+    }
+  }
+  for (let c = 0.5; c < cols; c += 1) {
+    for (let z = 0.4; z < top; z += 0.55) {
+      const [x, y] = P(c, 0, z)
+      motif(p, x, y, motifRight)
+    }
+  }
+
+  // rodapé: uma faixa mais escura embaixo dá o acabamento que falta
+  const skirt = 0.32
+  p.fillPoly([P(0, 0, skirt), P(0, rows, skirt), P(0, rows, 0), P(0, 0, 0)], shade(wall.base, -0.42))
+  p.fillPoly([P(0, 0, skirt), P(cols, 0, skirt), P(cols, 0, 0), P(0, 0, 0)], shade(wall.base, -0.34))
+
+  // quina e topo das paredes, pra separar do fundo
+  const edge = shade(wall.base, -0.55)
+  p.line(...P(0, 0, top), ...P(0, 0, 0), edge)
+  p.strokePoly(leftWall, edge)
+  p.strokePoly(rightWall, edge)
+}
+
+function motif(p, x, y, color) {
+  // florzinha de 5 pixels — pequena o suficiente pra virar textura, não desenho
+  p.px(x, y - 1, color)
+  p.px(x - 1, y, color)
+  p.px(x + 1, y, color)
+  p.px(x, y + 1, color)
+  p.px(x, y, shade(color, 0.25))
+}
+
+// ------------------------------------------------------------------ piso
+function drawFloor(p, cols, rows, origin, style) {
+  const floor = FLOOR_STYLES[style] || FLOOR_STYLES.padrao
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const diamond = tileDiamond(c, r, origin)
+      p.fillPoly(diamond, (c + r) % 2 === 0 ? floor.base : floor.alt)
+    }
+  }
+  // as juntas por cima de tudo, senão o losango de um tile come a linha do vizinho
+  for (let r = 0; r <= rows; r++) {
+    p.line(...project(0, r, 0, origin), ...project(cols, r, 0, origin), floor.line)
+  }
+  for (let c = 0; c <= cols; c++) {
+    p.line(...project(c, 0, 0, origin), ...project(c, rows, 0, origin), floor.line)
+  }
+  if (floor.plank) {
+    // veio da madeira: risquinhos curtos no sentido das tábuas
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if ((c * 7 + r * 3) % 4 !== 0) continue
+        const [x, y] = project(c + 0.3, r + 0.5, 0, origin)
+        p.px(x, y, floor.line)
+        p.px(x + 1, y, floor.line)
+        p.px(x + 2, y + 1, floor.line)
+      }
+    }
+  }
+}
+
+// ------------------------------------------------------------------ realces
+function highlight(p, col, row, w, d, origin, color) {
+  for (let r = row; r < row + d; r++) {
+    for (let c = col; c < col + w; c++) {
+      p.fillPoly(tileDiamond(c, r, origin, 0.02), color)
+    }
+  }
+}
+
+function gridOverlay(p, cols, rows, origin) {
+  const color = 'rgba(255,255,255,0.16)'
+  for (let r = 0; r <= rows; r++) {
+    p.line(...project(0, r, 0.02, origin), ...project(cols, r, 0.02, origin), color)
+  }
+  for (let c = 0; c <= cols; c++) {
+    p.line(...project(c, 0, 0.02, origin), ...project(c, rows, 0.02, origin), color)
+  }
+}
+
+// ------------------------------------------------------------------ tudo junto
+/**
+ * @param scene { cols, rows, floor, wall, items:[{id,shape,col,row,w,d,dir,color}] }
+ * @param ui    { editing, hover:{col,row,w,d,ok}, selectedId }
+ */
+export function drawScene(p, scene, ui = {}, t = 0) {
+  const { cols, rows } = scene
+  const { origin } = roomMetrics(cols, rows, WALL_HEIGHT)
+
+  p.clear()
+  if (!scene.outdoor) drawWalls(p, cols, rows, origin, scene.wall)
+  drawFloor(p, cols, rows, origin, scene.floor)
+  if (ui.editing) gridOverlay(p, cols, rows, origin)
+
+  const items = depthSort(scene.items || [])
+  for (const item of items) {
+    if (item.id === ui.selectedId) {
+      highlight(p, item.col, item.row, item.w, item.d, origin, 'rgba(255,207,107,0.45)')
+    }
+    if (item.mess) drawMess(p, item, origin, t)
+    else drawItem(p, item, origin, t)
+  }
+  if (scene.pet) drawHousePet(p, scene.pet, origin, t)
+
+  if (ui.hover) {
+    const { col, row, w, d, ok } = ui.hover
+    highlight(
+      p,
+      col,
+      row,
+      w,
+      d,
+      origin,
+      ok ? 'rgba(127,214,176,0.45)' : 'rgba(255,107,107,0.45)'
+    )
+  }
+  return origin
+}
+
+function drawHousePet(p, pet, origin, t) {
+  const [x,y] = project(pet.col+.5,pet.row+.5,.05,origin)
+  if (!drawHousePet.canvas) {
+    drawHousePet.canvas=document.createElement('canvas')
+    drawHousePet.painter=new Painter(drawHousePet.canvas)
+  }
+  const sprite=drawHousePet.painter
+  sprite.resize(128,108); sprite.clear(); drawPet(sprite,pet,t)
+  p.ctx.drawImage(drawHousePet.canvas,0,0,128,108,Math.round(x-25),Math.round(y-42),50,42)
+}
+
+function drawMess(p, item, origin, t) {
+  const [x, y] = project(item.col + .5, item.row + .5, .03, origin)
+  if (item.kind === 'puddle') {
+    p.fillPoly([[x-8,y],[x-3,y-4],[x+7,y-2],[x+9,y+2],[x,y+4],[x-7,y+3]], '#c3aa69')
+    p.px(x-2,y-1,'#eee0a6')
+  } else if (item.kind === 'fur') {
+    for (let i=0;i<7;i++) p.rect(x-7+i*2,y+(i%3)-2,3,1,'#c8bbaa')
+  } else if (item.kind === 'crumbs') {
+    for (const [dx,dy] of [[-6,1],[-2,-2],[3,2],[6,-1],[0,3]]) p.px(x+dx,y+dy,'#9b6938')
+  } else {
+    p.rect(x-5,y-3,10,4,'#6b4a2f'); p.rect(x-3,y-6,6,3,'#805a38'); p.rect(x-1,y-8,2,2,'#8a5f3c')
+  }
+  const fly = Math.sin(t/220) > 0 ? 1 : -1
+  p.px(x-7+fly,y-11,'#33203a'); p.px(x+6-fly,y-9,'#33203a')
+}
+
+export { roomMetrics, TW, TH, TZ }
