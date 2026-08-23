@@ -14,11 +14,12 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from . import catalog, settings_store
+from . import catalog, economy, settings_store
 from .clock import parse_day
 from .config import (
     COUPLE_START_DATE,
     CYCLE_OWNER_SLUG,
+    INITIAL_COINS,
     USER_A_NAME,
     USER_A_PASSWORD,
     USER_A_SLUG,
@@ -26,7 +27,7 @@ from .config import (
     USER_B_PASSWORD,
     USER_B_SLUG,
 )
-from .models import Avatar, InventoryItem, Pet, QuizQuestion, Room, RoomLayout, ShopItem, User, Wallet
+from .models import Avatar, InventoryItem, Pet, QuizQuestion, Room, RoomLayout, ShopItem, User, Wallet, WalletTransaction
 from .security import hash_password
 
 
@@ -53,6 +54,12 @@ def _ensure_user(db: Session, slug: str, name: str, password: str) -> User | Non
 
     if db.get(Wallet, user.id) is None:
         db.add(Wallet(user_id=user.id, balance=0))
+        db.flush()
+    if INITIAL_COINS and not db.query(WalletTransaction).filter(WalletTransaction.user_id == user.id).first():
+        economy.try_earn(
+            db, user.id, INITIAL_COINS, "admin", note="saldo inicial",
+            dedupe_key=f"initial-coins:{user.id}",
+        )
     if db.get(Avatar, user.id) is None:
         db.add(Avatar(user_id=user.id, config=dict(catalog.DEFAULT_AVATAR)))
     db.flush()

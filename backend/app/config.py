@@ -13,6 +13,7 @@ IS_PRODUCTION = not DATABASE_URL.startswith("sqlite")
 JWT_SECRET = os.getenv("JWT_SECRET", "")
 JWT_ALGORITHM = "HS256"
 TOKEN_DAYS = int(os.getenv("TOKEN_DAYS", "180"))  # app de casal: ninguem quer relogar
+INITIAL_COINS = max(0, min(int(os.getenv("INITIAL_COINS", "0")), 10000))
 
 if not JWT_SECRET:
     if IS_PRODUCTION:
