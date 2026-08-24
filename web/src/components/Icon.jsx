@@ -103,6 +103,10 @@ const PATHS = {
   plus: <path d="M12 5.5v13M5.5 12h13" />,
   back: <path d="M14.5 5.5L8 12l6.5 6.5" />,
   close: <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />,
+  // A seta de responder do chat. Sem ela desenhada, `Icon` devolveria `null` e o
+  // botão de responder apareceria vazio — sem erro nenhum, que é a armadilha já
+  // registrada no HANDOFF (os ícones `drop`/`sparkle`/`lock` sumiram assim).
+  reply: <path d="M9.5 6.5L4.5 11l5 4.5V12.5c4 0 6.6 1.2 8.5 4-.6-4.6-3.4-7.4-8.5-7.7z" />,
   // --- Etapa 4: os quatro atributos do bichinho e o cadeado do cômodo
   drop: <path d="M12 3.8c3.2 3.6 5 6.2 5 8.7a5 5 0 0 1-10 0c0-2.5 1.8-5.1 5-8.7z" />,
   sparkle: (

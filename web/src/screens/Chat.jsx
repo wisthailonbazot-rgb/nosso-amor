@@ -103,14 +103,100 @@ function Audio({ src, duration }) {
   )
 }
 
-function Bolha({ msg, minha, citada, onResponder, onApagar, onReagir }) {
-  const [menu, setMenu] = useState(false)
+/**
+ * Uma mensagem na conversa.
+ *
+ * O jeito de responder mudou pra ser o do WhatsApp, que é o que o dono pediu e o
+ * que todo mundo já tem no dedo:
+ *
+ *  - **arrastar a mensagem de lado** responde na hora. É o gesto mais usado, e
+ *    não custa um toque a mais nem tapa a tela com menu;
+ *  - **segurar** MARCA a mensagem. Marcada, ela fica destacada e as ações
+ *    aparecem numa barra — responder, reagir, copiar, apagar.
+ *
+ * O que existia era um toque simples que abria um menuzinho embaixo da bolha.
+ * Dois problemas: tocar é o mesmo gesto de abrir a foto (então o menu abria sem
+ * querer o tempo todo), e não havia como "marcar" nada — a mensagem nunca ficava
+ * escolhida, o menu só piscava.
+ */
+function Bolha({ msg, minha, citada, autorCitado, marcada, onMarcar, onResponder }) {
+  const [puxada, setPuxada] = useState(0)
+  const gesto = useRef(null)
+  const espera = useRef(null)
+
+  const LIMITE = 52   // o quanto arrastar pra virar resposta
+
+  function inicio(e) {
+    // Só com um dedo, e nunca em cima de link/imagem (lá o toque abre a mídia).
+    gesto.current = { x: e.clientX, y: e.clientY, ativo: false, cancelado: false }
+    clearTimeout(espera.current)
+    // Segurar marca. 420 ms é o tempo do WhatsApp: curto pra não parecer travado
+    // e longo pra não disparar quando a pessoa só está rolando a conversa.
+    espera.current = setTimeout(() => {
+      if (gesto.current && !gesto.current.cancelado) {
+        gesto.current.cancelado = true
+        onMarcar(msg)
+        window.casalSound?.('nav')
+      }
+    }, 420)
+  }
+
+  function mover(e) {
+    const g = gesto.current
+    if (!g) return
+    const dx = e.clientX - g.x
+    const dy = e.clientY - g.y
+    // Rolagem vertical vence: se o dedo desceu mais do que andou pro lado, é a
+    // pessoa navegando a conversa, não puxando a mensagem.
+    if (!g.ativo && Math.abs(dy) > Math.abs(dx)) { cancelar(); return }
+    if (Math.abs(dx) < 8) return
+    g.ativo = true
+    clearTimeout(espera.current)
+    e.preventDefault?.()
+    // Só pra um lado, e com teto: puxar sem limite faria a bolha sair da tela.
+    setPuxada(Math.max(0, Math.min(LIMITE + 12, minha ? -dx : dx)))
+  }
+
+  function fim() {
+    clearTimeout(espera.current)
+    const soltou = puxada
+    setPuxada(0)
+    gesto.current = null
+    if (soltou >= LIMITE) { onResponder(msg); window.casalSound?.('nav') }
+  }
+
+  function cancelar() {
+    clearTimeout(espera.current)
+    gesto.current = null
+    setPuxada(0)
+  }
+
+  const resumo = msg.type === 'sticker' ? 'figurinha'
+    : msg.type === 'image' ? 'foto'
+      : msg.type === 'audio' ? 'áudio' : msg.content
 
   return (
-    <div className={`msg-row ${minha ? 'minha' : ''}`}>
-      <div className="msg-bubble" onClick={() => setMenu((v) => !v)}>
+    <div
+      className={`msg-row ${minha ? 'minha' : ''} ${marcada ? 'marcada' : ''}`}
+      onPointerDown={inicio}
+      onPointerMove={mover}
+      onPointerUp={fim}
+      onPointerCancel={cancelar}
+    >
+      {/* a setinha que aparece por trás enquanto a mensagem é puxada */}
+      {puxada > 0 && (
+        <span className={`msg-puxa ${puxada >= LIMITE ? 'pronta' : ''}`} aria-hidden="true">
+          <Icon name="reply" size={15} />
+        </span>
+      )}
+
+      <div
+        className="msg-bubble"
+        style={puxada ? { transform: `translateX(${minha ? -puxada : puxada}px)` } : undefined}
+      >
         {citada && (
           <div className="msg-quote">
+            {autorCitado && <b>{autorCitado}</b>}
             {citada.type === 'sticker'
               ? 'figurinha'
               : citada.type === 'image'
@@ -141,27 +227,8 @@ function Bolha({ msg, minha, citada, onResponder, onApagar, onReagir }) {
         {msg.reaction && <span className="msg-reaction">{msg.reaction}</span>}
       </div>
 
-      {menu && (
-        <div className="msg-menu">
-          <button className="btn-sm btn-ghost" onClick={() => { onResponder(msg); setMenu(false) }}>
-            responder
-          </button>
-          {!minha && (
-            <>
-              {['❤️', '😂', '🥺'].map((e) => (
-                <button key={e} className="btn-sm btn-ghost" onClick={() => { onReagir(msg, e); setMenu(false) }}>
-                  {e}
-                </button>
-              ))}
-            </>
-          )}
-          {minha && (
-            <button className="btn-sm btn-danger" onClick={() => { onApagar(msg); setMenu(false) }}>
-              apagar
-            </button>
-          )}
-        </div>
-      )}
+      {marcada && <span className="msg-marca" aria-label="Mensagem marcada"><Icon name="check" size={12} /></span>}
+      <span className="visually-hidden">{resumo}</span>
     </div>
   )
 }
@@ -174,6 +241,7 @@ export default function Chat() {
   const [texto, setTexto] = useState('')
   const [painel, setPainel] = useState(null) // 'emoji' | 'sticker' | null
   const [respondendo, setRespondendo] = useState(null)
+  const [marcada, setMarcada] = useState(null)
   const [digitando, setDigitando] = useState(false)
   const [erro, setErro] = useState('')
   const [enviando, setEnviando] = useState(false)
@@ -333,6 +401,37 @@ export default function Chat() {
 
       {erro && <div className="alert alert-error">{erro}</div>}
 
+      {/* Barra de ações da mensagem marcada, como no WhatsApp: a mensagem fica
+          escolhida e o que dá pra fazer com ela aparece aqui em cima. */}
+      {marcada && (
+        <div className="msg-acoes">
+          <button className="btn-plain" onClick={() => setMarcada(null)} aria-label="Cancelar">
+            <Icon name="close" size={17} />
+          </button>
+          <span className="grow tiny">1 mensagem marcada</span>
+          <button className="btn-sm btn-ghost" onClick={() => { setRespondendo(marcada); setMarcada(null) }}>
+            <Icon name="reply" size={14} /> Responder
+          </button>
+          {marcada.content && (
+            <button className="btn-sm btn-ghost" onClick={() => { navigator.clipboard?.writeText(marcada.content); setMarcada(null) }}>
+              Copiar
+            </button>
+          )}
+          {marcada.sender_id !== user.id && ['❤️', '😂', '🥺'].map((e) => (
+            <button key={e} className="btn-sm btn-ghost" onClick={() => {
+              api.post(`/api/chat/${marcada.id}/react`, { reaction: e }).catch(() => {})
+              setMarcada(null)
+            }}>{e}</button>
+          ))}
+          {marcada.sender_id === user.id && (
+            <button className="btn-sm btn-danger" onClick={() => {
+              api.del(`/api/chat/${marcada.id}`).catch((err) => setErro(err.message))
+              setMarcada(null)
+            }}>Apagar</button>
+          )}
+        </div>
+      )}
+
       <div className="chat-list" ref={listaRef}>
         {temMais && (
           <button className="btn-ghost btn-sm" style={{ margin: '0 auto 10px' }} onClick={carregarAntigas}>
@@ -351,9 +450,14 @@ export default function Chat() {
               msg={item}
               minha={item.sender_id === user.id}
               citada={item.reply_to ? msgs.find((m) => m.id === item.reply_to) : null}
+              autorCitado={(() => {
+                const alvo = item.reply_to ? msgs.find((m) => m.id === item.reply_to) : null
+                if (!alvo) return ''
+                return alvo.sender_id === user.id ? 'Você' : partner?.name || ''
+              })()}
+              marcada={marcada?.id === item.id}
+              onMarcar={setMarcada}
               onResponder={setRespondendo}
-              onReagir={(m, e) => api.post(`/api/chat/${m.id}/react`, { reaction: e }).catch(() => {})}
-              onApagar={(m) => api.del(`/api/chat/${m.id}`).catch((err) => setErro(err.message))}
             />
           )
         )}
@@ -363,7 +467,10 @@ export default function Chat() {
       {respondendo && (
         <div className="chat-reply">
           <div className="grow tiny">
-            respondendo: {respondendo.content || respondendo.type}
+            <b>respondendo</b> {respondendo.content
+              || (respondendo.type === 'sticker' ? 'figurinha'
+                : respondendo.type === 'image' ? 'foto'
+                  : respondendo.type === 'audio' ? 'áudio' : '')}
           </div>
           <button className="btn-plain" onClick={() => setRespondendo(null)} aria-label="Cancelar">
             <Icon name="close" size={16} />

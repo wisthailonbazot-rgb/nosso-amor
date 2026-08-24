@@ -42,9 +42,18 @@ const TETO_PONTOS = 40    // igual ao teto do servidor em `JOGOS`
 const GESTO_MIN = 22
 
 // O bichinho na pista: desenhado direto neste tamanho, sem redução.
-const PET_L = 68
-const PET_A = 58
+//
+// Cresceu junto com a altura da pista, e os dois têm que andar juntos: o pulo
+// sobe uns 49 px (IMPULSO²/2·GRAVIDADE), então um bichinho maior numa pista
+// baixa bate a cabeça no topo do quadro e some pela borda no ponto mais alto do
+// salto — justamente quando a pessoa está olhando pra ele.
+const PET_L = 84
+const PET_A = 72
 const PET_ESCALA = PET_A / 108
+// Onde ele corre, em pixels de arte. UM número, usado pela colisão E pelo
+// desenho: separados, eles divergem na primeira vez que alguém mexer num só, e
+// o jogo passa a bater em coisa que não encostou nele.
+const PET_X = 60
 
 /**
  * O que vem vindo pela pista.
@@ -280,7 +289,7 @@ export default function PetRunner({ pet, aoTerminar, telaCheia = false }) {
 
     // Caixa de colisão do bichinho: estreita de propósito. Larga demais, o jogo
     // parece injusto ("passei longe e perdi") — e injusto é o que faz largar.
-    const petX = 46
+    const petX = PET_X
     const noAlto = j.y < -14        // pulou o bastante pra passar por cima
     const agachado = j.abaixado > 0 && !j.noAr
     for (const c of j.coisas) {
@@ -451,7 +460,8 @@ function desenhar(p, pintorPet, rascunho, pet, j, t, dim) {
         action: agachado ? 'deitar' : j.noAr ? 'pular' : j.rodando ? 'correr' : 'parado',
         velocidade: j.rodando ? Math.max(1, j.vel / VEL_INICIAL) : 1,
       },
-      t
+      t,
+      PET_ESCALA
     )
     // Agachar deixou de ser um ACHATAMENTO da imagem e virou pose de verdade.
     //
@@ -461,6 +471,6 @@ function desenhar(p, pintorPet, rascunho, pet, j, t, dim) {
     // pernas, que é o motivo de existir um esqueleto. A caixa de colisão não
     // muda: quem decide é `j.abaixado`, não a altura do desenho.
     const y = Math.round(CHAO - PET_A + 4 + j.y)
-    p.ctx.drawImage(rascunho, Math.round(46 - PET_L / 2), y)
+    p.ctx.drawImage(rascunho, Math.round(PET_X - PET_L / 2), y)
   }
 }

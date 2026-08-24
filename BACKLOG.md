@@ -427,3 +427,29 @@ ler antes de mexer no motor de desenho.
       `index-C8hTN-kh.js`, o mesmo nome gerado pelo build local.
 
 Estado: **537 verificações, 0 falha**. Detalhes e causas no HANDOFF, seção 9.5.
+
+### 24/08/2026 — Acertos de tela e chat estilo WhatsApp (terceira rodada)
+
+- **[x]** **Coleira bugada.** O "eixo do pescoço" ia do peito à BASE da cabeça, e com a
+      anatomia nova esse vetor ficou quase horizontal — a coleira virava uma tira em pé
+      atravessando o bichinho. Agora vai até o CENTRO da cabeça, e o que pende (gravata,
+      plaquinha) usa o "para baixo" do corpo, parando na linha do chão.
+- **[x]** **Aproximar a vista da casa.** Botões −/+ e pinça de dois dedos, em passos
+      inteiros de 1× a 4×, com o cômodo rolando. No celular a escala automática dava
+      sempre 1× e o bichinho sumia no cenário.
+- **[x]** **O bichinho ficava invisível no jogo, no celular.** Regressão minha: troquei o
+      tamanho do canvas da corrida e esqueci de avisar o desenho, que continuou pintando
+      na caixa de 128×108 — o recorte pegava só o céu. Agora a escala sai do próprio
+      canvas, então os dois não têm como discordar.
+- **[x]** **Barras de atributo pequenas, no canto.** Eram quatro cartões ocupando meia
+      tela; viraram quatro tracinhos num HUD dentro do cenário. O prazo até zerar
+      continua (no `title`, e escrito quando o atributo está baixo).
+- **[x]** **A aba do bichinho usa a tela do celular.** O cenário ocupa a altura toda,
+      as opções viraram uma faixa flutuante na lateral, e o bichinho passou de 1× para
+      **3×**. Interação por toque (cabeça/corpo/barriga) e arrastar item seguem valendo.
+- **[x]** **Chat: marcar a mensagem e responder, como no WhatsApp.** Arrastar de lado
+      responde (com setinha que acende no limite); segurar marca a mensagem e abre a
+      barra de ações (responder, copiar, reagir, apagar); a citação mostra quem
+      escreveu. A rolagem da conversa continua ganhando do gesto.
+
+Estado: **537 verificações, 0 falha**. Causas no HANDOFF, seção 9.6.

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { Painter } from './pixel'
 import { cenaDoItem } from './petProps'
@@ -60,8 +60,15 @@ export function acaoDe(pet) {
  * Com a escala, o motor desenha DIRETO no tamanho final: menos pixels, porém
  * todos escolhidos pelo desenho, e não pela conta de redução.
  */
-export function drawPet(p, pet, tick, escala = 1) {
+export function drawPet(p, pet, tick, escala) {
   const t = tick || 0
+  // A escala sai do PRÓPRIO canvas quando ninguém manda uma. Uma fonte só, de
+  // propósito: já aconteceu de eu trocar o tamanho do canvas de rascunho da
+  // corrida e esquecer de avisar o desenho. O bichinho continuou sendo pintado
+  // na caixa de 128x108, o recorte de 68x58 pegou o canto vazio acima dele e
+  // ele **sumiu do jogo** — sem erro no console, sem nada. Derivando daqui, o
+  // canvas e o desenho não têm como discordar.
+  if (escala == null) escala = (p.h || 108) / 108
   const cores = pet.colors?.length >= 3 ? pet.colors : PADRAO
   const plano = planoDe(pet.species || 'gato', crescimentoDe(pet), escala)
   const acao = acaoDe(pet)
@@ -73,7 +80,7 @@ export function drawPet(p, pet, tick, escala = 1) {
     bochechas: pet.mood === 'feliz' && !pet.sick,
   })
 
-  vestir(p, pet, marcos, cores)
+  vestir(p, pet, marcos, cores, plano)
   extras(p, nome, t, marcos, cores, plano)
 
   // O objeto do item que ele esta usando de verdade (o osso, o potinho, a
@@ -116,27 +123,43 @@ export function drawPet(p, pet, tick, escala = 1) {
  *     lugar — ficavam sobre o corpo no passarinho. Agora saem exatamente das
  *     mesmas âncoras que o rosto usa, e não de uma cópia que envelheceu.
  */
-function vestir(p, pet, m, cores) {
+function vestir(p, pet, m, cores, plano) {
   const neck = pet.accessories?.neck || ''
   const head = pet.accessories?.head || ''
   const traco = (pts, cor) => { p.fillPoly(pts, cor); p.strokePoly(pts, OUT) }
 
   if (neck) {
-    // O eixo do pescoço: da base dele até o queixo. É o que dá a inclinação.
+    // O EIXO DO PESCOÇO vai da base dele até o CENTRO da cabeça.
+    //
+    // Estava indo até a *base* da cabeça, e com a anatomia nova isso quebrou: a
+    // cabeça agora fica acima e um pouco à frente do peito, então o vetor
+    // peito→queixo aponta quase na HORIZONTAL. A coleira, que é perpendicular a
+    // esse vetor, virava uma tira em pé atravessando o bichinho de cima a baixo,
+    // e a gravata saía para a frente, na direção do focinho.
+    //
+    // Do peito até o centro da cabeça o vetor aponta pra cima, que é como um
+    // pescoço realmente corre — e aí a coleira volta a atravessá-lo.
     const [nx, ny] = m.pescoco
-    const [hx, hy] = m.naCabeca(0, 0.9)
-    const dx = hx - nx
-    const dy = hy - ny
-    const d = Math.hypot(dx, dy) || 1
-    const ux = dx / d
-    const uy = dy / d
-    const px = -uy      // perpendicular ao pescoço: a direção da coleira
+    const [hx, hy] = m.cabeca
+    const d = Math.hypot(hx - nx, hy - ny) || 1
+    const ux = (hx - nx) / d
+    const uy = (hy - ny) / d
+    const px = -uy      // atravessa o pescoço
     const py = ux
-    const meia = m.cabecaL * 0.34
-    // a coleira fica logo abaixo do queixo, e não no meio das costas
-    const cx = nx + ux * d * 0.55
-    const cy = ny + uy * d * 0.55
-    const esp = Math.max(2, m.cabecaA * 0.15)
+
+    // "Para baixo" sai do CORPO, não do pescoço: é o que faz a gravata e a
+    // plaquinha penderem certo mesmo com ele deitado ou de cabeça baixa.
+    const o = m.noCorpo(0, 0)
+    const b = m.noCorpo(0, 1)
+    const bd = Math.hypot(b[0] - o[0], b[1] - o[1]) || 1
+    const gx = (b[0] - o[0]) / bd
+    const gy = (b[1] - o[1]) / bd
+
+    const meia = Math.max(3, m.cabecaL * 0.30)
+    const esp = Math.max(1.5, m.cabecaA * 0.11)
+    // encostada no queixo, não no meio das costas
+    const cx = nx + ux * d * 0.62
+    const cy = ny + uy * d * 0.62
     const cor = neck.includes('gravata') ? '#e8879b' : '#5bb9e8'
     traco([
       [cx + px * meia - ux * esp, cy + py * meia - uy * esp],
@@ -145,26 +168,37 @@ function vestir(p, pet, m, cores) {
       [cx + px * meia + ux * esp, cy + py * meia + uy * esp],
     ], cor)
 
+    const bx = cx + gx * esp
+    const by = cy + gy * esp
     if (neck.includes('gravata')) {
-      // pende NO SENTIDO DO PESCOÇO (pra baixo em pé, pro peito deitado)
-      const comp = m.cabecaA * 0.68
-      const larg = m.cabecaL * 0.14
-      const bx = cx + ux * esp
-      const by = cy + uy * esp
+      // A gravata pende pra baixo, mas PARA no chão: deitado, o bichinho tem o
+      // peito quase no piso, e uma gravata de comprimento fixo atravessaria o
+      // assoalho. O teto é a distância que sobra até a linha do chão.
+      const ateOChao = Math.max(0, plano.chao - by)
+      const comp = Math.max(4, Math.min(m.cabecaA * 0.6, ateOChao))
+      const larg = Math.max(2, m.cabecaL * 0.13)
+      const lx = -gy   // atravessa a gravata
+      const ly = gx
       traco([
-        [bx + px * larg, by + py * larg],
-        [bx + ux * comp + px * larg * 1.35, by + uy * comp + py * larg * 1.35],
-        [bx + ux * comp * 1.32, by + uy * comp * 1.32],
-        [bx + ux * comp - px * larg * 1.35, by + uy * comp - py * larg * 1.35],
-        [bx - px * larg, by - py * larg],
+        [bx + lx * larg, by + ly * larg],
+        [bx + gx * comp + lx * larg * 1.4, by + gy * comp + ly * larg * 1.4],
+        [bx + gx * comp * 1.3, by + gy * comp * 1.3],
+        [bx + gx * comp - lx * larg * 1.4, by + gy * comp - ly * larg * 1.4],
+        [bx - lx * larg, by - ly * larg],
       ], cor)
     } else {
-      // plaquinha da coleira, pendurada no mesmo eixo
+      // plaquinha pendurada, sempre pra baixo
+      const r = Math.max(1.6, m.cabecaL * 0.09)
       p.fillPoly([
-        [cx + ux * esp * 1.2 - 2, cy + uy * esp * 1.2],
-        [cx + ux * esp * 1.2 + 2, cy + uy * esp * 1.2],
-        [cx + ux * (esp * 1.2 + 4), cy + uy * (esp * 1.2 + 4)],
+        [bx - gy * r, by + gx * r],
+        [bx + gy * r, by - gx * r],
+        [bx + gx * r * 2.2, by + gy * r * 2.2],
       ], '#f2c53d')
+      p.strokePoly([
+        [bx - gy * r, by + gx * r],
+        [bx + gy * r, by - gx * r],
+        [bx + gx * r * 2.2, by + gy * r * 2.2],
+      ], OUT)
     }
   }
 
@@ -304,6 +338,39 @@ function bolha(cx, cy, d) {
 // ------------------------------------------------------------------ componente
 export default function PetCanvas({ pet, onPoke }) {
   const ref = useRef(null)
+  const [zoom, setZoom] = useState(2)
+
+  // A arte continua sendo 128x108 e a AMPLIAÇÃO é inteira, feita pelo CSS.
+  //
+  // A outra saída seria desenhar numa resolução maior (256x216) pra encher o
+  // espaço. Não: isso dobraria a quantidade de pixel do desenho e ele deixaria
+  // de parecer pixel art — viraria um desenho pequeno e liso. Ampliar em fator
+  // INTEIRO mantém cada pixel um quadradinho nítido, que é a direção de arte
+  // travada do projeto. Fator quebrado (1,5x) daria franja nas diagonais.
+  useLayoutEffect(() => {
+    const canvas = ref.current
+    const pai = canvas?.parentElement
+    if (!pai) return
+    const medir = () => {
+      // A largura pode passar um pouco do palco (o palco corta o que sobra), e
+      // isso é de propósito: o bichinho ocupa o MEIO da caixa de 128x108, então
+      // o que estoura nas laterais é só ar. Sem essa folga a conta perdia por
+      // três pixels — o palco dá 265 e 2x pede 256 mais a margem — e o bichinho
+      // caía pra 1x, exatamente o "muito pequeno" que era pra ser corrigido.
+      // 1,25 de folga: o bichinho ocupa mais ou menos o miolo da caixa de 128
+      // (o desenho mais largo, o dragão, vai de 8 a 108), então o que estoura nas
+      // laterais é ar — e o palco corta com `overflow: hidden`. Com 1,1 a conta
+      // perdia o 3x por dez pixels numa tela de 375, e o bichinho ficava um terço
+      // menor do que cabia.
+      const cabeL = Math.floor((pai.clientWidth * 1.25) / 128)
+      const cabeA = Math.floor((pai.clientHeight - 8) / 108)
+      setZoom(Math.max(1, Math.min(4, Math.min(cabeL, cabeA) || 1)))
+    }
+    medir()
+    const obs = new ResizeObserver(medir)
+    obs.observe(pai)
+    return () => obs.disconnect()
+  }, [])
   // A reacao ao toque vive FORA do React: `setState` a cada toque re-renderizaria
   // a arvore e reiniciaria o laco de desenho no meio da animacao — o bichinho
   // daria um tranco justamente no quadro em que devia reagir.
@@ -368,6 +435,7 @@ export default function PetCanvas({ pet, onPoke }) {
     <canvas
       ref={ref}
       className="pet-canvas"
+      style={{ width: 128 * zoom, height: 108 * zoom }}
       onPointerDown={tocar}
       aria-label={`${pet.species_name || 'bichinho'} ${pet.mood || ''}`}
     />

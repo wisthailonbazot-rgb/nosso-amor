@@ -92,9 +92,12 @@ export default function ItemPreview({ item, avatarConfig, scale = 2 }) {
     if (item.category === 'pet' && item.subcategory === 'especie') {
       const species=meta.species||'gato'
       const colors={gato:['#f2a03d','#8d8d97','#f0ebe2'],cachorro:['#c98a4b','#6b4a2f','#e8dcc6'],coelho:['#f0ebe2','#c9c4bd','#fff'],passaro:['#f2c53d','#5bb9e8','#fff'],capivara:['#a87b52','#8a6340','#c9a67f'],dragao:['#7fd6b0','#6b4fa0','#e8879b']}
-      const art=document.createElement('canvas'),petPainter=new Painter(art);petPainter.resize(128,108);petPainter.clear()
-      drawPet(petPainter,{species,colors:colors[species],stage:'filhote',mood:'feliz',accessories:{}},0)
-      painter.resize(64,54);painter.clear();painter.ctx.drawImage(art,0,0,128,108,0,0,64,54);return
+      // Direto no tamanho do cartão, sem desenhar grande e encolher: reduzir
+      // pixel art joga pixel fora, e era o que deixava a miniatura da espécie
+      // esfarelada na loja.
+      painter.resize(64,54);painter.clear()
+      drawPet(painter,{species,colors:colors[species],stage:'filhote',mood:'feliz',accessories:{}},0)
+      return
     }
     // pet: comida, brinquedo, acessório
     painter.resize(32, 32)

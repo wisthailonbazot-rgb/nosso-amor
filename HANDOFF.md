@@ -845,3 +845,88 @@ servidor continua honesta ("Pipoca está sem fome nenhuma"), não vira erro.
 deploy, build do Coolify, e o site passou a servir `index-C8hTN-kh.js` — o mesmo nome
 que o `npm run build` gerou aqui, que é a prova de ser a mesma versão. Saúde HTTPS e os
 textos novos conferidos no bundle que está no ar.
+
+### 9.6 Rodada de acertos de tela e o chat estilo WhatsApp (24/08/2026)
+
+Seis pedidos do dono na mesma rodada, todos depois de rodar no celular.
+
+**1. O bichinho sumia no jogo.** Regressão do trabalho de 9.5, e do tipo que não dá
+erro: eu troquei o tamanho do canvas de rascunho da corrida para 68×58 e **esqueci de
+passar a escala** para o `drawPet`. Ele continuou desenhando na caixa de 128×108, e o
+recorte de 68×58 pegou o canto de cima — que é só céu vazio. O bichinho existia, fora
+da moldura.
+
+O conserto não foi só passar o argumento. `drawPet` agora **deriva a escala do próprio
+canvas** (`p.h / 108`) quando ninguém manda uma: o tamanho do canvas e o tamanho do
+desenho passam a ter uma fonte só e não têm como discordar de novo. `ItemPreview`
+entrou na mesma correção — a miniatura de espécie da loja ainda desenhava grande e
+encolhia.
+
+**2. A coleira estava torta.** Ela é perpendicular ao "eixo do pescoço", e esse eixo
+era medido do peito até a **base** da cabeça. Com a anatomia nova (cabeça acima e um
+pouco à frente do peito) esse vetor virou quase horizontal — então a coleira aparecia
+como uma tira **em pé**, atravessando o bichinho, e a gravata apontava para o focinho.
+Agora o eixo vai do peito ao **centro** da cabeça, que é a direção em que um pescoço
+realmente corre. E o que pende (gravata, plaquinha) usa o "para baixo" **do corpo**, não
+do pescoço — por isso continua caindo certo com ele deitado ou de cabeça baixa. A
+gravata também para na linha do chão, senão atravessaria o assoalho no `dormir`.
+
+**3. Aproximar a vista da casa.** No celular a escala que cabe dá 1× (o cômodo tem
+434 px de arte e a tela tem 375), e aí o bichinho aparecia com os 62 px dele, perdido no
+cenário. Agora existe **aproximar**: botões −/+ e **pinça de dois dedos**, em passos
+INTEIROS (1× a 4×), com o cômodo passando a rolar — que é o que jogo de decoração faz.
+Encolher a arte pra caber seria o contrário da direção de arte do projeto.
+
+Três detalhes que valem: a aproximação fica **separada** da escala automática (senão
+girar o celular jogaria fora o zoom escolhido); aproximar mantém o **meio da vista** no
+lugar (sem isso cada passo joga a pessoa pro canto do cômodo e ela perde o bichinho de
+vista); e os botões ficam **fora** do contêiner que rola — dentro, eles rolavam junto e
+sumiam, e quem aproximasse não teria como afastar.
+
+**4. As barras de atributo viravam meia tela.** Eram quatro cartões num grid embaixo do
+cenário. Agora são quatro tracinhos num **HUD de canto**, dentro do palco. O prazo até
+zerar não se perdeu — é ele que mostra que o tempo está correndo, decisão registrada em
+8.2: virou o `title` de cada barra e aparece escrito **quando o atributo está baixo**,
+que é quando importa.
+
+**5. A aba do bichinho usa a tela do celular.** `.pet-tela` ocupa a altura entre o
+cabeçalho e o menu (`100dvh`, e não `vh`: no celular a barra do navegador entra e sai, e
+`vh` não conta isso — o rodapé ficaria escondido atrás dela). O palco ocupa a largura
+inteira e as opções viraram uma faixa flutuante **sobre** o cenário; é a largura que
+decide o tamanho do bichinho, então tirá-las do fluxo foi o que permitiu ele chegar a
+3× no celular (era 1×). A ampliação continua **inteira** — ampliar em 1,5× daria franja
+nas diagonais e acabaria com a pixel art.
+
+Detalhe da conta: a largura pode passar 25% do palco, porque o bichinho ocupa o miolo da
+caixa de 128 (o mais largo, o dragão, vai de 8 a 108) e o que estoura nas laterais é ar,
+cortado pelo `overflow: hidden`. Com a folga antiga de 10% a conta perdia o 3× por dez
+pixels numa tela de 375.
+
+**6. Chat: marcar a mensagem e responder, como no WhatsApp.**
+
+O que existia era um toque simples que abria um menuzinho embaixo da bolha — e tocar é o
+mesmo gesto de abrir a foto, então o menu abria sem querer o tempo todo. Agora:
+
+- **arrastar a mensagem de lado** responde. A setinha aparece por trás e **acende**
+  quando o arrasto já passou do limite, pra soltar não virar aposta;
+- **segurar 420 ms** marca a mensagem: ela fica destacada, ganha um selo, e as ações
+  aparecem numa barra no topo — responder, copiar, reagir, apagar;
+- a citação passou a mostrar **quem escreveu** ("Você" / o nome dela), como no WhatsApp.
+
+O cuidado que faz o gesto conviver com a conversa: `touch-action: pan-y` na linha e, no
+código, **a rolagem vence** — se o dedo desceu mais do que andou pro lado, o gesto é
+cancelado. Sem isso, puxar pra responder mataria a rolagem da conversa. Conferido: um
+arrasto vertical sobre a bolha não marca nem abre resposta.
+
+> **`Icon` devolve `null` pra nome que não existe** — a armadilha de 9.2 de novo. A seta
+> `reply` não existia e o botão de responder sairia vazio, sem erro. Foi desenhada.
+
+**Conferido no navegador, em viewport de celular (375×812)**, contra o app publicado:
+o bichinho reaparece na corrida (298 px pintados, antes 0); a coleira virou uma faixa
+de 11×7 atravessando o pescoço (era uma tira em pé); o zoom da casa vai de 434×290 a
+1302×870 com o indicador certo; o palco do bichinho chega a 3× (384×324 de canvas);
+arrastar item continua funcionando no layout novo (fome 76 → 100); e no chat, puxar
+responde, segurar marca (com as quatro ações), a citação sai com o autor e o arrasto
+vertical não rouba a rolagem.
+
+**537 verificações, 0 falha.**

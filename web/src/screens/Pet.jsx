@@ -142,28 +142,79 @@ export default function Pet() {
 
   const cuddleReady = readyAt(pet.can_cuddle_at)
   return <>
+    <div className="pet-tela">
     <div className="row between"><div><h1 className="screen-title pet-name">{pet.name}</h1><p className="muted small pet-sub">{pet.species_name} · nível {pet.level} · {pet.stage}</p></div><span className={`pill ${pet.sick ? 'rose' : 'sage'}`}>{MOOD[pet.mood] || pet.mood}</span></div>
     {status && <p className={`notice ${status.kind}`}>{status.text}</p>}
-    <div ref={palcoRef} className={`pet-stage card ${pet.sick ? 'sick' : ''} ${arrasto ? (arrasto.sobre ? 'alvo-aceso' : 'alvo') : ''}`}>
-      <PetCanvas pet={{ ...pet, prop: emUso }} />
-      {arrasto && <span className="pet-stage-dica">{arrasto.sobre ? `Solte para dar ${arrasto.name}` : `Arraste até ${pet.name}`}</span>}<div className="pet-stage-note"><strong>{pet.mood === 'feliz' ? 'Tudo em ordem por aqui' : 'Ele está tentando avisar vocês'}</strong><span>{pet.mess_count ? `${pet.mess_count} sujeira${pet.mess_count > 1 ? 's' : ''} pela casa` : 'Casa limpinha'}</span></div></div>
-    <div className="pet-stats">{Object.entries(pet.stats).map(([key, value]) => <div className={`pet-stat ${value < 30 ? 'low' : ''}`} key={key}><div className="row between"><span><Icon name={STAT[key][1]} size={15} /> {STAT[key][0]}</span><strong>{value}</strong></div><div className="stat-track"><i style={{ width: `${value}%` }} /></div>{pet.empty_in_hours[key] != null && <small>zera em cerca de {pet.empty_in_hours[key]}h</small>}</div>)}</div>
-    <div className="xp-strip"><span>Nível {pet.level}</span><div><i style={{ width: `${pet.xp_ratio * 100}%` }} /></div><small>{pet.xp_need ? `${pet.xp_into}/${pet.xp_need} XP` : 'máximo'}</small></div>
-    <div className="pet-tabs">{[['comida','Alimentar'],['brinquedo','Brincar'],['acessorio','Vestir']].map(([code, label]) => <button key={code} className={tab === code ? 'active' : ''} onClick={() => setTab(code)}>{label}</button>)}</div>
-    <div className="pet-items">{shown.map((item) => {
-      const can = item.quantity > 0 && (tab !== 'brinquedo' || item.ready)
-      const path = tab === 'comida' && item.effect.hygiene ? 'bathe' : tab === 'comida' ? 'feed' : tab === 'brinquedo' ? 'play' : 'accessory'
-      const label = tab === 'acessorio' ? `${item.name} vestido.` : `${pet.name} recebeu ${item.name}.`
-      return <button
-        key={item.code}
-        className={`pet-item ${arrasto?.code === item.code ? 'na-mao' : ''}`}
-        disabled={busy || !can}
-        onPointerDown={(e) => { if (can) comecarArrasto(e, item, path, label) }}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (can) act(path, { code: item.code }, label) } }}
-      ><span className="pet-item-art"><ItemPreview item={{ ...item, category: 'pet' }} scale={1.35} /></span><strong>{item.name}</strong><small>{item.quantity ? `vocês têm ${item.quantity}` : `${item.price} Corações na loja`}</small></button>
-    })}</div>
+    {/* A ARENA: o bichinho grande no meio, as opções na lateral.
+        Antes o palco era uma faixa baixa e a lista de itens ocupava a largura
+        toda embaixo — o bichinho ficava pequeno e longe do que se faz com ele.
+        Com as opções em pé, do lado, sobra altura pro cenário e o arrasto vira
+        um caminho curto: o item sai da lateral e cai em cima dele. */}
+    <div className="pet-arena">
+      <div ref={palcoRef} className={`pet-stage card ${pet.sick ? 'sick' : ''} ${arrasto ? (arrasto.sobre ? 'alvo-aceso' : 'alvo') : ''}`}>
+        <PetCanvas pet={{ ...pet, prop: emUso }} />
+        {/* As barras viraram um HUD de canto.
+            Elas ocupavam quatro cartões num grid embaixo do cenário — metade da
+            tela pra dizer quatro números. Aqui são quatro tracinhos no canto,
+            como em jogo: dá pra ler de relance e o cenário fica com o espaço.
+            O prazo até zerar não se perdeu (é ele que mostra que o tempo está
+            correndo, decisão registrada no HANDOFF): virou o `title` de cada
+            barra, e aparece escrito quando o atributo está baixo — que é
+            justamente quando importa. */}
+        <div className="pet-hud">
+          {Object.entries(pet.stats).map(([key, value]) => (
+            <div
+              key={key}
+              className={`hud-linha ${value < 30 ? 'baixo' : ''}`}
+              title={`${STAT[key][0]}: ${value}${pet.empty_in_hours[key] != null ? ` · zera em cerca de ${pet.empty_in_hours[key]}h` : ''}`}
+            >
+              <Icon name={STAT[key][1]} size={11} />
+              <i><b style={{ width: `${value}%` }} /></i>
+              {value < 30 && pet.empty_in_hours[key] != null && <em>{pet.empty_in_hours[key]}h</em>}
+            </div>
+          ))}
+          <div className="hud-xp" title={pet.xp_need ? `${pet.xp_into}/${pet.xp_need} XP` : 'nível máximo'}>
+            <span>Nv {pet.level}</span>
+            <i><b style={{ width: `${pet.xp_ratio * 100}%` }} /></i>
+          </div>
+        </div>
+        <div className="pet-stage-note">
+          <strong>{pet.mood === 'feliz' ? 'Tudo em ordem' : 'Ele quer avisar algo'}</strong>
+          <span>{pet.mess_count ? `${pet.mess_count} sujeira${pet.mess_count > 1 ? 's' : ''} pela casa` : 'Casa limpinha'}</span>
+        </div>
+        {arrasto && <span className="pet-stage-dica">{arrasto.sobre ? `Solte para dar ${arrasto.name}` : `Arraste até ${pet.name}`}</span>}
+      </div>
+
+      <div className="pet-lateral">
+        <div className="pet-tabs">{[['comida', 'Comer', 'bag'], ['brinquedo', 'Brincar', 'game'], ['acessorio', 'Vestir', 'sparkle']].map(([code, label, ic]) => (
+          <button key={code} className={tab === code ? 'active' : ''} onClick={() => setTab(code)} title={label}>
+            <Icon name={ic} size={15} /><span>{label}</span>
+          </button>
+        ))}</div>
+        <div className="pet-items">{shown.map((item) => {
+          const can = item.quantity > 0 && (tab !== 'brinquedo' || item.ready)
+          const path = tab === 'comida' && item.effect.hygiene ? 'bathe' : tab === 'comida' ? 'feed' : tab === 'brinquedo' ? 'play' : 'accessory'
+          const label = tab === 'acessorio' ? `${item.name} vestido.` : `${pet.name} recebeu ${item.name}.`
+          return <button
+            key={item.code}
+            className={`pet-item ${arrasto?.code === item.code ? 'na-mao' : ''}`}
+            disabled={busy || !can}
+            title={item.name}
+            onPointerDown={(e) => { if (can) comecarArrasto(e, item, path, label) }}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (can) act(path, { code: item.code }, label) } }}
+          >
+            <span className="pet-item-art"><ItemPreview item={{ ...item, category: 'pet' }} scale={1.15} /></span>
+            <strong>{item.name}</strong>
+            <small>{item.quantity ? `×${item.quantity}` : `${item.price}♥`}</small>
+          </button>
+        })}</div>
+        <button className="btn btn-ghost pet-cuddle" disabled={busy || !cuddleReady} onClick={() => act('cuddle', undefined, `${pet.name} ganhou um carinho.`)}>
+          <Icon name="heart" size={16} /><span>{cuddleReady ? 'Carinho' : 'Descansando'}</span>
+        </button>
+      </div>
+    </div>
+    </div>
     {!shown.some((i) => i.quantity) && <Link to="/loja" className="btn btn-accent btn-block"><Icon name="bag" size={17} /> Ir comprar na loja</Link>}
-    <button className="btn btn-ghost btn-block pet-cuddle" disabled={busy || !cuddleReady} onClick={() => act('cuddle', undefined, `${pet.name} ganhou um carinho.`)}><Icon name="heart" size={17} /> {cuddleReady ? 'Carinho (descansa 4 horas)' : 'Carinho ainda descansando'}</button>
     {arrasto && (
       <span
         className={`arrasto-fantasma ${arrasto.sobre ? 'aceso' : ''}`}
