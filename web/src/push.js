@@ -87,7 +87,15 @@ export function diagnose() {
 export async function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return null
   try {
-    return await navigator.serviceWorker.register('/sw.js', { scope: '/' })
+    const registro = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
+    // Pede a checagem de versao NA MAO.
+    //
+    // O iPhone segura o service worker com forca: uma vez instalado, ele pode
+    // ficar dias servindo a versao antiga, e correcao no tratamento do push
+    // simplesmente nao chega. Com `skipWaiting`/`clients.claim` do outro lado,
+    // este `update()` faz a versao nova assumir ainda nesta abertura do app.
+    registro.update().catch(() => {})
+    return registro
   } catch (err) {
     console.warn('service worker nao registrou', err)
     return null

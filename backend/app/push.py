@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+import secrets
 
 from pywebpush import WebPushException, webpush
 from sqlalchemy.exc import IntegrityError
@@ -99,19 +100,38 @@ def send_to_user(
     if not PUSH_ENABLED:
         return {"sent": 0, "skipped": "push desligado (sem chaves VAPID)"}
 
+    # Bilhete de volta.
+    #
+    # Do lado do servidor a gente so sabe que a Apple ACEITOU a mensagem — e ela
+    # aceita mesmo quando o aviso nunca aparece na tela. Este numero aleatorio vai
+    # junto, e o service worker devolve ele em `/api/push/ack` dizendo se
+    # conseguiu mostrar. Sem isso, "o servidor mandou e nada chegou" fica sendo
+    # chute entre tres suspeitos: envio, aparelho e service worker.
+    ack = secrets.token_urlsafe(9)
     payload = {
         "title": title,
         "body": body,
         "url": url,
         "kind": kind,
         "tag": tag or kind,
+        "ack": ack,
         **(extra or {}),
     }
+    log.info("push saindo user=%s kind=%s ack=%s", user_id, kind, ack)
 
     subs = db.query(PushSubscription).filter(PushSubscription.user_id == user_id).all()
+    if not subs:
+        log.warning("push sem aparelho registrado (user=%s ack=%s)", user_id, ack)
     sent = 0
     for sub in subs:
         ok, drop = _send_one(sub, payload)
+        log.info(
+            "push -> %s aceito=%s apagar=%s ack=%s",
+            sub.endpoint.split("/")[2] if "/" in sub.endpoint else "?",
+            ok,
+            drop,
+            ack,
+        )
         if ok:
             sub.failures = 0
             sub.last_ok_at = utcnow()

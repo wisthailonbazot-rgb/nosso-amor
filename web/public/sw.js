@@ -8,7 +8,7 @@
 // "nunca cachear" pra /api. Um app de casal com chat nao pode servir mensagem
 // velha do cache achando que e a atual.
 
-const CACHE = 'casal-v2'
+const CACHE = 'casal-v3'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', (event) => {
@@ -47,6 +47,33 @@ self.addEventListener('fetch', (event) => {
 })
 
 // ------------------------------------------------------------------ push
+//
+// Duas coisas aqui existem por causa de um caso real: o servidor mandava, a
+// Apple aceitava, e nada aparecia no iPhone.
+//
+// 1. **Plano B na hora de mostrar.** `showNotification` REJEITA se alguma opcao
+//    nao agradar o navegador — e a Safari e mais exigente que as outras. Uma
+//    opcao ruim (um `badge` que ela nao aceita, por exemplo) fazia o aviso
+//    inteiro nao aparecer, sem erro em lugar nenhum. Se a versao completa
+//    falhar, mostra a versao simples: melhor um aviso sem enfeite do que aviso
+//    nenhum.
+//
+// 2. **Bilhete de volta.** O `ack` que veio no push e devolvido pro servidor
+//    dizendo se deu certo. E o que separa "o aparelho nem acordou" de "acordou e
+//    nao conseguiu mostrar" — do lado de fora, os dois parecem a mesma coisa.
+async function contar(ack, ok, modo, erro) {
+  if (!ack) return
+  try {
+    await fetch('/api/push/ack', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ack, ok, modo, erro: String(erro || '').slice(0, 200) }),
+    })
+  } catch (e) {
+    /* sem rede: paciencia, o aviso e o que importa */
+  }
+}
+
 self.addEventListener('push', (event) => {
   let data = {}
   try {
@@ -55,7 +82,9 @@ self.addEventListener('push', (event) => {
     data = { title: 'Nosso app', body: event.data ? event.data.text() : '' }
   }
   const title = data.title || 'Nosso app'
-  const options = {
+  const ack = data.ack || ''
+
+  const completa = {
     body: data.body || '',
     icon: '/icon-192.png',
     badge: '/icon-192.png',
@@ -65,7 +94,19 @@ self.addEventListener('push', (event) => {
     renotify: true,
     data: { url: data.url || '/' },
   }
-  event.waitUntil(self.registration.showNotification(title, options))
+  const simples = { body: data.body || '', icon: '/icon-192.png', data: { url: data.url || '/' } }
+
+  event.waitUntil(
+    self.registration
+      .showNotification(title, completa)
+      .then(() => contar(ack, true, 'completa'))
+      .catch((err) =>
+        self.registration
+          .showNotification(title, simples)
+          .then(() => contar(ack, true, 'simples', err))
+          .catch((err2) => contar(ack, false, 'nenhuma', err2))
+      )
+  )
 })
 
 self.addEventListener('notificationclick', (event) => {

@@ -1,3 +1,7 @@
+import logging
+
+from pydantic import BaseModel, Field
+
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
@@ -95,6 +99,37 @@ def test_push(user: User = Depends(current_user), db: Session = Depends(get_db))
     )
     db.commit()
     return result
+
+
+class AckIn(BaseModel):
+    ack: str = Field(default="", max_length=40)
+    ok: bool = True
+    erro: str = Field(default="", max_length=200)
+    modo: str = Field(default="", max_length=40)
+
+
+@router.post("/ack")
+def ack_push(payload: AckIn) -> dict:
+    """O service worker conta o que aconteceu com o push que chegou.
+
+    **Sem autenticacao de proposito.** Quem chama e o service worker, que roda
+    fora da pagina e nao tem o token da sessao na mao. O que ele manda de volta
+    e so o numero aleatorio que veio no proprio push — nao da pra descobrir nada
+    com ele, nao identifica ninguem e nao muda nada no banco. E um bilhete de
+    diagnostico, e o unico efeito e uma linha no log.
+
+    Existe porque o servidor sozinho nao consegue distinguir tres coisas muito
+    diferentes que parecem iguais: a Apple recusou, a Apple aceitou mas o
+    aparelho nao acordou, ou o aparelho acordou e nao conseguiu mostrar o aviso.
+    """
+    logging.getLogger("push").info(
+        "push ACK ack=%s mostrou=%s modo=%s erro=%s",
+        payload.ack or "?",
+        payload.ok,
+        payload.modo or "-",
+        payload.erro or "-",
+    )
+    return {"ok": True}
 
 
 def _guess_label(agent: str) -> str:
