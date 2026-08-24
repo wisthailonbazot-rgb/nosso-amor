@@ -143,15 +143,32 @@ export function drawScene(p, scene, ui = {}, t = 0) {
   drawFloor(p, cols, rows, origin, scene.floor)
   if (ui.editing) gridOverlay(p, cols, rows, origin)
 
-  const items = depthSort(scene.items || [])
-  for (const item of items) {
+  // O bichinho entra na MESMA fila de profundidade dos moveis.
+  //
+  // Enquanto ele ficava parado num canto, desenhar por ultimo passava
+  // despercebido. Agora que ele anda, desenhar por ultimo o faria atravessar o
+  // sofa por cima ao passar atras dele — em isometrico, quem esta mais ao fundo
+  // tem que ser pintado primeiro, e isso vale pro bicho igual vale pra mobilia.
+  const fila = [...(scene.items || [])]
+  // `scene.pet` pode ser um objeto OU uma funcao do instante.
+  //
+  // Funcao e o caso do comodo: a posicao dele muda a cada quadro, e um objeto
+  // fixo so mudaria quando o React re-renderizasse — ou seja, ele voltaria a
+  // ficar parado, que e exatamente o que a gente esta consertando.
+  const bicho = typeof scene.pet === 'function' ? scene.pet(t || 0) : scene.pet
+  if (bicho) fila.push({ ...bicho, w: 1, d: 1, _pet: true })
+
+  for (const item of depthSort(fila)) {
+    if (item._pet) {
+      drawHousePet(p, item, origin, t)
+      continue
+    }
     if (item.id === ui.selectedId) {
       highlight(p, item.col, item.row, item.w, item.d, origin, 'rgba(255,207,107,0.45)')
     }
     if (item.mess) drawMess(p, item, origin, t)
     else drawItem(p, item, origin, t)
   }
-  if (scene.pet) drawHousePet(p, scene.pet, origin, t)
 
   if (ui.hover) {
     const { col, row, w, d, ok } = ui.hover
@@ -168,15 +185,42 @@ export function drawScene(p, scene, ui = {}, t = 0) {
   return origin
 }
 
+/**
+ * O bichinho dentro do comodo.
+ *
+ * Ele e desenhado num canvas separado, em tamanho cheio, e so depois colado
+ * encolhido na cena. Poderia ser desenhado direto, mas ai cada parte do corpo
+ * teria que conhecer a escala do comodo — e o mesmo desenho que aparece na tela
+ * dele deixaria de ser o mesmo daqui. Um desenho so, colado em dois tamanhos.
+ *
+ * `pet.col` e `pet.row` aceitam fracao: e assim que o passeio (`petWander.js`)
+ * faz ele ANDAR em vez de pular de celula em celula.
+ */
 function drawHousePet(p, pet, origin, t) {
-  const [x,y] = project(pet.col+.5,pet.row+.5,.05,origin)
+  const [x, y] = project(pet.col + 0.5, pet.row + 0.5, 0.05, origin)
   if (!drawHousePet.canvas) {
-    drawHousePet.canvas=document.createElement('canvas')
-    drawHousePet.painter=new Painter(drawHousePet.canvas)
+    drawHousePet.canvas = document.createElement('canvas')
+    drawHousePet.painter = new Painter(drawHousePet.canvas)
   }
-  const sprite=drawHousePet.painter
-  sprite.resize(128,108); sprite.clear(); drawPet(sprite,pet,t)
-  p.ctx.drawImage(drawHousePet.canvas,0,0,128,108,Math.round(x-25),Math.round(y-42),50,42)
+  const sprite = drawHousePet.painter
+  sprite.resize(128, 108)
+  sprite.clear()
+  drawPet(sprite, pet, t)
+
+  const ex = Math.round(x - 25)
+  const ey = Math.round(y - 42)
+  if (pet.olhando === 'esquerda') {
+    // Espelha na hora de colar, em vez de desenhar um segundo conjunto de
+    // sprites virados. `drawImage` com escala negativa e nitido: nao interpola,
+    // entao a pixel art continua com borda dura.
+    p.ctx.save()
+    p.ctx.translate(ex + 50, ey)
+    p.ctx.scale(-1, 1)
+    p.ctx.drawImage(drawHousePet.canvas, 0, 0, 128, 108, 0, 0, 50, 42)
+    p.ctx.restore()
+  } else {
+    p.ctx.drawImage(drawHousePet.canvas, 0, 0, 128, 108, ex, ey, 50, 42)
+  }
 }
 
 function drawMess(p, item, origin, t) {

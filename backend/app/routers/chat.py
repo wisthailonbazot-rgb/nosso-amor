@@ -22,7 +22,7 @@ STICKERS = [
     "com_fome", "chateado", "risada", "piscada", "flor", "cafe",
     "bolo", "estrela", "chuva", "sol", "gatinho", "presente",
     "quero_voce", "hoje_tem", "vem_ca", "beijo_pescoco", "debaixo_coberta", "fogo",
-    "toma_amor", "grudinho", "menstruacao", "amo_voce", "cafune",
+    "toma_amor", "uau", "grudinho", "menstruacao", "amo_voce", "cafune",
     "amor_seguro", "amor_protegido", "comemoracao", "acabei",
     "sono_a_dois", "mordida", "meu_dia", "foi_mal",
 ]

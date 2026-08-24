@@ -401,8 +401,9 @@ guardar no volume de disco e servir com o token de mídia que já existe.
 - Etapa 2 pronta: carteira, check-in com sequência, tarefas, loja, avatar — com as
   telas já na direção de arte nova.
 - Motor de pixel isométrico funcionando; a tela da casa já desenha um cômodo real.
-- Bancada `/lab` confere sozinha se toda peça de arte desenha algo (30 móveis,
-  48 peças de avatar, 13 itens) — rota escondida, sem link em menu nenhum.
+- Bancada `/lab` confere sozinha se toda peça de arte desenha algo (30 móveis nas
+  4 rotações, 6 bichinhos × 3 estágios, 4 humores + 4 acessórios, 48 peças de
+  avatar, 13 itens, 37 figurinhas) — rota escondida, sem link em menu nenhum.
 - Etapa 3 pronta: ciclo com base clínica citada, privacidade em três níveis, chat
   estilo WhatsApp com figurinha e áudio, mural de momentos, toques de saudade e
   datas importantes.
@@ -416,7 +417,7 @@ guardar no volume de disco e servir com o token de mídia que já existe.
   `pet-redesenhado.png` e `jogo-pet.png`.
 - O pet agora aparece e interage dentro do cômodo; prova do arraste, rotação,
   persistência e interação em `docs/screenshots/casa-pet-interacao.png`.
-- Nada no ar ainda: roda só localmente.
+- Produção no ar em `https://nossoamor.209.50.229.119.sslip.io`, isolada no Coolify.
 
 **Revisão de progressão e perfil (23/08/2026):** `/tarefas` agora gera cinco missões
 compartilhadas por dia a partir de uma rotação determinística. Elas avançam somente
@@ -431,12 +432,12 @@ enviada pelo dono virou 13 novas figurinhas pixel-art e seis novos cutucões; o 
 passou de 24 para **37 figurinhas**, todas conferidas pela bancada `/lab` sem desenho
 vazio. O smoke passou com **498 verificações, 0 falha** e a build Vite passou.
 
-**Deploy móvel bloqueado:** `credenciais.md` está desatualizado para os três caminhos
-de acesso: o token da API Coolify responde 401, o login/senha do painel retorna para
-`/login` e a chave local `id_ed25519` apontada no documento não existe. Não houve
-alteração na VPS. Renovar um token Coolify com acesso às aplicações (preferível) ou
-restaurar a chave SSH; só então publicar em HTTPS/WSS e recompilar o APK. Não entregar
-outro APK com IP local.
+**Deploy móvel concluído:** as credenciais válidas estavam em `env-coolify.txt`. A
+aplicação `q13k8ab4ps5elmhoio0mov3t` foi publicada pelo Dockerfile em
+`https://nossoamor.209.50.229.119.sslip.io`, com PostgreSQL exclusivo
+`gqn59a5xe8hk2rf6utzpa34w`, volume persistente, limites de memória/CPU e variáveis
+somente de execução. Login dos dois perfis, saúde, missões, saldos de 1.000 Corações
+e entrega WSS entre parceiros foram validados na aplicação pública.
 
 ### 9.1 Pacote móvel local (23/08/2026)
 
@@ -445,22 +446,157 @@ identificador `com.nossoapp.casal`, Android mínimo 7.0 (API 24) e alvo API 36. 
 de depuração foi compilado com o JDK 21 e SDK Android portáteis guardados somente em
 `.tools/`, sem instalar nem alterar ferramentas dos outros projetos. O pacote passou
 no `apksigner` (assinatura v2), no `aapt` e no Gradle. Uma cópia de entrega fica em
-`releases/NossoApp-casal-android-debug.apk`.
+`releases/NossoApp-casal-android.apk`.
 
-Esta primeira cópia usa `http://192.168.1.250:8020` e, portanto, é somente para teste
-no mesmo Wi-Fi, com este computador e o backend ligados. `dev_server.py` escuta em
-`0.0.0.0` e aceita as origens nativas do Capacitor. O login e todos os dados continuam
-no mesmo FastAPI; não há uma base separada dentro do APK.
+O pacote final usa `https://nossoamor.209.50.229.119.sslip.io`, desabilita tráfego
+HTTP em claro e funciona em qualquer rede com internet. O login e todos os dados
+continuam no mesmo FastAPI/PostgreSQL; não há uma base separada dentro do APK.
 
-A build web normal foi copiada para `backend/app/static`; manifesto, service worker
-e tags Apple já permitem testar no Safari pelo endereço local. A versão definitiva
-para iPhone exige publicar a aplicação em HTTPS/WSS na VPS, pois instalação PWA,
-service worker e Web Push não devem depender de HTTP ou do IP doméstico. Ao receber
-a URL pública, recompilar o APK com `VITE_API_URL=https://...`, sincronizar o
-Capacitor e gerar uma assinatura de release; a chave de debug atual não é publicação.
+A PWA para iPhone está no mesmo endereço HTTPS, com manifesto, service worker e tags
+Apple. No Safari, usar Compartilhar → Adicionar à Tela de Início. O APK entregue é
+instalável e assinado com a chave de depuração do Android; para publicar na Play Store
+será necessário criar uma chave de release definitiva.
 
-Validação desta etapa: **488 verificações, 0 falha**, `npm run build` aprovado,
-Gradle aprovado, APK inspecionado e rota de saúde acessível pelo IP da rede local.
+Validação desta etapa: **498 verificações, 0 falha**, `npm run build` e Gradle
+aprovados, APK v2 inspecionado (SHA-256
+`2EA12DA09CF0A13E2417AB6BB53635AB2B640CAEBAAD5DAF53B03C4812C6C80B`), saúde
+HTTPS e tempo real WSS aprovados em produção.
+
+### 9.2 Revisão final da Etapa 4 (23/08/2026)
+
+Três defeitos que só apareceram na conferência de verdade — vale ler antes de mexer
+no motor de desenho, porque os dois primeiros são do tipo que não dá erro nenhum:
+
+1. **`requestAnimationFrame` não roda em aba que o navegador não está compondo.**
+   Todo canvas do app desenhava só dentro do laço de animação, então aba em segundo
+   plano, celular com a tela travada ou app minimizado devolviam um retângulo
+   **em branco** — sem erro, sem log, sem nada. Foi medido: `document.hidden` verdadeiro,
+   **zero** quadros em 1,5 s, e os seis canvases das espécies com 0 pixel pintado.
+   Corrigido em `RoomCanvas`, `PetCanvas` e `PropertyCanvas`: **um quadro é pintado
+   na hora**, de forma síncrona, antes de pedir o primeiro quadro animado.
+   Cuidado ao mexer: em `PropertyCanvas` o `draw` agenda o próximo quadro sozinho,
+   então chamar `draw()` **e** `requestAnimationFrame(draw)` cria dois laços no
+   mesmo canvas e a cena pisca.
+
+2. **`Icon` devolve `null` para nome que não existe.** As telas novas usavam `drop`,
+   `sparkle` e `lock`, que nunca foram desenhados — os ícones das barras de atributo
+   do bichinho simplesmente não apareciam, calados. Os três foram desenhados. Para
+   conferir depois de acrescentar tela nova:
+
+   ```bash
+   cd "D:/beckup/arquivo env/app-casal" && grep -ohE 'name="[a-zA-Z_]+"' web/src/screens/*.jsx web/src/components/*.jsx | sed -E 's/name="([a-zA-Z_]+)"/\1/' | sort -u > /tmp/used.txt; grep -oE "^\s{2}[a-zA-Z_]+:" web/src/components/Icon.jsx | sed -E 's/[ :]//g' | sort -u > /tmp/have.txt; comm -23 /tmp/used.txt /tmp/have.txt
+   ```
+
+3. **A casa mentia sobre o bichinho.** A linha do cômodo dizia "tirando uma soneca
+   na caminha" com ele doente e doze sujeiras no chão: a legenda saía do móvel
+   favorito e ignorava o estado. Agora o estado ruim (doente / faminto / imundo /
+   triste / casa suja) vem **antes** do móvel — é justamente o aviso que o dono
+   precisa ver.
+
+A bancada `/lab` ganhou as abas **Bichinhos** e **Humores** porque o bichinho era a
+única arte do app que ninguém conferia sozinha — e foi exatamente onde o defeito 1
+apareceu primeiro.
+
+Conferido no navegador, contra o app publicado (`web/dist` copiado pro
+`backend/app/static`, igual à produção): as 6 espécies desenham (2.580 a 3.853 pixels
+cada, silhuetas diferentes), adoção pela tela funciona ponta a ponta, o editor
+recusa o segundo móvel com "Vocês só têm 1 de Mesa", comprar → posicionar → girar →
+salvar persiste (revisão 2 → 3, saldo 1.000 → 880) e um coelho largado 48 horas
+chega a fome 0, alegria 0, higiene 8, **doente**, com **12 sujeiras** espalhadas pela
+sala nos 4 tipos e nenhuma em cima de móvel. Com sujeira, o desenho do cômodo muda
+(conferido por resumo da imagem); sem ela, volta ao anterior.
+
+### 9.3 Rodada de validação no aparelho (23/08/2026)
+
+O dono rodou no iPhone e no APK e voltou com uma lista. O que foi achado e feito:
+
+**A causa da foto e do áudio não funcionarem no APK — e não era mídia.**
+O servidor devolve o caminho **relativo** da mídia (`/media/x.jpg?token=…`), porque
+não tem como saber com segurança por qual endereço público está sendo acessado. No
+navegador isso resolve sozinho, porque o app é servido pelo próprio backend. Dentro
+do APK, não: o app roda de `https://localhost`, e ali `/` é **o pacote embutido no
+aparelho** — sem API e sem foto. A imagem quebrava e o áudio não tocava, calados.
+Corrigido com `mediaUrl()` em `api.js`; **toda** foto, miniatura e áudio passa por ele.
+
+Junto disso, duas coisas no Android que faltavam:
+- `RECORD_AUDIO` no `AndroidManifest.xml`. Sem ela o `getUserMedia({audio:true})` da
+  WebView falha **antes** de o Android pedir permissão — o áudio não gravava e não
+  aparecia erro nenhum. Entraram também `READ_MEDIA_IMAGES` e `POST_NOTIFICATIONS`.
+- O script `android:apk` chamava `npm run build`, **sem** o endereço do servidor —
+  ou seja, gerava um APK que não fala com backend nenhum. Agora existe
+  `npm run build:apk`, que usa `vite build --mode apk` e lê `web/.env.apk`.
+
+> **Dois builds, de propósito.** `npm run build` (o que o FastAPI serve) tem que
+> continuar **sem** endereço: lá o app e a API são a mesma origem. `npm run build:apk`
+> crava o endereço. Trocar o endereço do servidor exige APK novo nos dois celulares —
+> a mesma pegadinha já documentada no `hvac-system`.
+
+**Notificação.** O encanamento está certo e a produção responde `push_enabled: true`
+com chave VAPID. O que faltava no app era o **aviso com o app aberto**: quem ouvia o
+cutucão era um componente que morava dentro da tela de Início, então trocar de aba
+parava de receber. Agora existe `AvisosAoVivo`, montado no casco (`App.jsx`), fora
+das rotas: cutucão vira chuva de figurinha e mensagem do parceiro vira faixa clicável
+no topo, **em qualquer tela** — menos dentro do próprio chat, onde seria repetição.
+
+Sobre o Android: o dono pediu "faz igual ao HVAC". Conferi o `hvac-system` e ele
+**não tem notificação nenhuma** — as dependências de lá são `@capacitor/filesystem` e
+`@capacitor/share`, pra PDF. O que aquele projeto resolveu, e que serve aqui, é o
+endereço cravado (acima). **WebView do Android não entrega Web Push**: no APK isso
+exige push nativo (Firebase/FCM) ou instalar como PWA pelo Chrome. Decisão pendente.
+
+**"Interagir" com o bichinho na casa.** O botão chamava direto o carinho, que tem
+descanso de 4 horas de propósito. Fora dessa janela o servidor recusava com 400, a
+tela pintava erro e **nada acontecia com o bicho** — parecia quebrado. O conserto não
+foi tirar o descanso (é decisão travada: carinho não pode ser botão sem consequência),
+e sim **separar reação de prêmio**: encostar nele sempre faz ele pular e soltar
+coração; só a alegria é que espera as 4 horas, e a recusa virou aviso, não erro.
+
+**A casa estava empilhada.** Media **1.587 px de altura num visor de 918**: vista
+externa, legenda, abas de cômodo, cômodo, linha do bichinho e editor, tudo na mesma
+rolagem. Virou duas abas — "Do lado de fora" e "Por dentro" — com a **fachada inteira
+clicável** pra entrar. Cada vista agora cabe na tela (812 px, sem rolagem lateral).
+
+**O bichinho não pode ficar parado.** A posição dele vinha de uma conta feita uma vez
+e nunca mudava. Agora existe `web/src/render/petWander.js`: ele escolhe um lugar livre,
+**caminha** até lá em posição fracionária (a projeção isométrica aceita fração), para
+e escolhe outro. Medido no navegador: **61 posições distintas em 6 segundos**.
+
+Dois cuidados que isso trouxe:
+1. O bichinho entrou na **ordem de profundidade** junto com os móveis. Enquanto ficava
+   parado num canto, desenhar por último passava despercebido; andando, ele passaria
+   por cima do sofá.
+2. `scene.pet` agora pode ser uma **função do instante**. Um objeto fixo só mudaria
+   quando o React re-renderizasse — ou seja, ele voltaria a ficar parado.
+
+`drawPet` passou a receber `pet.action` e anima por ação: andar (poeira do passo),
+comer (potinho e migalhas), banho (espuma e bolhas subindo), brincar/feliz (pulo e
+coraçõezinhos) e dormir (respiração lenta e os "z"). Tudo desenhado, nada de emoji.
+
+**Jogo novo: corrida do bichinho** (`web/src/render/PetRunner.jsx`), escolhido pelo
+dono. Ele corre, você toca pra pular; pedra tira vida, ossinho vale ponto. Usa o mesmo
+`drawPet`, então o acessório comprado aparece no jogo. A rota `/api/pet/game` foi
+generalizada: `JOGOS` guarda teto de pontos, descanso e energia de cada um, num lugar
+só, e placar acima do teto é recusado (só chega assim se o app foi adulterado).
+
+> **O prêmio em moeda é o ponto perigoso.** Se fosse por partida, bastava ficar
+> jogando pra imprimir Coração. São **12 Corações uma vez por dia, por jogo e por
+> pessoa**, garantidos pelo índice único de `dedupe_key` — não por um `if`. Jogar mais
+> continua valendo pela alegria do bichinho; só o dinheiro tem torneira fechada. A
+> bateria cobre isso: cinco partidas seguidas e o saldo não se mexe.
+
+**Figurinhas da foto de referência.** As 18 conferidas uma a uma; 17 já existiam e
+faltava só **"Uau"**, agora desenhada. O seletor passou a mostrar o **nome embaixo de
+cada figurinha**, como na referência — sem nome, "grudinho" e "toma s2" viravam dois
+bonequinhos parecidos. A bancada `/lab` agora reprova figurinha **sem nome** do mesmo
+jeito que reprova figurinha que não desenha.
+
+**Armadilha em que eu mesmo caí, e que já estava escrita na seção 2:** o
+`dev_server.py` **não recarrega**. Testei o prêmio da corrida contra um servidor com a
+rota antiga, vi "não pagou" e quase fui atrás de um bug que não existia. Depois de
+mexer no backend, **pare e suba de novo** antes de concluir qualquer coisa.
+
+Estado: **516 verificações, 0 falha**. Bancada: 30 móveis × 4 rotações, 18 bichinhos,
+8 humores, 13 itens e 38 figurinhas — nenhuma vazia e nenhuma sem nome.
 
 **Próximo passo:** seção 8.1 — mapa navegável do bairro: avatar andando na rua,
 fachadas e mercado como lugar. Os outros minigames continuam depois desse passo.

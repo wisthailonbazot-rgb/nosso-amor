@@ -61,13 +61,25 @@ export default function RoomCanvas({
 
     let frame = 0
     let running = true
-    const loop = (t) => {
-      if (!running) return
+    const paint = (t) => {
       const s = stateRef.current
       drawScene(painterRef.current, s.scene, { editing: s.editing, hover: s.hover, selectedId: s.selectedId }, t)
+    }
+    const loop = (t) => {
+      if (!running) return
+      paint(t)
       if (animated) frame = requestAnimationFrame(loop)
     }
-    frame = requestAnimationFrame(loop)
+
+    // Um quadro DESENHADO NA HORA, antes de pedir o primeiro `requestAnimationFrame`.
+    //
+    // O motivo apareceu na bancada: `requestAnimationFrame` nao roda em aba que
+    // o navegador nao esta compondo (segundo plano, celular com a tela travada,
+    // app aberto e minimizado). Sem este desenho imediato, quem volta pro app
+    // encontra um retangulo VAZIO ate o navegador resolver animar de novo — e
+    // o cenario parece quebrado, quando na verdade so nao chegou a ser pintado.
+    paint(performance.now())
+    if (animated) frame = requestAnimationFrame(loop)
     return () => {
       running = false
       cancelAnimationFrame(frame)
@@ -86,8 +98,63 @@ export default function RoomCanvas({
     return { col, row }
   }
 
+  // ------------------------------------------------------------------ arrastar
+  // O cômodo é maior que a tela do celular, e a escala é INTEIRA de propósito
+  // (meio pixel de arte vira franja). Então, quando não cabe, a saída não é
+  // encolher a arte: é deixar deslocar a vista. Fora do modo de arrumar, o dedo
+  // arrasta o cômodo; dentro dele, o dedo move o móvel.
+  const arrasto = useRef(null)
+
+  function inicioArrasto(e) {
+    if (editing) return
+    const holder = holderRef.current
+    arrasto.current = {
+      x: e.clientX,
+      y: e.clientY,
+      left: holder.scrollLeft,
+      top: holder.scrollTop,
+      id: e.pointerId,
+    }
+    // `setPointerCapture` estoura se o ponteiro ja nao estiver ativo (dedo que
+    // saiu da tela, ponteiro sintetico). Sem o try, essa excecao derruba o
+    // handler inteiro e o arrasto nao acontece — foi exatamente o que apareceu
+    // na bancada.
+    try {
+      holder.setPointerCapture?.(e.pointerId)
+    } catch {
+      /* segue sem captura: o arrasto ainda funciona enquanto o dedo estiver em cima */
+    }
+  }
+
+  function moverArrasto(e) {
+    const a = arrasto.current
+    if (!a || a.id !== e.pointerId) return
+    const holder = holderRef.current
+    holder.scrollLeft = a.left - (e.clientX - a.x)
+    holder.scrollTop = a.top - (e.clientY - a.y)
+  }
+
+  function fimArrasto(e) {
+    const a = arrasto.current
+    if (a) {
+      try {
+        holderRef.current?.releasePointerCapture?.(a.id)
+      } catch {
+        /* ja tinha sido solto */
+      }
+    }
+    arrasto.current = null
+  }
+
   return (
-    <div ref={holderRef} className="room-holder">
+    <div
+      ref={holderRef}
+      className={`room-holder ${editing ? 'editando' : 'arrastavel'}`}
+      onPointerDown={inicioArrasto}
+      onPointerMove={moverArrasto}
+      onPointerUp={fimArrasto}
+      onPointerCancel={fimArrasto}
+    >
       <canvas
         ref={canvasRef}
         className="room-canvas"

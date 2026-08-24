@@ -103,6 +103,21 @@ const PATHS = {
   plus: <path d="M12 5.5v13M5.5 12h13" />,
   back: <path d="M14.5 5.5L8 12l6.5 6.5" />,
   close: <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />,
+  // --- Etapa 4: os quatro atributos do bichinho e o cadeado do cômodo
+  drop: <path d="M12 3.8c3.2 3.6 5 6.2 5 8.7a5 5 0 0 1-10 0c0-2.5 1.8-5.1 5-8.7z" />,
+  sparkle: (
+    <>
+      <path d="M12 4v5M12 15v5M4.9 12h5M14.1 12h5" />
+      <path d="M7.4 7.4l2.6 2.6M14 14l2.6 2.6M16.6 7.4L14 10M10 14l-2.6 2.6" />
+    </>
+  ),
+  lock: (
+    <>
+      <rect x="4.8" y="10.5" width="14.4" height="9.5" rx="2" />
+      <path d="M8.4 10.5V8a3.6 3.6 0 0 1 7.2 0v2.5" />
+      <circle cx="12" cy="15.2" r="1.2" />
+    </>
+  ),
 }
 
 export default function Icon({ name, size = 24, color = 'currentColor', filled = false, ...rest }) {

@@ -3,6 +3,7 @@ import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 
 import { useStore } from './store'
 import Icon from './components/Icon'
+import AvisosAoVivo from './components/AvisosAoVivo'
 import Login from './screens/Login'
 import Home from './screens/Home'
 import Cycle from './screens/Cycle'
@@ -81,6 +82,9 @@ export default function App() {
   return (
     <div className="app-shell">
       <ScrollTop />
+      {/* Fora das rotas de proposito: e o que faz o cutucao e a mensagem do
+          parceiro chegarem em QUALQUER tela, e nao so na que ouve o evento. */}
+      <AvisosAoVivo />
       <main className="app-main">
         <Routes>
           <Route path="/" element={<Home />} />

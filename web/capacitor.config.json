@@ -3,7 +3,7 @@
   "appName": "Nosso app",
   "webDir": "dist",
   "server": {
-    "cleartext": true
+    "cleartext": false
   },
   "android": {
     "allowMixedContent": false,

@@ -628,10 +628,22 @@ label.field > span {
   width: 100%;
   display: flex;
   justify-content: center;
-  overflow-x: auto;
-  overflow-y: hidden;
+  /* Os DOIS eixos rolam. Antes o vertical era `hidden`, e num cômodo mais alto
+     que o quadro a parte de baixo simplesmente sumia — era o "está cortando o
+     cômodo". A escala é inteira de propósito (meio pixel vira franja), então a
+     saída pra caber no celular é deslocar a vista, nunca encolher a arte. */
+  overflow: auto;
+  /* teto de altura: sem isto o cômodo empurra o resto da tela pra fora */
+  max-height: min(58vh, 420px);
   scrollbar-width: none;
+  overscroll-behavior: contain;   /* arrastar o cômodo não rola a página junto */
 }
+
+/* Fora do modo de arrumar, o dedo arrasta a vista. Dentro dele, o dedo move o
+   móvel — por isso o navegador não pode ficar com o gesto. */
+.room-holder.arrastavel { cursor: grab; touch-action: none; }
+.room-holder.arrastavel:active { cursor: grabbing; }
+.room-holder.editando { touch-action: none; }
 
 .room-holder::-webkit-scrollbar {
   display: none;
@@ -1281,3 +1293,166 @@ button:disabled,
 @keyframes ball-hop { to { transform:translateY(-8px) rotate(9deg); } }
 .pet-at-home{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;padding:9px 12px;border:2px solid var(--ink);border-radius:10px;background:#fff6df;box-shadow:2px 2px 0 var(--ink);font-size:.9rem}
 .game-bush{position:absolute;bottom:21%;width:76px;height:35px;background:#4f914f;border:3px solid var(--ink);border-radius:50% 50% 20% 20%;z-index:1}.bush-a{left:-18px}.bush-b{right:-22px;transform:scale(.8)}
+
+/* ---------------------------------------------------------------- avisos ao vivo
+   A faixa que anuncia mensagem do parceiro e cutucão em qualquer tela.
+   Fica ACIMA de tudo (inclusive da barra de abas) e abaixo da chuva de
+   figurinhas, que é puro enfeite e não deve roubar o clique da faixa. */
+.aviso-faixa {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top));
+  left: 10px;
+  right: 10px;
+  /* Acima da chuva de figurinhas (60), que cobre a tela inteira e captura
+     clique. No mesmo nível, a chuva vem depois no DOM e engoliria o toque na
+     faixa — que é justamente o que leva pro chat. */
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  background: var(--paper, #fffaf3);
+  border: 2px solid var(--ink, #33203a);
+  border-radius: 14px;
+  box-shadow: 0 6px 0 rgba(51, 32, 58, 0.18);
+  animation: aviso-entra 0.26s ease-out;
+}
+
+@keyframes aviso-entra {
+  from { transform: translateY(-120%); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
+}
+
+.aviso-texto {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;          /* sem isto o texto longo estoura a faixa em vez de cortar */
+  line-height: 1.25;
+}
+.aviso-texto strong { font-size: 0.9rem; }
+.aviso-texto span {
+  font-size: 0.85rem;
+  opacity: 0.78;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aviso-fechar {
+  margin-left: auto;
+  border: 0;
+  background: none;
+  font-size: 1.35rem;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+  color: var(--ink, #33203a);
+  opacity: 0.55;
+}
+.aviso-fechar:hover { opacity: 1; }
+
+/* ------------------------------------------------------------- casa: fora/dentro
+   Duas abas grandes no topo da tela da casa. Antes a vista externa e o cômodo
+   ficavam empilhados na mesma rolagem (1.587 px de altura num visor de 918), e
+   não dava pra ver nem um nem outro direito. */
+.vista-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 2px 0 12px;
+}
+.vista-tabs button {
+  padding: 10px 8px;
+  border: 2px solid var(--ink);
+  background: var(--cream);
+  color: var(--ink);
+  border-radius: 12px 9px 13px 10px;
+  font: 700 13px 'Baloo 2', sans-serif;
+}
+.vista-tabs button.active {
+  background: var(--rose);
+  color: #fff;
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+/* A fachada inteira é o botão de entrar — é o gesto que o dono pediu:
+   "vê a casa de fora, clica e vê os cômodos de dentro". */
+.fachada { position: relative; cursor: pointer; }
+.fachada-porta {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 12px 9px 13px 10px;
+  box-shadow: 0 3px 0 var(--ink);
+  font: 700 13px 'Baloo 2', sans-serif;
+  color: var(--ink);
+  white-space: nowrap;
+  pointer-events: none;   /* quem recebe o clique é a fachada toda, não o rótulo */
+}
+.fachada:active .fachada-porta { transform: translateX(-50%) translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+
+/* ------------------------------------------------------------ corrida do pet */
+.runner-frame {
+  position: relative;
+  border: 2px solid var(--ink);
+  border-radius: 16px 12px 17px 13px;
+  overflow: hidden;
+  box-shadow: 0 3px 0 var(--ink);
+  margin-bottom: 12px;
+  touch-action: manipulation;   /* toque pra pular, sem o atraso do duplo-toque */
+  cursor: pointer;
+  user-select: none;
+}
+.runner-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;   /* pixel nítido ao ampliar, sem borrão */
+}
+.runner-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: rgba(51, 32, 58, 0.45);
+  color: #fff;
+  font-family: 'Baloo 2', sans-serif;
+  text-align: center;
+  padding: 10px;
+}
+.runner-overlay strong { font-size: 24px; }
+.runner-overlay span { font-size: 13px; opacity: 0.92; }
+
+/* Figurinha com o nome embaixo, como na referência que o dono mandou.
+   Sem o nome, "grudinho" e "toma s2" viram dois bonequinhos parecidos e
+   ninguém acha o que quer. */
+.sticker-btn.com-nome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 2px 4px;
+}
+.sticker-nome {
+  font: 700 9px 'Baloo 2', sans-serif;
+  color: var(--ink-soft);
+  line-height: 1.1;
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Figurinha realista (SVG). Fica lado a lado com a de pixel enquanto as duas
+   coexistem, então precisa ocupar exatamente o mesmo espaço. */
+.sticker-hd { display: inline-block; line-height: 0; }
+.sticker-hd svg { display: block; width: 100%; height: 100%; }

@@ -1,50 +1,8 @@
 import { useEffect, useState } from 'react'
 
 import { api } from '../api'
-import { subscribe } from '../store'
 import Sticker from './Sticker'
-
-// Cada toque vira uma figurinha na tela do outro. O mesmo desenho do chat, para
-// o app ter uma linguagem só em vez de dois conjuntos de arte.
-const FIGURINHA = {
-  heart: 'coracao',
-  kiss: 'beijo',
-  hug: 'abraco',
-  miss: 'saudade',
-  poke: 'piscada',
-  thinking: 'carinha_apaixonada',
-  come_here: 'vem_ca',
-  cuddle: 'grudinho',
-  cafune: 'cafune',
-  sorry: 'foi_mal',
-  safe: 'amor_seguro',
-}
-
-/** A chuva de figurinhas que cai quando o toque chega. */
-function Chuva({ code, aoTerminar }) {
-  useEffect(() => {
-    const timer = setTimeout(aoTerminar, 2600)
-    return () => clearTimeout(timer)
-  }, [aoTerminar])
-
-  return (
-    <div className="tap-rain" onClick={aoTerminar}>
-      {Array.from({ length: 9 }).map((_, i) => (
-        <span
-          key={i}
-          className="tap-drop"
-          style={{
-            left: `${6 + i * 10.5}%`,
-            animationDelay: `${(i % 4) * 0.18}s`,
-            animationDuration: `${1.9 + (i % 3) * 0.4}s`,
-          }}
-        >
-          <Sticker code={FIGURINHA[code] || 'coracao'} scale={2} />
-        </span>
-      ))}
-    </div>
-  )
-}
+import { Chuva, FIGURINHA_DO_TOQUE as FIGURINHA } from './AvisosAoVivo'
 
 export default function LoveTaps({ partnerName }) {
   const [tipos, setTipos] = useState([])
@@ -58,13 +16,9 @@ export default function LoveTaps({ partnerName }) {
       .then((d) => setTipos(d.kinds))
       .catch(() => {})
 
-    // toque do outro chegando com o app aberto: cai na hora, sem notificação
-    const off = subscribe('love_tap', ({ type, label }) => {
-      setChuva(type)
-      setAviso(`${partnerName || 'Ele'} ${label ? label.toLowerCase() : ''}`)
-      api.post('/api/couple/taps/seen').catch(() => {})
-    })
-    return off
+    // O toque QUE CHEGA nao e ouvido aqui: quem cuida disso e o `AvisosAoVivo`,
+    // montado no casco do app. Se os dois ouvissem, o mesmo cutucao cairia duas
+    // vezes na tela de Inicio — e continuaria nao caindo nas outras.
   }, [partnerName])
 
   async function mandar(code) {

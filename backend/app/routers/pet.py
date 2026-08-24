@@ -18,8 +18,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from .. import catalog, missions, pet_care, push
-from ..clock import utcnow
+from .. import catalog, economy, missions, pet_care, push
+from ..clock import today, utcnow
 from ..db import get_db
 from ..models import HouseMess, Pet, PetInteraction, Room, ShopItem, User
 from ..realtime import publish
@@ -55,9 +55,18 @@ class AdoptIn(BaseModel):
     species: str = Field(min_length=1, max_length=30)
 
 
+# Os minijogos. O `teto` e o limite de pontos que a rota aceita: qualquer coisa
+# acima disso e app adulterado, e o servidor recusa em vez de pagar.
+JOGOS = {
+    "bolinha": {"nome": "Aventura da bolinha", "teto": 12, "descanso_min": 2, "energia": 8},
+    "corrida": {"nome": "Corrida do bichinho", "teto": 40, "descanso_min": 3, "energia": 10},
+}
+
+
 class GameIn(BaseModel):
-    score: int = Field(ge=0, le=12)
-    duration_ms: int = Field(ge=5000, le=60000)
+    score: int = Field(ge=0, le=60)
+    duration_ms: int = Field(ge=5000, le=180000)
+    game: str = Field(default="bolinha", max_length=20)
 
 
 def get_pet(db: Session) -> Pet:
@@ -366,31 +375,73 @@ def play(payload: ItemIn, user: User = Depends(current_user), db: Session = Depe
     return _respond(db, pet, {"used": item.name, **result})
 
 
+# Corações que uma partida pode render — UMA VEZ POR DIA, por jogo.
+#
+# O prêmio em moeda é o que transformaria o minigame em caça-níquel: bastaria
+# ficar jogando pra imprimir Coração. Por isso ele não é por partida, e sim por
+# dia, garantido pelo índice único de `dedupe_key` no banco — não por um `if`,
+# que perde a corrida no toque duplo. Jogar mais continua valendo pela alegria
+# do bichinho; só o dinheiro é que tem torneira fechada.
+PREMIO_DIARIO = 12
+
+
 @router.post("/game")
 def game(payload: GameIn, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
-    """Uma partida curta de pegar a bolinha.
+    """Uma partida curta de minijogo com o bichinho.
 
-    Pontuação e duração têm teto/piso no schema; descanso impede transformar o
-    minigame em torneira infinita de XP. É brincadeira com o pet, não caça-níquel.
+    Vale pros dois jogos (`bolinha` e `corrida`): o que muda entre eles é o teto
+    de pontos, o descanso e a energia gasta — tudo em `JOGOS`, num lugar só.
+
+    Ponto e duração têm teto no schema; o descanso impede virar torneira infinita
+    de experiência. É brincadeira com o pet, não caça-níquel.
     """
+    regra = JOGOS.get(payload.game)
+    if regra is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Esse jogo não existe")
+    if payload.score > regra["teto"]:
+        # Placar acima do teto do jogo só chega aqui se o app foi adulterado.
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Placar impossível nesse jogo")
+
     pet = _require_pet(db)
     now = utcnow()
-    code = "game_bolinha"
+    code = f"game_{payload.game}"
     ready = pet_care.toy_ready_at(pet, code)
     if ready and ready > now:
-        raise HTTPException(status.HTTP_409_CONFLICT, "A bolinha está descansando. Volta em dois minutos.")
-    if pet.energy < 8:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{pet.name} está sem energia para brincar")
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{regra['nome']} está descansando. Volta em {regra['descanso_min']} minutos.",
+        )
+    if pet.energy < regra["energia"]:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, f"{pet.name} está sem energia para brincar"
+        )
 
-    happiness = min(18, 4 + payload.score)
+    # A alegria acompanha o desempenho, mas em fração do teto — assim os dois
+    # jogos rendem parecido mesmo tendo placares de tamanhos bem diferentes.
+    aproveitamento = payload.score / regra["teto"] if regra["teto"] else 0
+    happiness = int(4 + round(14 * min(1.0, aproveitamento)))
     result = pet_care.touch(
-        db, pet, {"happiness": happiness, "energy": -8}, "play", now
+        db, pet, {"happiness": happiness, "energy": -regra["energia"]}, "play", now
     )
-    pet_care.set_toy_cooldown(pet, code, 2, now)
+    pet_care.set_toy_cooldown(pet, code, regra["descanso_min"], now)
+
+    premio = economy.try_earn(
+        db,
+        user.id,
+        PREMIO_DIARIO,
+        "minigame",
+        reference=payload.game,
+        note=f"{regra['nome']} — primeira partida do dia",
+        dedupe_key=f"petgame:{payload.game}:{user.id}:{today().isoformat()}",
+    )
+
     effect = {**result, "score": payload.score, "duration_ms": payload.duration_ms}
     _log(db, pet, user, "play", code, effect)
     missions.record(db, "pet_game")
-    return _respond(db, pet, effect)
+    body = _respond(db, pet, {**effect, "coins": PREMIO_DIARIO if premio else 0})
+    if premio:
+        publish("wallet", {"balance": economy.balance(db, user.id)}, to_user=user.id)
+    return body
 
 
 @router.post("/cuddle")

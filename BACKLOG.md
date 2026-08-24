@@ -64,19 +64,19 @@ Legenda: **[ ]** a fazer · **[~]** em andamento · **[x]** pronto e testado
       **figurinhas** (como no Love8) e **envio de áudio**
   - 18 figurinhas desenhadas em pixel, bolhas, resposta citada, reação, apagar,
       "digitando…", visto ✓✓, divisória de dia, gravador de áudio com onda
-- **[ ]** **Bichinho tem que dar trabalho de verdade**: sujar, precisar de cuidado,
+- **[x]** **Bichinho tem que dar trabalho de verdade**: sujar, precisar de cuidado,
       e **sujar a casa** quando é deixado de lado — não pode ser um botão de carinho
       sem consequência
-- **[ ]** **Várias espécies de bichinho** pra escolher
-- **[ ]** **Casa com mais de um cômodo**, tudo personalizável
-- **[ ]** **Terreno em volta da casa** e a **rua na frente**, também construídos
+- **[x]** **Várias espécies de bichinho** pra escolher — seis, com ritmo próprio
+- **[x]** **Casa com mais de um cômodo**, tudo personalizável
+- **[x]** **Terreno em volta da casa** e a **rua na frente**, também construídos
 - **[ ]** **PRÓXIMO PASSO — mapa 2,5D do bairro**: uma rua onde dá pra andar e
       **entrar em lugares**, incluindo um **mercado onde se compra ração** e os
       outros itens. A loja deixa de ser uma lista e vira um lugar.
 
 > Estes seis mudam o formato do jogo: ele deixa de ser "telas separadas" e vira um
-> mundinho. A parte pesada é o mapa — está anotada no HANDOFF, seção 8, com o
-> caminho técnico pensado.
+> mundinho. Cinco estão de pé; falta **o mapa do bairro**, que é a parte pesada —
+> está anotada no HANDOFF, seção 8, com o caminho técnico pensado.
 
 ---
 
@@ -174,6 +174,26 @@ Legenda: **[ ]** a fazer · **[~]** em andamento · **[x]** pronto e testado
       thread e descartava o evento; agora agenda no loop dono do WebSocket
 - [x] Loja: 30/30 móveis com arte; smoke cruza catálogo Python com `SHAPES` JS
 
+### 23/08/2026 — fechamento da Etapa 4: o que a revisão final encontrou
+
+Três defeitos reais que a bateria e a bancada pegaram, com a causa corrigida:
+
+- [x] **Cenário aparecia vazio em aba que o navegador não está compondo.** Todo
+      canvas só desenhava dentro de `requestAnimationFrame`, e aba em segundo
+      plano (ou celular com a tela travada) simplesmente não recebe quadro. Quem
+      voltava pro app via um retângulo em branco. Agora `RoomCanvas`, `PetCanvas`
+      e `PropertyCanvas` pintam **um quadro na hora**, antes de pedir animação.
+- [x] **Três ícones usados nas telas novas não existiam** (`drop`, `sparkle`,
+      `lock`). `Icon` devolve `null` para nome desconhecido, então eles sumiam
+      calados — justamente nas barras de atributo do bichinho. Desenhados, e a
+      conferência "todo `name=` usado tem desenho" ficou registrada.
+- [x] **A casa mentia sobre o bichinho:** dizia "tirando uma soneca na caminha"
+      com ele doente e doze sujeiras no chão. A legenda agora sai do estado real
+      (doente / faminto / imundo / triste / casa suja) antes do móvel favorito.
+- [x] Bancada `/lab` ganhou as abas **Bichinhos** (6 espécies × 3 estágios) e
+      **Humores** (4 humores + 4 acessórios vestidos) — antes o bichinho era a
+      única arte do app que ninguém conferia sozinho.
+
 ## Etapa 5 — Minigames
 
 - [x] Um jogo simples de brincar com o bichinho: **Pega a bolinha**, com energia,
@@ -191,24 +211,20 @@ Legenda: **[ ]** a fazer · **[~]** em andamento · **[x]** pronto e testado
       missões diárias aleatórias, renovação automática e geração contínua sem manutenção
       manual; ações reais do jogo devem avançar objetivos, pagar Corações uma única vez
       e alimentar progressão/metas compartilhadas do casal.
-- **[~]** 23/08/2026 — O APK local não consegue autenticar fora da rede. Usar as
-      credenciais já guardadas em `D:\beckup\arquivo env\credenciais.md` para
+- **[x]** 23/08/2026 — O APK local não consegue autenticar fora da rede. Usar as
+      credenciais corretas guardadas em `D:\beckup\arquivo env\env-coolify.txt` para
       implantar o app-casal isoladamente na VPS/Coolify, validar login e tempo real
       por HTTPS/WSS e gerar outro APK apontando para o endereço público. Não alterar
       nem interromper os demais projetos hospedados nessa VPS.
-      **Bloqueio confirmado:** token Coolify retorna 401, login do painel volta para
-      `/login` e a chave SSH `id_ed25519` registrada não existe no computador. É
-      necessário renovar um token Coolify com permissão de aplicações ou restaurar
-      a chave SSH antes de publicar e recompilar.
-- **[~]** 23/08/2026 — Gerar o APK Android instalável e fechar a versão de abrir/
+      Publicado em `https://nossoamor.209.50.229.119.sslip.io`, com PostgreSQL
+      exclusivo, HTTPS/WSS, login e tempo real validados sem tocar nos outros projetos.
+- **[x]** 23/08/2026 — Gerar o APK Android instalável e fechar a versão de abrir/
       instalar no iPhone como PWA, ambos usando o login existente do casal. O APK de
       teste para a rede local foi compilado, assinado e validado; a PWA local foi
-      publicada. Smoke (488/0), build web e build Android passaram. Falta o endereço
-      HTTPS público da VPS para gerar a versão definitiva, que funcione fora do Wi-Fi
-      e permita instalação/PWA completa no iPhone.
+      publicada. A versão final usa o servidor HTTPS público e funciona fora do Wi-Fi.
       - [x] APK Android de teste apontando para `http://192.168.1.250:8020`
       - [x] Manifesto, service worker e metadados Apple publicados localmente
-      - [ ] Implantar em HTTPS/WSS e recompilar o APK de produção com a URL definitiva
+      - [x] Implantar em HTTPS/WSS e recompilar o APK de produção com a URL definitiva
 
 - [ ] **Mapa 2,5D do bairro**: rua com o avatar andando, fachadas com porta
 - [ ] **Mercado** onde se compra ração — a loja vira um lugar, não uma lista
@@ -220,8 +236,138 @@ Legenda: **[ ]** a fazer · **[~]** em andamento · **[x]** pronto e testado
 
 ## Pendências técnicas conhecidas
 
-- [ ] Gerar chaves VAPID de produção e guardar no Coolify (as de desenvolvimento
+- [x] Gerar chaves VAPID de produção e guardar no Coolify (as de desenvolvimento
       estão fixas em `dev_server.py` **de propósito**, e não valem em produção)
 - [ ] Definir os dois usuários de verdade (slug, nome, senha) e a data de início
-- [ ] Limite de memória dos containers no Coolify — é o que protege os outros projetos
+- [x] Limite de memória dos containers no Coolify — é o que protege os outros projetos
 - [ ] Fonte self-hosted já baixada (340 KB); conferir se compensa cortar peso
+
+
+---
+
+## 23/08/2026 — Pedidos do dono (rodada de validação no aparelho)
+
+Tudo isto veio depois de rodar o app no iPhone e no APK. Nada aqui é considerado
+pronto sem o bloco no smoke test e o print da tela.
+
+### Notificações e tempo real
+- **[ ]** **Notificação não funciona nem no Android nem no iPhone.** Diagnosticar os
+      dois caminhos separadamente: PWA no iPhone (Web Push/VAPID) e APK no Android.
+      Atenção: WebView do Android **não** entrega Web Push — no APK isso exige push
+      nativo (Firebase/FCM), que é dependência externa. Ver a mesma lição no app do
+      painel da barbearia.
+- **[x]** **Cutucão chega em qualquer lugar do app.** Causa: quem ouvia o evento era
+      um componente que morava DENTRO da tela de Início; trocou de aba, parou de
+      chegar. Agora o ouvinte mora no casco (`AvisosAoVivo`), fora das rotas.
+- **[~]** **Mensagem do parceiro como faixa no topo** — faixa clicável (leva pro chat)
+      pronta e valendo em qualquer tela, menos dentro do próprio chat, onde seria
+      barulho repetido. A parte de **notificação com o app fechado** depende do push,
+      abaixo.
+
+### APK (Android)
+- **[x]** **Foto no APK.** Causa achada: o servidor devolve o caminho RELATIVO
+      (`/media/x.jpg?token=…`), e dentro do APK isso vira `https://localhost/media/…`
+      — o pacote embutido no aparelho, onde não existe foto nenhuma. Criado
+      `mediaUrl()` em `api.js`; toda foto, miniatura e áudio passa por ele.
+- **[x]** **Áudio no APK.** Duas causas: a mesma URL relativa acima (não tocava) e a
+      falta de `RECORD_AUDIO` no `AndroidManifest.xml` (não gravava — o Android nem
+      chegava a pedir permissão, falhava calado). As duas corrigidas.
+
+### Casa
+- **[x]** **Casa em abas.** Estava medindo **1.587 px de altura num visor de 918** —
+      vista externa, legenda, abas de cômodo, cômodo, linha do bichinho e editor,
+      tudo na mesma rolagem. Agora são duas abas ("Do lado de fora" / "Por dentro"),
+      **a fachada inteira é clicável pra entrar**, e cada vista cabe na tela (812 px,
+      sem rolagem lateral).
+
+### Figurinhas
+- **[x]** **Figurinhas da foto**: as 18 conferidas uma a uma na bancada. 17 já
+      existiam do trabalho anterior; faltava só **"Uau"**, agora desenhada. E o
+      seletor passou a mostrar o **nome embaixo de cada uma**, como na sua foto —
+      sem nome, "grudinho" e "toma s2" viravam dois bonequinhos parecidos.
+      Pedido original:: Saudades,
+      Vem pra cá, Beijo, Toma s2, Uau, Grudadinho, Menstruação, Amo vc, Vem cá,
+      Cafuné, Abraço, Amor seguro, Amor protegido, Boa!, Acabei, Sono a dois,
+      Mordida, Meu dia, Foi mal. **Na nossa linguagem visual** (pixel art própria) —
+      a foto é referência de assunto, não arte pra copiar: emoji de sistema é
+      desenho de terceiro e já foi decidido que não entra como arte final.
+
+### Bichinho
+- **[x]** **Ele anda.** A posição vinha de uma conta feita uma vez e nunca mudava.
+      Agora existe `petWander.js`: ele escolhe um lugar, caminha até lá em posição
+      fracionária, para e escolha outro. Medido: **61 posições distintas em 6 s**.
+      Entrou também na ordem de profundidade, senão passaria por cima do sofá.
+- **[x]** **Animações de ação**: andar (poeira do passo), comer (potinho e migalhas),
+      banho (espuma e bolhas subindo), brincar/feliz (pulo e coraçõezinhos) e dormir
+      (respiração lenta e os "z" subindo). Tudo desenhado, nada de emoji.
+- **[x]** **Mais interativo**: ele anda pelo cômodo, reage ao toque na hora e a frase
+      da casa conta o estado real dele.
+- **[x]** **Corrida do bichinho** (escolha do dono). Ele corre, você toca pra pular;
+      pedra tira vida, ossinho vale ponto. É o mesmo `drawPet` de sempre, então o
+      acessório comprado aparece no jogo. Prêmio de 12 Corações **uma vez por dia,
+      por jogo**, travado por `dedupe_key` — jogar mais rende alegria, não dinheiro.
+
+### Acrescentado no mesmo dia
+- **[x]** **"Interagir" na casa.** O botão chamava direto o carinho, que tem descanso
+      de 4 horas de propósito; fora dessa janela o servidor recusava com 400, a tela
+      pintava erro vermelho e **nada acontecia com o bicho**. Consertado sem tirar o
+      descanso: **a reação é sempre** (ele pula e solta coração), só o **prêmio** é
+      que tem hora — e a recusa virou aviso honesto, não erro.
+- **[x]** Jogo novo escolhido pelo dono: **corrida do bichinho** (ele corre pelo
+      cenário, você toca pra pular obstáculo e pegar petisco).
+
+> **Sobre "fazer igual ao HVAC":** conferi o `hvac-system` e ele **não tem
+> notificação nenhuma** — nem Web Push, nem Firebase. As dependências de lá são
+> `@capacitor/filesystem` e `@capacitor/share`, pra PDF. O que aquele projeto
+> resolveu, e que **serve aqui**, é outra coisa: o **endereço do servidor cravado
+> no APK**. É exatamente a causa da foto e do áudio não funcionarem aqui — então a
+> estrutura do HVAC foi copiada pra esse problema. Push no Android continua
+> precisando de PWA ou Firebase; a escolha ficou pendente com o dono.
+
+
+### 23/08/2026 — segunda rodada (correções do dono)
+
+- **[x]** Correção do dono: quem tem notificação funcionando é o **`bazot-app`**,
+      não o `hvac-system`. Estrutura conferida lá: plugin nativo
+      `@capacitor/push-notifications`, `google-services.json` do projeto Firebase
+      `barberia-bazot` e `plugins.PushNotifications` no `capacitor.config.json`.
+      É essa a estrutura a copiar.
+- **[ ]** **Push nativo no APK do app-casal**, copiando o bazot-app.
+      **Depende de duas coisas que só o dono pode gerar** (a credencial do Firebase
+      é amarrada ao nome do pacote, e o do casal é `com.nossoapp.casal`, diferente
+      do `com.barbeariabazot.admin`):
+      1. adicionar um app Android novo ao projeto `barberia-bazot` e baixar o
+         `google-services.json` do pacote `com.nossoapp.casal`;
+      2. a chave de conta de serviço do mesmo projeto, pro backend conseguir
+         **enviar** por FCM (o envio de hoje é Web Push/VAPID, que é outro caminho).
+- **[x]** Dono confirmou: **eu mesmo gero o APK** quando terminar a correção.
+- **[x]** **Figurinhas realistas, não em pixel** — do jeito da foto enviada (brilho,
+      volume, traço liso). Muda a direção de arte **das figurinhas do chat**; o
+      cenário isométrico continua em pixel.
+      ⚠️ Os desenhos da foto são o emoji da Apple, que é arte de terceiro: não dá
+      pra copiar. O que dá, e é o que foi feito, é desenhar **arte nossa no mesmo
+      estilo** (redondo, com brilho e sombra), com os mesmos assuntos.
+- **[x]** **Bichinho animado de verdade**: animação dele **interagindo com cada
+      item que a loja vende** — comendo a ração, roendo o ossinho, correndo atrás
+      da bolinha, brincando com a varinha, dormindo na almofada, tomando banho.
+- **[x]** **A casa corta o cômodo na tela do celular.** Criar um jeito de
+      **arrastar pra ver o cômodo inteiro** (a escala é inteira de propósito, então
+      quando não cabe tem que dar pra deslocar a vista, não encolher a arte).
+- **[x]** **Corrida mais difícil**: mais tipos de obstáculo e a opção de **abaixar**,
+      além de pular.
+
+**Feito nesta rodada (23/08/2026, noite):**
+- 18 figurinhas realistas em SVG (rosto com degradê, brilho e sombra), com queda
+  automática pras de pixel que ainda não foram convertidas.
+- `petProps.js`: cada item da loja tem o SEU objeto e o SEU jeito de ser usado —
+  potinho de ração baixando, biscoito sumindo em três mordidas, bolo com velinha,
+  sushi com vapor, chuveiro com pingos, bolinha quicando, osso na boca com
+  lasquinhas, pena da varinha dançando, almofada pra dormir e brilho de estreia
+  pros acessórios. Poses novas: roer, correr, pular.
+- Casa: `.room-holder` rola nos DOIS eixos, com teto de altura, e **arrastar com
+  o dedo** move a vista (fora do modo de arrumar). Conferido: 53 → 0 → 53.
+- Corrida: 6 tipos de coisa na pista (pedra, tronco, galho, abelha, petisco,
+  ossinho), **abaixar** com toque na metade de baixo ou seta pra baixo, e o
+  bichinho ACHATA (46 → 26 px) em vez de virar outro sprite.
+- **APK gerado e assinado** (`releases/NossoApp-casal-android.apk`, 4,6 MB), com
+  `RECORD_AUDIO`, `POST_NOTIFICATIONS`, `READ_MEDIA_IMAGES` e o endereço cravado.

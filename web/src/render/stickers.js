@@ -428,6 +428,21 @@ export const STICKERS = {
     p.fillPoly([[16,3],[27,8],[25,22],[16,29],[7,22],[5,8]],C.purple);p.strokePoly([[16,3],[27,8],[25,22],[16,29],[7,22],[5,8]],C.out)
     heart(p,16,16,6,C.roseDark)
   },
+  // "Uau": a única da foto de referência que ainda não existia aqui.
+  // Olhos de coração, boca aberta e brilhos em volta — o espanto apaixonado.
+  uau(p) {
+    face(p, 16, 17, 9, { eyes: 'hearts', mouth: 'open' })
+    // brilhos de quatro pontas, em pixel: a estrelinha de espanto
+    for (const [bx, by, t] of [[4, 6, 2], [27, 8, 2], [25, 24, 1], [6, 22, 1]]) {
+      fill(p, bx - t, by, t * 2 + 1, 1, C.gold)
+      fill(p, bx, by - t, 1, t * 2 + 1, C.gold)
+      p.px(bx, by, C.white)
+    }
+    // dois coraçõezinhos subindo
+    heart(p, 9, 4, 3, C.rose, null)
+    heart(p, 23, 3, 3, C.roseDark, null)
+  },
+
   comemoracao(p) {
     face(p,16,18,9,{eyes:'happy',mouth:'open'});fill(p,5,4,2,5,C.gold);fill(p,25,5,2,5,C.sky)
     p.line(9,3,12,8,C.roseDark);p.line(21,8,24,2,C.sageDark)
@@ -460,3 +475,57 @@ export function drawSticker(painter, code) {
 }
 
 export const STICKER_CODES = Object.keys(STICKERS)
+
+/**
+ * O nome de cada figurinha, do jeito que a gente fala.
+ *
+ * A referencia que o dono mandou mostra cada figurinha COM o nome embaixo, e e
+ * assim que ele espera escolher. Sem nome, "grudinho" e "toma_amor" viravam
+ * dois bonequinhos parecidos e ninguem achava o que queria.
+ *
+ * Figurinha que nao esta aqui aparece com o proprio codigo — some ninguem, mas
+ * fica feio; a bancada `/lab` denuncia as que faltam.
+ */
+export const STICKER_LABEL = {
+  saudade: 'Saudades',
+  vem_ca: 'Vem pra cá',
+  beijo: 'Beijo',
+  toma_amor: 'Toma s2',
+  uau: 'Uau',
+  grudinho: 'Grudadinho',
+  menstruacao: 'Menstruação',
+  amo_voce: 'Amo vc',
+  cafune: 'Cafuné',
+  abraco: 'Abraço',
+  amor_seguro: 'Amor seguro',
+  amor_protegido: 'Amor protegido',
+  comemoracao: 'Boa!',
+  acabei: 'Acabei',
+  sono_a_dois: 'Sono a dois',
+  mordida: 'Mordida',
+  meu_dia: 'Meu dia',
+  foi_mal: 'Foi mal',
+  quero_voce: 'Quero você',
+  beijo_pescoco: 'No pescoço',
+  debaixo_coberta: 'Debaixo da coberta',
+  hoje_tem: 'Hoje tem',
+  coracao: 'Coração',
+  carinha_apaixonada: 'Apaixonada',
+  piscada: 'Piscadinha',
+  risada: 'Risada',
+  chateado: 'Chateado',
+  com_fome: 'Com fome',
+  dormindo: 'Dormindo',
+  presente: 'Presente',
+  flor: 'Flor',
+  bolo: 'Bolo',
+  cafe: 'Café',
+  sol: 'Sol',
+  chuva: 'Chuva',
+  estrela: 'Estrela',
+  fogo: 'Fogo',
+  gatinho: 'Gatinho',
+  disc: 'Música',
+  draw: 'Desenho',
+  stamp: 'Selo',
+}

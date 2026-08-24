@@ -7,6 +7,16 @@
 
 const BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 
+// Dentro do APK o app NAO e servido pelo backend: ele roda de
+// `https://localhost` (Capacitor), e ali "/" e o pacote embutido, nao o
+// servidor. Por isso o endereco vem cravado no build por `VITE_API_URL` — e a
+// mesma estrutura que ja funciona no `hvac-system`.
+export const RODANDO_EMPACOTADO =
+  typeof window !== 'undefined' &&
+  (window.location.protocol === 'capacitor:' ||
+    window.location.protocol === 'file:' ||
+    (window.location.hostname === 'localhost' && !!BASE))
+
 const TOKEN_KEY = 'casal.token'
 
 export function getToken() {
@@ -35,6 +45,26 @@ export class ApiError extends Error {
 }
 
 export function apiUrl(path) {
+  return `${BASE}${path}`
+}
+
+/**
+ * Resolve o endereco de uma foto ou audio que veio do servidor.
+ *
+ * ESTE ERA O BUG DA FOTO E DO AUDIO NO APK. O servidor devolve o caminho
+ * RELATIVO ("/media/abc.jpg?token=..."), porque ele nao tem como saber com
+ * seguranca por qual endereco publico esta sendo acessado. No navegador isso
+ * resolve sozinho, porque o app e servido pelo proprio backend. Dentro do APK,
+ * nao: `<img src="/media/...">` vira `https://localhost/media/...`, que aponta
+ * pro pacote embutido no aparelho — onde nao existe foto nenhuma. A imagem
+ * ficava quebrada e o audio nao tocava, sem erro na tela.
+ *
+ * Toda foto, miniatura e audio TEM que passar por aqui.
+ */
+export function mediaUrl(path) {
+  if (!path) return path
+  // ja e absoluto (http, blob de previa local, data:) — nao mexe
+  if (/^(https?:|blob:|data:|capacitor:)/.test(path)) return path
   return `${BASE}${path}`
 }
 

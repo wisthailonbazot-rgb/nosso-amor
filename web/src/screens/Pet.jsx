@@ -50,10 +50,23 @@ export default function Pet() {
     if (state.since?.mess_born) setStatus({ kind: 'warn', text: `${state.since.mess_born} sujeira nova apareceu na casa.` })
   }
   useEffect(() => { load().catch((e) => setStatus({ kind: 'error', text: e.message })); return subscribe('pet', (next) => setPet(next)) }, [])
+  // O item que ele esta usando AGORA, so pro desenho. Some sozinho depois da
+  // cena — e o que faz voce VER ele comendo a racao, roendo o osso ou correndo
+  // atras da bolinha, em vez de so o numero da barra subir.
+  const [emUso, setEmUso] = useState(null)
+
   async function act(path, body, label) {
     setBusy(path + (body?.code || '')); setStatus(null)
+    if (body?.code) {
+      setEmUso(body.code)
+      clearTimeout(act.timer)
+      act.timer = setTimeout(() => setEmUso(null), 2600)
+    }
     try { const result = await api.post(`/api/pet/${path}`, body); setPet(result.pet); setStatus({ kind: 'ok', text: label }); setItems((await api.get('/api/pet/items')).items) }
-    catch (e) { setStatus({ kind: 'error', text: e.message }) }
+    catch (e) {
+      setStatus({ kind: 'error', text: e.message })
+      setEmUso(null)  // deu errado: nao mostra cena de uso que nao aconteceu
+    }
     setBusy('')
   }
   const shown = useMemo(() => items.filter((i) => i.subcategory === tab), [items, tab])
@@ -66,7 +79,7 @@ export default function Pet() {
   return <>
     <div className="row between"><div><h1 className="screen-title pet-name">{pet.name}</h1><p className="muted small pet-sub">{pet.species_name} · nível {pet.level} · {pet.stage}</p></div><span className={`pill ${pet.sick ? 'rose' : 'sage'}`}>{MOOD[pet.mood] || pet.mood}</span></div>
     {status && <p className={`notice ${status.kind}`}>{status.text}</p>}
-    <div className={`pet-stage card ${pet.sick ? 'sick' : ''}`}><PetCanvas pet={pet} /><div className="pet-stage-note"><strong>{pet.mood === 'feliz' ? 'Tudo em ordem por aqui' : 'Ele está tentando avisar vocês'}</strong><span>{pet.mess_count ? `${pet.mess_count} sujeira${pet.mess_count > 1 ? 's' : ''} pela casa` : 'Casa limpinha'}</span></div></div>
+    <div className={`pet-stage card ${pet.sick ? 'sick' : ''}`}><PetCanvas pet={{ ...pet, prop: emUso }} /><div className="pet-stage-note"><strong>{pet.mood === 'feliz' ? 'Tudo em ordem por aqui' : 'Ele está tentando avisar vocês'}</strong><span>{pet.mess_count ? `${pet.mess_count} sujeira${pet.mess_count > 1 ? 's' : ''} pela casa` : 'Casa limpinha'}</span></div></div>
     <div className="pet-stats">{Object.entries(pet.stats).map(([key, value]) => <div className={`pet-stat ${value < 30 ? 'low' : ''}`} key={key}><div className="row between"><span><Icon name={STAT[key][1]} size={15} /> {STAT[key][0]}</span><strong>{value}</strong></div><div className="stat-track"><i style={{ width: `${value}%` }} /></div>{pet.empty_in_hours[key] != null && <small>zera em cerca de {pet.empty_in_hours[key]}h</small>}</div>)}</div>
     <div className="xp-strip"><span>Nível {pet.level}</span><div><i style={{ width: `${pet.xp_ratio * 100}%` }} /></div><small>{pet.xp_need ? `${pet.xp_into}/${pet.xp_need} XP` : 'máximo'}</small></div>
     <div className="pet-tabs">{[['comida','Alimentar'],['brinquedo','Brincar'],['acessorio','Vestir']].map(([code, label]) => <button key={code} className={tab === code ? 'active' : ''} onClick={() => setTab(code)}>{label}</button>)}</div>

@@ -17,7 +17,23 @@ import { roomMetrics } from '../render/iso'
 import { drawScene, FLOOR_STYLES, WALL_STYLES } from '../render/room'
 import { AVATAR_H, AVATAR_W, STYLE_LISTS, drawAvatar } from '../render/avatar'
 import { drawPetIcon, PET_ICON_CODES } from '../render/petitems'
-import { drawSticker, STICKER_CODES, STICKER_SIZE } from '../render/stickers'
+import { drawSticker, STICKER_CODES, STICKER_LABEL, STICKER_SIZE } from '../render/stickers'
+import { drawPet } from '../render/PetCanvas'
+
+// As seis espécies, os três estágios e os humores que MUDAM o desenho.
+// Estão aqui porque o bichinho é desenhado por espécie: um `if` esquecido numa
+// espécie só aparece pra quem escolheu aquela — e é justamente quem nunca vai
+// abrir um chamado dizendo "meu coelho está sem orelha".
+const LAB_SPECIES = [
+  ['gato', ['#f2a03d', '#8d8d97', '#3a3340', '#f0ebe2']],
+  ['cachorro', ['#c98a4b', '#6b4a2f', '#e8dcc6', '#3a3340']],
+  ['coelho', ['#f0ebe2', '#c9c4bd', '#9c7b62', '#3a3340']],
+  ['passaro', ['#f2c53d', '#5bb9e8', '#7fd6b0', '#e8879b']],
+  ['capivara', ['#a87b52', '#8a6340', '#c9a67f', '#3a3340']],
+  ['dragao', ['#7fd6b0', '#6b4fa0', '#e8879b', '#f2c53d']],
+]
+const LAB_STAGES = ['filhote', 'jovem', 'adulto']
+const LAB_MOODS = ['feliz', 'triste', 'faminto', 'doente']
 
 const MIN_PIXELS = 20 // abaixo disso, considera que a peça não desenhou nada
 
@@ -89,6 +105,8 @@ export default function ShapeLab() {
   const abas = [
     { key: 'moveis', name: `Móveis (${Object.keys(SHAPES).length})` },
     { key: 'avatar', name: 'Avatar' },
+    { key: 'bichinhos', name: `Bichinhos (${LAB_SPECIES.length * LAB_STAGES.length})` },
+    { key: 'humores', name: `Humores (${LAB_MOODS.length * 2})` },
     { key: 'itens', name: `Itens (${PET_ICON_CODES.length})` },
     { key: 'figurinhas', name: `Figurinhas (${STICKER_CODES.length})` },
     { key: 'cores', name: 'Acabamentos' },
@@ -184,6 +202,80 @@ export default function ShapeLab() {
         </>
       )}
 
+      {aba === 'bichinhos' && (
+        <div className="lab-grid">
+          {LAB_SPECIES.flatMap(([code, colors]) =>
+            LAB_STAGES.map((stage) => (
+              <Tile
+                key={`${code}-${stage}`}
+                label={`${code} · ${stage}`}
+                width={128}
+                height={108}
+                paint={(p, t) =>
+                  drawPet(
+                    p,
+                    { species: code, colors, stage, mood: 'feliz', accessories: {}, mess_count: 0 },
+                    t
+                  )
+                }
+              />
+            ))
+          )}
+        </div>
+      )}
+
+      {aba === 'humores' && (
+        <div className="lab-grid">
+          {LAB_MOODS.map((mood) => (
+            <Tile
+              key={mood}
+              label={`gato · ${mood}`}
+              width={128}
+              height={108}
+              paint={(p, t) =>
+                drawPet(
+                  p,
+                  {
+                    species: 'gato',
+                    colors: ['#f2a03d', '#8d8d97', '#3a3340', '#f0ebe2'],
+                    stage: 'jovem',
+                    mood,
+                    sick: mood === 'doente',
+                    accessories: {},
+                    mess_count: 0,
+                  },
+                  t
+                )
+              }
+            />
+          ))}
+          {[['pet_coleira', 'neck'], ['pet_gravata', 'neck'], ['pet_chapeu', 'head'], ['pet_oculos_pet', 'head']].map(
+            ([item, slot]) => (
+              <Tile
+                key={item}
+                label={`gato · ${item.replace('pet_', '')}`}
+                width={128}
+                height={108}
+                paint={(p, t) =>
+                  drawPet(
+                    p,
+                    {
+                      species: 'gato',
+                      colors: ['#f2a03d', '#8d8d97', '#3a3340', '#f0ebe2'],
+                      stage: 'jovem',
+                      mood: 'feliz',
+                      accessories: { [slot]: item },
+                      mess_count: 0,
+                    },
+                    t
+                  )
+                }
+              />
+            )
+          )}
+        </div>
+      )}
+
       {aba === 'itens' && (
         <div className="lab-grid">
           {PET_ICON_CODES.map((code) => (
@@ -199,11 +291,20 @@ export default function ShapeLab() {
       )}
 
       {aba === 'figurinhas' && (
+        <>
+          {/* Figurinha sem nome aparece como problema, do mesmo jeito que
+              figurinha que nao desenha: no seletor ela viraria um bonequinho
+              sem legenda, e o dono pediu a lista COM nome. */}
+          {STICKER_CODES.some((c) => !STICKER_LABEL[c]) && (
+            <p className="notice error">
+              Sem nome: {STICKER_CODES.filter((c) => !STICKER_LABEL[c]).join(', ')}
+            </p>
+          )}
         <div className="lab-grid">
           {STICKER_CODES.map((code) => (
             <Tile
               key={code}
-              label={code}
+              label={STICKER_LABEL[code] || `${code} ⚠ sem nome`}
               width={STICKER_SIZE * 2}
               height={STICKER_SIZE * 2}
               paint={(p) => {
@@ -215,6 +316,7 @@ export default function ShapeLab() {
             />
           ))}
         </div>
+        </>
       )}
 
       {aba === 'cores' && (

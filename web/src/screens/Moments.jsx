@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { api } from '../api'
+import { api, mediaUrl } from '../api'
 import { subscribe, useStore } from '../store'
 import Icon from '../components/Icon'
 import { prettyDay, stamp, today } from '../lib/dates'
@@ -152,8 +152,8 @@ export default function Moments() {
           return (
             <div key={m.id} className={`card ${i % 2 ? 'tilt' : 'tilt-2'}`} style={{ marginBottom: 0 }}>
               {m.thumb && (
-                <a href={m.media} target="_blank" rel="noreferrer">
-                  <img src={m.thumb} alt="" className="moment-img" />
+                <a href={mediaUrl(m.media)} target="_blank" rel="noreferrer">
+                  <img src={mediaUrl(m.thumb)} alt="" className="moment-img" />
                 </a>
               )}
 

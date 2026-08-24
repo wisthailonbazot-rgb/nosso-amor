@@ -36,7 +36,12 @@ export default function PropertyCanvas({rooms}) {
       const bx=220+((t/18)%700);p.rect(bx,82,4,2,'#33203a');p.rect(bx+7,80,4,2,'#33203a')
       frame=requestAnimationFrame(draw)
     }
-    frame=requestAnimationFrame(draw)
+    // Um quadro desenhado na hora antes de animar: aba em segundo plano nao
+    // recebe `requestAnimationFrame`, e sem isto o terreno aparece em branco.
+    // `draw` ja agenda o proximo quadro no fim, entao chamar aqui uma vez inicia
+    // o laco — pedir um `requestAnimationFrame` alem deste criaria DOIS lacos
+    // desenhando o mesmo canvas, e o terreno piscaria.
+    draw(performance.now())
     return()=>{alive=false;cancelAnimationFrame(frame)}
   },[rooms])
   return <div className="property-scroll"><canvas ref={ref} className="property-canvas"/></div>

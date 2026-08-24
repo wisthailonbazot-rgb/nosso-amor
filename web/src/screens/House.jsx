@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { api } from '../api'
 import RoomCanvas from '../render/RoomCanvas'
+import { criarPasseio, passearAte } from '../render/petWander'
 import PropertyCanvas from '../render/PropertyCanvas'
 import ItemPreview from '../components/ItemPreview'
 import Icon from '../components/Icon'
@@ -26,6 +27,13 @@ export default function House() {
   const [selectedId, setSelectedId] = useState(null)
   const [hover, setHover] = useState(null)
   const [editing, setEditing] = useState(false)
+  // 'fora' = a casa vista de fora, com quintal e rua. 'dentro' = os comodos.
+  //
+  // Antes as duas coisas ficavam EMPILHADAS na mesma rolagem: a vista externa,
+  // a legenda, as abas de comodo, o comodo, a linha do bichinho e o editor, tudo
+  // de uma vez. Media 1.587 pixels de altura num visor de 918 — voce so via
+  // pedaco de cada coisa. Agora e um lugar de cada vez, e voce ENTRA na casa.
+  const [vista, setVista] = useState('fora')
   const [status, setStatus] = useState(null)
   const [saving, setSaving] = useState(false)
   const dragging = useRef(null)
@@ -43,26 +51,86 @@ export default function House() {
   useEffect(() => { const room=data?.rooms.find((r)=>r.code===roomCode); if(room&&!editing) setDraft(room.items) },[roomCode,data,editing])
 
   const room = data?.rooms.find((r) => r.code === roomCode)
-  const petScene = useMemo(() => {
-    if (!room || !data?.pet?.chosen || data.pet.room_code !== room.code) return null
-    const occupied = new Set()
-    for (const item of draft) for (let r=item.row;r<item.row+item.d;r++) for (let c=item.col;c<item.col+item.w;c++) occupied.add(`${c}:${r}`)
-    for (const mess of room.mess) occupied.add(`${mess.col}:${mess.row}`)
-    const favorites = ['house_caminha_pet','house_comedouro','house_arranhador','house_casinha_pet','house_sofa']
-    const friend = favorites.map((code)=>draft.find((item)=>item.code===code)).find(Boolean)
-    const candidates = friend
-      ? [[friend.col+friend.w,friend.row],[friend.col-1,friend.row],[friend.col,friend.row+friend.d],[friend.col,friend.row-1]]
-      : [[Math.floor(room.w/2),Math.floor(room.h/2)]]
-    let spot = candidates.find(([c,r])=>c>=0&&r>=0&&c<room.w&&r<room.h&&!occupied.has(`${c}:${r}`))
-    if (!spot) for(let r=room.h-1;r>=0&&!spot;r--) for(let c=room.w-1;c>=0;c--) if(!occupied.has(`${c}:${r}`)){spot=[c,r];break}
-    const activities = {
-      house_caminha_pet:'tirando uma soneca na caminha', house_comedouro:'farejando o potinho',
-      house_arranhador:'brincando no arranhador', house_casinha_pet:'descansando na casinha',
-      house_sofa:'fazendo companhia no sofá',
+  // ------------------------------------------------------------------ o bicho
+  // As celulas onde ele nao pode pisar. Recalculado quando a mobilia ou a
+  // sujeira muda; o passeio em si NAO e refeito, pra ele nao teleportar toda
+  // vez que voce arrasta um movel.
+  const bloqueadas = useMemo(() => {
+    const set = new Set()
+    if (!room) return set
+    for (const item of draft)
+      for (let r = item.row; r < item.row + item.d; r++)
+        for (let c = item.col; c < item.col + item.w; c++) set.add(`${c}:${r}`)
+    for (const m of room.mess) set.add(`${m.col}:${m.row}`)
+    return set
+  }, [room, draft])
+
+  const passeio = useRef(null)
+  const aqui = data?.pet?.chosen && room && data.pet.room_code === room.code
+
+  useEffect(() => {
+    if (!aqui) { passeio.current = null; return }
+    // recria so quando troca de comodo; dentro do mesmo comodo ele continua de
+    // onde estava, so respeitando os obstaculos novos
+    if (!passeio.current || passeio.current.comodo !== room.code) {
+      passeio.current = criarPasseio(room.w, room.h, bloqueadas, [
+        Math.floor(room.w / 2),
+        Math.floor(room.h / 2),
+      ])
+      passeio.current.comodo = room.code
+    } else {
+      passeio.current.livre = (c, r) =>
+        c >= 0 && r >= 0 && c < room.w && r < room.h && !bloqueadas.has(`${c}:${r}`)
     }
-    return spot ? {...data.pet,col:spot[0],row:spot[1],w:1,d:1,activity:activities[friend?.code]||'explorando o cômodo'} : null
-  }, [room, data?.pet, draft])
-  const scene = useMemo(() => room ? { cols:room.w, rows:room.h, floor:room.floor, wall:room.wall, outdoor:room.outdoor, pet:petScene, items:[...draft,...room.mess.map((m)=>({...m,id:`mess-${m.id}`,w:1,d:1,mess:true}))] } : null,[room,draft,petScene])
+  }, [aqui, room?.code, room?.w, room?.h, bloqueadas])
+
+  // A acao que ele esta fazendo agora. `reacao` e temporaria (o "Interagir"),
+  // o resto sai do estado dele — e por isso um bicho doente NAO aparece
+  // brincando feliz no meio da sala.
+  const [reacao, setReacao] = useState(null)
+  const acaoDoBicho = () => {
+    if (reacao) return reacao
+    if (!data?.pet) return 'idle'
+    if (data.pet.sick) return 'sleep'
+    if (data.pet.mood === 'sonolento') return 'sleep'
+    return null // null = deixa o passeio decidir entre andar e parar
+  }
+
+  const scene = useMemo(
+    () =>
+      room
+        ? {
+            cols: room.w,
+            rows: room.h,
+            floor: room.floor,
+            wall: room.wall,
+            outdoor: room.outdoor,
+            // `pet` e uma FUNCAO, avaliada a cada quadro pelo desenho. Se fosse
+            // um objeto fixo, a posicao so mudaria quando o React re-renderizasse
+            // — ou seja, o bichinho voltaria a ficar parado.
+            pet: aqui
+              ? (t) => {
+                  const passo = passeio.current
+                  if (!passo) return null
+                  const forcado = acaoDoBicho()
+                  passearAte(passo, t, forcado !== null)
+                  return {
+                    ...data.pet,
+                    col: passo.col,
+                    row: passo.row,
+                    olhando: passo.olhando,
+                    action: forcado || (passo.andando ? 'walk' : 'idle'),
+                  }
+                }
+              : null,
+            items: [
+              ...draft,
+              ...room.mess.map((m) => ({ ...m, id: `mess-${m.id}`, w: 1, d: 1, mess: true })),
+            ],
+          }
+        : null,
+    [room, draft, aqui, data?.pet, reacao]
+  )
 
   async function save() {
     setSaving(true); setStatus(null)
@@ -94,9 +162,37 @@ export default function House() {
     try { const result=await api.post('/api/pet/move',{room_code:room.code}); setData((old)=>({...old,pet:{...old.pet,...result.pet}})); setStatus({kind:'ok',text:`${result.pet.name} veio para ${room.name.toLowerCase()}.`}) }
     catch(e){setStatus({kind:'error',text:e.message})}
   }
+  /**
+   * Carinho no bichinho dentro do cômodo.
+   *
+   * Aqui estava o "não funciona": o botão chamava direto o carinho, que tem
+   * descanso de 4 horas de propósito. Fora dessa janela o servidor recusava com
+   * 400, a tela pintava um erro vermelho e **nada acontecia com o bicho** — o
+   * botão parecia quebrado.
+   *
+   * O conserto não é tirar o descanso (ele existe pra o carinho não virar botão
+   * sem consequência, que é decisão travada). O conserto é separar as duas
+   * coisas: **a reação é sempre**, o **prêmio** é que tem hora. Encostar nele
+   * sempre faz ele pular e soltar coraçãozinho; só a alegria é que não sobe
+   * antes das 4 horas — e a tela diz isso sem parecer erro.
+   */
   async function interactPet() {
-    try { const result=await api.post('/api/pet/cuddle'); setData((old)=>({...old,pet:{...old.pet,...result.pet}})); window.casalSound?.('pet',result.pet.species); setStatus({kind:'ok',text:`${result.pet.name} veio brincar com você no cômodo.`}) }
-    catch(e){setStatus({kind:'error',text:e.message})}
+    setReacao('happy')
+    window.casalSound?.('pet', data.pet.species)
+    setTimeout(() => setReacao(null), 1800)
+    try {
+      const result = await api.post('/api/pet/cuddle')
+      setData((old) => ({ ...old, pet: { ...old.pet, ...result.pet } }))
+      setStatus({ kind: 'ok', text: `${result.pet.name} adorou o carinho.` })
+    } catch (e) {
+      const descansando = e.status === 400 && /carinho/i.test(e.message || '')
+      setStatus({
+        kind: descansando ? 'warn' : 'error',
+        text: descansando
+          ? `${data.pet.name} retribuiu, mas já tinha ganhado carinho — o próximo rende de novo daqui a pouco.`
+          : e.message,
+      })
+    }
   }
   function pick(tile,_event,moving) {
     if(!editing) return
@@ -106,16 +202,66 @@ export default function House() {
     const ok=fits(item,tile.col,tile.row,room,others); setHover({...tile,w:item.w,d:item.d,ok}); if(ok)setDraft(draft.map((i)=>i.id===id?{...i,col:tile.col,row:tile.row}:i))
   }
 
+  // O que ele esta fazendo, em palavras. O estado ruim vem ANTES do movel
+  // favorito: a legenda simpatica escondendo bichinho doente ja foi bug uma vez.
+  function fraseDoBicho() {
+    if (reacao === 'happy') return 'todo feliz com o carinho'
+    if (data.pet.sick) return 'largado num canto, doente'
+    if (data.pet.mood === 'faminto') return 'rondando o comedouro, com fome'
+    if (data.pet.mood === 'imundo') return 'precisando muito de um banho'
+    if (data.pet.mood === 'sonolento') return 'tirando uma soneca'
+    if (data.pet.mood === 'triste') return 'quietinho, sentindo falta de vocês'
+    if (room.mess.length > 2) return 'sem saber onde pisar, de tanta sujeira'
+    return 'passeando pelo cômodo'
+  }
+
   if(!data||!room||!scene) return <div className="full-center"><div className="spinner" /></div>
   const selected=draft.find((i)=>i.id===selectedId)
 
   return (
     <>
-      <div className="row between"><h1 className="screen-title">Nossa casa</h1><span className="pill mustard"><Icon name="heart" size={14}/>{data.balance}</span></div>
-      {status&&<p className={`notice ${status.kind}`}>{status.text}</p>}
-      <PropertyCanvas rooms={data.rooms}/>
-      <p className="property-caption">Quintal, muro, portão, calçada e a rua em frente — o começo do bairro.</p>
+      <div className="row between">
+        <h1 className="screen-title">Nossa casa</h1>
+        <span className="pill mustard"><Icon name="heart" size={14}/>{data.balance}</span>
+      </div>
 
+      {/* Duas abas, um lugar de cada vez. */}
+      <div className="vista-tabs">
+        <button className={vista === 'fora' ? 'active' : ''} onClick={() => setVista('fora')}>
+          Do lado de fora
+        </button>
+        <button className={vista === 'dentro' ? 'active' : ''} onClick={() => setVista('dentro')}>
+          Por dentro
+        </button>
+      </div>
+
+      {status&&<p className={`notice ${status.kind}`}>{status.text}</p>}
+
+      {vista === 'fora' ? (
+        <>
+          {/* A fachada inteira e clicavel: e o jeito natural de "entrar". */}
+          <div className="fachada" onClick={() => setVista('dentro')} role="button" tabIndex={0}
+               onKeyDown={(e) => e.key === 'Enter' && setVista('dentro')}>
+            <PropertyCanvas rooms={data.rooms}/>
+            <span className="fachada-porta">Entrar em casa</span>
+          </div>
+          <p className="property-caption">
+            Quintal, muro, portão, calçada e a rua em frente — o começo do bairro.
+          </p>
+          <div className="card">
+            <p className="card-title">Como está a casa</p>
+            <p className="muted small" style={{ margin: 0 }}>
+              {data.rooms.filter((r) => r.unlocked && !r.outdoor).length} de{' '}
+              {data.rooms.filter((r) => !r.outdoor).length} cômodos abertos
+              {data.rooms.some((r) => r.mess?.length)
+                ? ` · tem sujeira esperando em ${data.rooms.filter((r) => r.mess?.length).map((r) => r.name.toLowerCase()).join(', ')}`
+                : ' · tudo limpo por aqui'}
+              .
+            </p>
+          </div>
+        </>
+      ) : (
+        <>
       <div className="room-tabs">{data.rooms.map((r)=><button key={r.code} className={roomCode===r.code?'active':''} onClick={()=>setRoomCode(r.code)}>{!r.unlocked&&<Icon name="lock" size={13}/>} {r.name}</button>)}</div>
       {!room.unlocked ? <div className="card center"><Icon name="lock" size={36}/><h2>{room.name} está fechado</h2><p className="muted">Abrir custa {room.unlock_price} Corações.</p><button className="btn btn-primary" onClick={()=>unlock(room)}>Abrir cômodo</button></div> : <>
 
@@ -129,12 +275,29 @@ export default function House() {
           onReleaseTile={()=>{dragging.current=null;setHover(null)}}
         />
       </div>
-      {data.pet.chosen&&<div className="pet-at-home"><span><strong>{data.pet.name}</strong> {petScene ? petScene.activity : `está em ${data.rooms.find((r)=>r.code===data.pet.room_code)?.name||'outro cômodo'}`}.</span>{petScene?<button className="btn btn-sm" onClick={interactPet}>Interagir</button>:<button className="btn btn-sm" onClick={bringPet}>Chamar para cá</button>}</div>}
+      {data.pet.chosen && (
+        <div className="pet-at-home">
+          <span>
+            <strong>{data.pet.name}</strong>{' '}
+            {aqui
+              ? fraseDoBicho()
+              : `está em ${data.rooms.find((r) => r.code === data.pet.room_code)?.name || 'outro cômodo'}`}
+            .
+          </span>
+          {aqui ? (
+            <button className="btn btn-sm" onClick={interactPet}>Fazer carinho</button>
+          ) : (
+            <button className="btn btn-sm" onClick={bringPet}>Chamar para cá</button>
+          )}
+        </div>
+      )}
 
       <div className="row" style={{ gap: 8, marginTop: 12 }}>{editing?<><button className="btn btn-ghost" onClick={()=>{setDraft(room.items);setEditing(false)}}>Cancelar</button><button className="btn btn-primary grow" disabled={saving} onClick={save}><Icon name="check" size={17}/>Salvar para nós dois</button></>:<button className="btn btn-ghost grow" onClick={()=>setEditing(true)}><Icon name="palette" size={17}/>Arrastar e decorar</button>}
       </div>
       {editing&&<div className="house-editor card"><div className="finish-row"><label>Piso<select value={room.floor} onChange={(e)=>finish('floor',e.target.value)}>{data.floors.map((x)=><option key={x}>{x}</option>)}</select></label>{!room.outdoor&&<label>Parede<select value={room.wall} onChange={(e)=>finish('wall',e.target.value)}>{data.walls.map((x)=><option key={x}>{x}</option>)}</select></label>}</div>{selected&&<div className="selected-tools"><strong>{data.catalog.find((x)=>x.code===selected.code)?.name}</strong><button className="btn btn-sm" onClick={rotateSelected}>Girar</button><button className="btn btn-sm btn-danger" onClick={()=>{setDraft(draft.filter((i)=>i.id!==selected.id));setSelectedId(null)}}>Guardar</button></div>}<p className="card-title">Móveis de vocês</p><div className="furniture-tray">{data.catalog.filter((x)=>room.outdoor?x.subcategory==='quintal':x.subcategory!=='quintal').map((spec)=><button key={spec.code} onClick={()=>add(spec)}><ItemPreview item={{category:'house',metadata:{shape:spec.shape,width:spec.w,height:spec.d}}} scale={1}/><span>{spec.name}</span><small>{draft.filter((i)=>i.code===spec.code).length}/{spec.owned}</small></button>)}</div></div>}
       </>}
+        </>
+      )}
     </>
   )
 }

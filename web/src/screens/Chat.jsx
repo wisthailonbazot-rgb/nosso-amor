@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { api } from '../api'
+import { api, mediaUrl } from '../api'
 import { subscribe, useStore } from '../store'
 import Icon from '../components/Icon'
 import Sticker from '../components/Sticker'
@@ -124,12 +124,12 @@ function Bolha({ msg, minha, citada, onResponder, onApagar, onReagir }) {
         {msg.type === 'sticker' && <Sticker code={msg.sticker} scale={3} />}
 
         {msg.type === 'image' && (
-          <a href={msg.media} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
-            <img src={msg.thumb} alt="" className="msg-img" />
+          <a href={mediaUrl(msg.media)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+            <img src={mediaUrl(msg.thumb)} alt="" className="msg-img" />
           </a>
         )}
 
-        {msg.type === 'audio' && <Audio src={msg.media} duration={msg.duration_ms} />}
+        {msg.type === 'audio' && <Audio src={mediaUrl(msg.media)} duration={msg.duration_ms} />}
 
         {msg.content && <div className="msg-text">{msg.content}</div>}
 
@@ -381,7 +381,7 @@ export default function Chat() {
       {painel === 'sticker' && (
         <div className="chat-panel stickers">
           {stickers.map((code) => (
-            <Sticker key={code} code={code} scale={2} onClick={() => enviarFigurinha(code)} />
+            <Sticker key={code} code={code} scale={2} comNome onClick={() => enviarFigurinha(code)} />
           ))}
         </div>
       )}
