@@ -58,7 +58,16 @@ def _out(row: Message, media_token: str) -> dict:
     }
 
 
-def _notify(db: Session, sender: User, preview: str) -> None:
+def nao_lidas(db: Session, user_id: int) -> int:
+    """Quantas mensagens do outro ainda não foram lidas por este usuário."""
+    return (
+        db.query(Message)
+        .filter(Message.sender_id != user_id, Message.read_at.is_(None))
+        .count()
+    )
+
+
+def _notify(db: Session, sender: User, preview: str, message_id: int | None = None) -> None:
     partner = partner_of(db, sender)
     if partner is None:
         return
@@ -73,8 +82,28 @@ def _notify(db: Session, sender: User, preview: str) -> None:
         body=preview,
         url="/chat",
         kind="chat",
-        tag="chat",  # agrupa: cinco mensagens viram um aviso que se atualiza
+        # Uma etiqueta POR MENSAGEM.
+        #
+        # Antes era "chat" pra todas, o que agrupa — e agrupar, no celular,
+        # quer dizer que a mensagem nova SUBSTITUI a anterior. Mandando três
+        # seguidas, o dono via uma só e achava que as outras não chegaram.
+        # Agora cada uma aparece; o iPhone já empilha elas sozinho embaixo do
+        # nome do app, que é o comportamento que as pessoas esperam.
+        tag=f"chat-{message_id}" if message_id else "chat",
+        badge=nao_lidas(db, partner.id),
     )
+
+
+@router.get("/unread")
+def unread_count(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    """Só o número de mensagens por ler.
+
+    Existe separado de `GET /api/chat` porque o app precisa desse número no
+    ARRANQUE, pra pôr a bolinha na aba e o numerinho no ícone — e carregar o
+    histórico inteiro (40 mensagens, com token de mídia) só pra contar seria
+    caro em toda abertura do app.
+    """
+    return {"unread": nao_lidas(db, user.id)}
 
 
 @router.get("")
@@ -130,7 +159,7 @@ def send_text(
     db.add(row)
     db.flush()
     missions.record(db, "chat_send")
-    _notify(db, user, preview)
+    _notify(db, user, preview, row.id)
     db.commit()
 
     token = create_media_token(user)
@@ -155,7 +184,7 @@ def send_image(
     )
     db.add(row)
     db.flush()
-    _notify(db, user, "mandou uma foto")
+    _notify(db, user, "mandou uma foto", row.id)
     db.commit()
 
     token = create_media_token(user)
@@ -179,7 +208,7 @@ def send_audio(
     )
     db.add(row)
     db.flush()
-    _notify(db, user, "mandou um áudio")
+    _notify(db, user, "mandou um áudio", row.id)
     db.commit()
 
     token = create_media_token(user)

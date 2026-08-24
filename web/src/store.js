@@ -13,6 +13,23 @@ let reconnectTimer = null
 let pingTimer = null
 const listeners = new Map()
 
+/**
+ * O numerinho vermelho no icone do app.
+ *
+ * Com o app ABERTO quem manda e a tela; com ele fechado, quem manda e o service
+ * worker (ver `sw.js`). Os dois chamam a mesma API do navegador, entao o numero
+ * nao briga consigo mesmo.
+ */
+export function marcarIcone(total) {
+  try {
+    if (!navigator.setAppBadge) return
+    const p = total > 0 ? navigator.setAppBadge(total) : navigator.clearAppBadge()
+    Promise.resolve(p).catch(() => {})
+  } catch {
+    /* navegador sem suporte: o contador na aba continua valendo */
+  }
+}
+
 export function subscribe(event, handler) {
   if (!listeners.has(event)) listeners.set(event, new Set())
   listeners.get(event).add(handler)
@@ -41,6 +58,10 @@ export const useStore = create((set, get) => ({
   vapidKey: '',
   online: [],
   unread: 0,
+  // Mensagens do outro ainda não lidas. Fica separado de `unread` (que é o
+  // contador de AVISOS) porque são duas coisas diferentes e apareciam no lugar
+  // errado: o chat não mostrava número nenhum.
+  naoLidas: 0,
   connection: 'offline',
 
   async boot() {
@@ -81,6 +102,12 @@ export const useStore = create((set, get) => ({
     } catch {
       /* sem rede: mantem o que tinha */
     }
+    try {
+      const chat = await api.get('/api/chat/unread')
+      get().definirNaoLidas(chat.unread)
+    } catch {
+      /* idem */
+    }
   },
 
   async login(slug, password) {
@@ -96,7 +123,8 @@ export const useStore = create((set, get) => ({
   logout() {
     setToken('')
     get().disconnect()
-    set({ user: null, partner: null, balance: 0, online: [], unread: 0 })
+    set({ user: null, partner: null, balance: 0, online: [], unread: 0, naoLidas: 0 })
+    marcarIcone(0)
   },
 
   setBalance(balance) {
@@ -141,6 +169,14 @@ export const useStore = create((set, get) => ({
       if (message.event === 'wallet' && message.data?.balance !== undefined) {
         set({ balance: message.data.balance })
       }
+      // Mensagem do parceiro chegando com o app aberto: soma no contador do
+      // chat, a não ser que a conversa já esteja na tela.
+      if (message.event === 'chat' && message.data?.message) {
+        const minha = message.data.message.sender_id === get().user?.id
+        const noChat = location.pathname.startsWith('/chat')
+        if (!minha && !noChat) get().somarNaoLida(1)
+      }
+      if (message.event === 'chat_read') get().zerarNaoLidas()
       emit(message.event, message.data)
     }
 
@@ -158,6 +194,23 @@ export const useStore = create((set, get) => ({
         /* ja fechou */
       }
     }
+  },
+
+  somarNaoLida(quantas = 1) {
+    const total = Math.max(0, get().naoLidas + quantas)
+    set({ naoLidas: total })
+    marcarIcone(total)
+  },
+
+  definirNaoLidas(total) {
+    const n = Math.max(0, Number(total) || 0)
+    set({ naoLidas: n })
+    marcarIcone(n)
+  },
+
+  zerarNaoLidas() {
+    set({ naoLidas: 0 })
+    marcarIcone(0)
   },
 
   scheduleReconnect() {

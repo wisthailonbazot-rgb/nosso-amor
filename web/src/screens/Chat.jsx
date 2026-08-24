@@ -192,6 +192,9 @@ export default function Chat() {
     setStickers(data.stickers)
     setTemMais(data.has_more)
     await api.post('/api/chat/read').catch(() => {})
+    // Abriu a conversa = leu. Zera o número da aba E o do ícone do app, senão
+    // o iPhone fica com a bolinha vermelha pra sempre.
+    useStore.getState().zerarNaoLidas()
     setTimeout(() => rolarPraBaixo(), 30)
   }, [rolarPraBaixo])
 

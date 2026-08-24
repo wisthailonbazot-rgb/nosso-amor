@@ -33,6 +33,10 @@ from .config import (
 from .models import Notification, PushSubscription
 
 log = logging.getLogger("push")
+# As linhas de diagnostico saem em WARNING de proposito: o uvicorn, com a
+# configuracao padrao, NAO mostra INFO de logger proprio — e o diagnostico que
+# ninguem consegue ler nao serve pra nada. Ja custou uma rodada inteira de
+# investigacao as cegas.
 
 # Depois de tantas falhas seguidas que nao sao 404/410 (rede, 5xx do provedor),
 # a assinatura e considerada perdida. Evita ficar batendo em endpoint zumbi.
@@ -74,6 +78,7 @@ def send_to_user(
     kind: str = "geral",
     dedupe_key: str | None = None,
     tag: str | None = None,
+    badge: int | None = None,
     extra: dict | None = None,
 ) -> dict:
     """Notifica um usuario em todos os aparelhos dele.
@@ -115,9 +120,13 @@ def send_to_user(
         "kind": kind,
         "tag": tag or kind,
         "ack": ack,
+        # Quantos avisos por ler. O service worker usa isso pro numerinho
+        # vermelho no icone do app — que no iPhone e a unica pista de que
+        # chegou coisa nova sem voce abrir o aparelho.
+        "badge": badge,
         **(extra or {}),
     }
-    log.info("push saindo user=%s kind=%s ack=%s", user_id, kind, ack)
+    log.warning("push saindo user=%s kind=%s ack=%s", user_id, kind, ack)
 
     subs = db.query(PushSubscription).filter(PushSubscription.user_id == user_id).all()
     if not subs:
@@ -125,7 +134,7 @@ def send_to_user(
     sent = 0
     for sub in subs:
         ok, drop = _send_one(sub, payload)
-        log.info(
+        log.warning(
             "push -> %s aceito=%s apagar=%s ack=%s",
             sub.endpoint.split("/")[2] if "/" in sub.endpoint else "?",
             ok,

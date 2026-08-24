@@ -32,6 +32,7 @@ const TABS = [
 
 function TabBar() {
   const unread = useStore((s) => s.unread)
+  const naoLidas = useStore((s) => s.naoLidas)
   const user = useStore((s) => s.user)
   const privacy = useStore((s) => s.cyclePrivacy)
 
@@ -47,6 +48,12 @@ function TabBar() {
           <span>{tab.label}</span>
           {tab.to === '/mais' && unread > 0 && (
             <span className="tab-dot">{unread > 9 ? '9+' : unread}</span>
+          )}
+          {/* O número de mensagens por ler, na aba do Chat. Antes só existia a
+              bolinha de "avisos" na aba Mais, e mensagem nova não aparecia em
+              lugar nenhum dentro do app. */}
+          {tab.to === '/chat' && naoLidas > 0 && (
+            <span className="tab-dot">{naoLidas > 9 ? '9+' : naoLidas}</span>
           )}
         </NavLink>
       ))}

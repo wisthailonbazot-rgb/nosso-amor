@@ -96,6 +96,21 @@ self.addEventListener('push', (event) => {
   }
   const simples = { body: data.body || '', icon: '/icon-192.png', data: { url: data.url || '/' } }
 
+  // O numerinho vermelho no icone do app.
+  //
+  // No iPhone, com o app fechado, ele e a UNICA pista de que chegou coisa nova.
+  // Precisa ser posto AQUI, no service worker, e nao na tela: a tela nem esta
+  // rodando quando o push chega. `setAppBadge` existe no iOS 16.4+ pra web app
+  // da Tela de Inicio; onde nao existir, o `catch` engole e o aviso normal
+  // continua valendo.
+  if (typeof data.badge === 'number' && self.navigator && self.navigator.setAppBadge) {
+    const acao =
+      data.badge > 0
+        ? self.navigator.setAppBadge(data.badge)
+        : self.navigator.clearAppBadge()
+    Promise.resolve(acao).catch(() => {})
+  }
+
   event.waitUntil(
     self.registration
       .showNotification(title, completa)
