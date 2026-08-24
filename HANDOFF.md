@@ -82,6 +82,18 @@ Depois de mexer no app, para ver o resultado como ele será em produção:
 cd "D:/beckup/arquivo env/app-casal/web" && npm run build && cd .. && rm -rf backend/app/static/assets && cp -r web/dist/* backend/app/static/ && echo publicado
 ```
 
+> ### ⚠️ Isso publica só na SUA MÁQUINA
+>
+> Copiar `web/dist` pro `backend/app/static` atualiza o que roda em
+> `localhost:8020`. **Não encosta em produção.** O site em
+> `https://nossoamor.209.50.229.119.sslip.io` sai de OUTRO lugar: o repositório
+> de deploy em `.deploy-repo/` (GitHub `wisthailonbazot-rgb/nosso-amor`), que o
+> Coolify constrói pelo Dockerfile.
+>
+> Já aconteceu de tudo ser testado e aprovado no local, o dono abrir o link no
+> celular e ver a versão velha. Pra publicar de verdade, ver **"Publicar em
+> produção"** logo abaixo.
+
 **Duas pegadinhas que já custaram tempo aqui:**
 
 1. O `dev_server.py` **não recarrega sozinho**. Depois de mexer no backend é preciso
@@ -90,6 +102,30 @@ cd "D:/beckup/arquivo env/app-casal/web" && npm run build && cd .. && rm -rf bac
    desconhecida agora responde 404 em vez de devolver a página.)
 2. `rm -rf backend/app/static/assets` antes de copiar: sem isso os arquivos antigos
    ficam lá, e o navegador pode servir uma mistura das duas versões.
+
+### Publicar em produção (o passo que falta depois de tudo passar)
+
+O site público **não** sai da pasta de trabalho: sai de `.deploy-repo/`, que é um
+repositório git separado apontando pro GitHub `wisthailonbazot-rgb/nosso-amor`. O
+Coolify constrói dali pelo `Dockerfile` — que compila o `web/` sozinho, então o
+`dist` **não** vai versionado.
+
+```bash
+cd "D:/beckup/arquivo env/app-casal" && rm -rf .deploy-repo/backend/app .deploy-repo/web/src .deploy-repo/web/public && cp -r backend/app .deploy-repo/backend/app && cp backend/dev_server.py backend/requirements*.txt .deploy-repo/backend/ && cp -r web/src web/public .deploy-repo/web/ && cp web/index.html web/package.json web/package-lock.json web/vite.config.js web/capacitor.config.json .deploy-repo/web/ && cp Dockerfile .dockerignore HANDOFF.md BACKLOG.md .deploy-repo/ && rm -rf .deploy-repo/backend/app/static .deploy-repo/backend/app/__pycache__ .deploy-repo/backend/app/routers/__pycache__
+```
+
+Depois commitar e empurrar em `.deploy-repo/`, e disparar o build (o token está em
+`../env-coolify.txt`, fora deste projeto):
+
+```bash
+cd "D:/beckup/arquivo env" && TOKEN=$(grep "^COOLIFY_TOKEN=" env-coolify.txt | sed 's/^COOLIFY_TOKEN= *//' | tr -d '') && curl -s -X POST -H "Authorization: Bearer $TOKEN" "https://painel.barbeariabazot.com/api/v1/deploy?uuid=q13k8ab4ps5elmhoio0mov3t&force=true"
+```
+
+**Como saber se subiu mesmo:** o nome do arquivo do bundle é um resumo do
+conteúdo. Se o `/assets/index-XXXX.js` que o site serve for o mesmo que o
+`npm run build` gerou aqui, é a mesma versão. Procurar nomes de função no bundle
+**não** serve — o build minifica e renomeia tudo; procure TEXTO que aparece na
+tela ("Fazer carinho", "Entrar em casa").
 
 ### A bancada de arte: `/lab`
 
