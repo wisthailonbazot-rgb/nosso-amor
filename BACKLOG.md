@@ -409,3 +409,21 @@ para arrastar na tela (arrasta pra cima pula, pra baixo abaixa).
 Estado: **537 verificações, 0 falha**; build Vite aprovada; conferido no navegador
 contra o app publicado. As causas de cada defeito estão no HANDOFF, seção 9.4 — vale
 ler antes de mexer no motor de desenho.
+
+### 24/08/2026 — Qualidade do sprite e arrastar item (segunda rodada)
+
+- **[x]** **"O boneco do joguinho e na casa está com qualidade baixíssima."** Causa: o
+      bichinho era desenhado em 128×108 e **encolhido** pra 50×42 (cômodo) e 54×46
+      (corrida) — reduzir pixel art joga pixel fora, de cada dois e meio sobra um.
+      Na tela dele, que usa a caixa cheia, estava bom; por isso o defeito só aparecia
+      nesses dois lugares. Agora `drawPet` recebe uma escala e o motor desenha DIRETO
+      no tamanho final (62×52 no cômodo, 68×58 na corrida). Continua sendo o mesmo
+      `drawPet` — não existe um segundo sprite do bichinho.
+- **[x]** **Arrastar e soltar comida e objetos no bichinho.** Eventos de ponteiro (a
+      API de arrastar do HTML não dispara em toque), com folga de 8 px antes de virar
+      arrasto — assim o toque simples e a rolagem da lista continuam funcionando.
+      Soltar fora do bichinho não gasta item. O palco acende e diz "Solte para dar X".
+- **[x]** Publicado em produção: `https://nossoamor.209.50.229.119.sslip.io` servindo
+      `index-C8hTN-kh.js`, o mesmo nome gerado pelo build local.
+
+Estado: **537 verificações, 0 falha**. Detalhes e causas no HANDOFF, seção 9.5.

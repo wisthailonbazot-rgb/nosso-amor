@@ -775,3 +775,73 @@ catálogo Python tem plano de corpo no motor JS (e nenhum plano sobrando), todo 
 que o app pede existe, e nenhum apelido de ação aponta pra clipe inexistente.
 
 **Próximo passo:** continua sendo a seção 8.1 — mapa navegável do bairro.
+
+### 9.5 Qualidade do sprite fora da tela do bichinho, e arrastar item (24/08/2026)
+
+Dois pedidos do dono depois de rodar a versão de 9.4: o bichinho estava com
+"qualidade baixíssima" **no joguinho e na casa** (na tela dele, não), e ele queria
+**arrastar e soltar a comida e os objetos** até o bichinho.
+
+**A causa da qualidade: encolher pixel art joga pixel fora.** O bichinho era sempre
+desenhado na caixa cheia de 128×108 e depois colado com `drawImage` em 50×42 (cômodo)
+e 54×46 (corrida). Isso não suaviza nem reduz com cuidado — de cada dois pixels e meio
+sobra um, escolhido por arredondamento. Contorno esfarela, olho some, perna fica com
+buraco. Na tela do bichinho, que usa a caixa inteira, ele estava bem; por isso o
+defeito parecia "só no jogo e na casa".
+
+Foi por isso que a decisão antiga ("um desenho só, colado em dois tamanhos", comentada
+no `room.js`) precisou cair. O que ela protegia continua de pé: **não existe um segundo
+sprite do bichinho**. O que mudou é que `drawPet(p, pet, tick, escala)` agora recebe
+uma escala e o motor desenha DIRETO no tamanho final — `planoDe()` escala todas as
+medidas e carrega as próprias âncoras (`plano.cx`, `plano.chao`), em vez das constantes
+globais que amarravam o bichinho a uma caixa só. São menos pixels, mas todos escolhidos
+pelo desenho.
+
+Duas consequências que valem saber antes de mexer:
+
+- **abaixo de 0,8 de escala, a miudeza não é desenhada** (bolha de sabão, migalha, o
+  "z" do sono, a poeira do passo, e o objeto do item de `petProps.js`). Reduzida, ela
+  vira sujeira de um pixel espalhada — pior do que não ter. Traço fino e raio de olho
+  têm piso (`Math.max`), senão sumiriam de vez;
+- **agachar na corrida deixou de ser achatamento da imagem.** Era um `drawImage`
+  espremendo o sprite pela metade — mais uma redução em cima da que já estragava a
+  arte. Agora é o clipe `deitar`, que abaixa o corpo dobrando as pernas. A caixa de
+  colisão não mudou: quem decide continua sendo `j.abaixado`, não a altura do desenho.
+
+Tamanhos em uso: **62×52** no cômodo e **68×58** na corrida.
+
+**Arrastar e soltar o item no bichinho.** Feito com eventos de PONTEIRO, não com a API
+de arrastar do HTML — aquela simplesmente **não dispara em toque**, e o recurso ficaria
+só no computador, que é onde ninguém usa este app. Ponteiro é o mesmo caminho para
+dedo, caneta e mouse.
+
+Três decisões dentro disso:
+
+1. **só vira arrasto depois de 8 px de dedo.** Sem essa folga, qualquer tremida viraria
+   arrasto, o toque simples deixaria de funcionar e a rolagem da lista morreria junto.
+   O toque continua valendo e faz exatamente o que sempre fez;
+2. **soltar fora do bichinho não faz nada.** É desistir no meio. Aplicar mesmo assim
+   gastaria um item do inventário sem a pessoa ter escolhido isso — conferido: soltar
+   no rodapé deixa higiene e inventário intactos;
+3. `touch-action: none` nos itens e `pointer-events: none` no item que segue o dedo. O
+   segundo é obrigatório: se ele capturasse o ponteiro, o `pointerup` cairia nele e
+   nunca no palco, e o item nunca chegaria ao bichinho.
+
+O palco pisca quando há item na mão e acende quando o item está sobre ele, com a frase
+"Solte para dar X" — sem essa resposta, quem arrasta não sabe até onde levar o dedo.
+
+**Conferido no navegador**, contra o app publicado: arrastar o sushi até o bichinho
+levou a fome de 35 para 80 com o aviso certo; soltar fora não mexeu em nada nem gastou
+item; o toque simples continua aplicando (higiene 40 → 80, inventário 2 → 1). Recusa do
+servidor continua honesta ("Pipoca está sem fome nenhuma"), não vira erro.
+
+> **Um susto que não era bug:** no meio do teste apareceu `Internal Server Error` com
+> `database is locked`. Foi a minha própria escrita externa no SQLite da bancada
+> (ajustando atributos pra testar), não o código. Produção é PostgreSQL e não tem isso.
+> Mexer no `casal_local.db` por fora enquanto o `dev_server` está de pé provoca
+> exatamente esse erro — se aparecer, é a primeira suspeita.
+
+**537 verificações, 0 falha.** Publicado em produção: commit `66bb2f8` no repositório de
+deploy, build do Coolify, e o site passou a servir `index-C8hTN-kh.js` — o mesmo nome
+que o `npm run build` gerou aqui, que é a prova de ser a mesma versão. Saúde HTTPS e os
+textos novos conferidos no bundle que está no ar.
