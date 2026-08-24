@@ -188,14 +188,27 @@ export function drawScene(p, scene, ui = {}, t = 0) {
 /**
  * O bichinho dentro do comodo.
  *
- * Ele e desenhado num canvas separado, em tamanho cheio, e so depois colado
- * encolhido na cena. Poderia ser desenhado direto, mas ai cada parte do corpo
- * teria que conhecer a escala do comodo — e o mesmo desenho que aparece na tela
- * dele deixaria de ser o mesmo daqui. Um desenho so, colado em dois tamanhos.
+ * Ele e desenhado num canvas separado e depois colado na cena — mas agora **no
+ * tamanho em que vai aparecer**, nao encolhido.
+ *
+ * A versao anterior pintava nos 128x108 cheios e colava em 50x42. Parecia
+ * economico ("um desenho so, colado em dois tamanhos"), e era justamente o que
+ * arruinava a arte: reduzir pixel art nao suaviza, JOGA PIXEL FORA. De cada
+ * dois pixels e meio sobrava um, escolhido por arredondamento — contorno
+ * esfarelado, olho sumido, perna com buraco. Na tela do bichinho, que usa a
+ * caixa inteira, ele estava bonito; aqui e no jogo, nao.
+ *
+ * O motor aceita escala (ver `drawPet`), entao o desenho sai direto em 50x42:
+ * sao menos pixels, mas todos escolhidos pelo desenho. Continua sendo O MESMO
+ * `drawPet` — a regra de nao existir um segundo sprite do bichinho vale.
  *
  * `pet.col` e `pet.row` aceitam fracao: e assim que o passeio (`petWander.js`)
  * faz ele ANDAR em vez de pular de celula em celula.
  */
+const PET_L = 62
+const PET_A = 52
+const PET_ESCALA = PET_A / 108
+
 function drawHousePet(p, pet, origin, t) {
   const [x, y] = project(pet.col + 0.5, pet.row + 0.5, 0.05, origin)
   if (!drawHousePet.canvas) {
@@ -203,23 +216,23 @@ function drawHousePet(p, pet, origin, t) {
     drawHousePet.painter = new Painter(drawHousePet.canvas)
   }
   const sprite = drawHousePet.painter
-  sprite.resize(128, 108)
+  sprite.resize(PET_L, PET_A)
   sprite.clear()
-  drawPet(sprite, pet, t)
+  drawPet(sprite, pet, t, PET_ESCALA)
 
-  const ex = Math.round(x - 25)
-  const ey = Math.round(y - 42)
+  const ex = Math.round(x - PET_L / 2)
+  const ey = Math.round(y - PET_A)
   if (pet.olhando === 'esquerda') {
     // Espelha na hora de colar, em vez de desenhar um segundo conjunto de
     // sprites virados. `drawImage` com escala negativa e nitido: nao interpola,
     // entao a pixel art continua com borda dura.
     p.ctx.save()
-    p.ctx.translate(ex + 50, ey)
+    p.ctx.translate(ex + PET_L, ey)
     p.ctx.scale(-1, 1)
-    p.ctx.drawImage(drawHousePet.canvas, 0, 0, 128, 108, 0, 0, 50, 42)
+    p.ctx.drawImage(drawHousePet.canvas, 0, 0)
     p.ctx.restore()
   } else {
-    p.ctx.drawImage(drawHousePet.canvas, 0, 0, 128, 108, ex, ey, 50, 42)
+    p.ctx.drawImage(drawHousePet.canvas, ex, ey)
   }
 }
 

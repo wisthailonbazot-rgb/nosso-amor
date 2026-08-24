@@ -1404,16 +1404,52 @@ button:disabled,
   overflow: hidden;
   box-shadow: 0 3px 0 var(--ink);
   margin-bottom: 12px;
-  touch-action: manipulation;   /* toque pra pular, sem o atraso do duplo-toque */
   cursor: pointer;
   user-select: none;
+
+  /* O quadro manda no tamanho, e o canvas o preenche. O contrário (canvas com
+     `height:auto` mandando na altura do quadro) fecharia um LOOP com o
+     `ResizeObserver` que mede o quadro pra decidir a resolução da arte: medir
+     mudaria o canvas, que mudaria a medida. */
+  aspect-ratio: 320 / 150;
+
+  /* `none`, e não `manipulation`: o comando do jogo é ARRASTAR na pista, e com
+     qualquer outro valor o navegador entende o arrasto vertical como rolagem da
+     página — a tela desce e o pulo nunca acontece. */
+  touch-action: none;
+}
+.runner-frame.cheia {
+  aspect-ratio: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-bottom: 6px;
 }
 .runner-canvas {
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
   image-rendering: pixelated;   /* pixel nítido ao ampliar, sem borrão */
 }
+
+/* ------------------------------------------------------- jogo em tela cheia
+   Sobreposição própria, porque a API de tela cheia do navegador NÃO existe no
+   iPhone fora de vídeo. Aqui ela é o caminho principal (funciona nos dois
+   sistemas) e a API nativa entra só como extra no Android. */
+.jogo-cheio {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: max(10px, env(safe-area-inset-top)) 10px max(10px, env(safe-area-inset-bottom));
+  background: var(--paper, #f6efe3);
+  overflow: hidden;
+}
+.jogo-cheio .pet-game { flex: 1 1 auto; min-height: 0; }
+.jogo-cheio-titulo { font-family: 'Baloo 2', sans-serif; font-size: 17px; }
+.sem-rolagem { overflow: hidden; }
+.pet-game.cheia { min-height: 0; }
 .runner-overlay {
   position: absolute;
   inset: 0;
@@ -1456,3 +1492,45 @@ button:disabled,
    coexistem, então precisa ocupar exatamente o mesmo espaço. */
 .sticker-hd { display: inline-block; line-height: 0; }
 .sticker-hd svg { display: block; width: 100%; height: 100%; }
+
+/* ------------------------------------------------- arrastar item pro bichinho
+   O item sai da lista e vai até ele. `touch-action: none` nos itens é o que
+   permite o gesto: sem isso o navegador entende o arrasto vertical como rolagem
+   da lista e o item nunca sai do lugar. O toque simples continua funcionando —
+   só vira arrasto depois de o dedo andar 8 px (ver `Pet.jsx`). */
+.pet-item { touch-action: none; }
+.pet-item.na-mao { opacity: 0.4; border-style: dashed; }
+
+/* O palco pisca quando tem item na mão, e acende quando o item está sobre ele:
+   sem essa resposta, quem arrasta não sabe até onde precisa levar o dedo. */
+.pet-stage { position: relative; transition: box-shadow 0.12s, transform 0.12s; }
+.pet-stage.alvo { box-shadow: 0 0 0 2px var(--ink), 0 0 0 6px rgba(232, 135, 155, 0.35); }
+.pet-stage.alvo-aceso {
+  box-shadow: 0 0 0 3px var(--ink), 0 0 0 9px rgba(232, 135, 155, 0.6);
+  transform: scale(1.015);
+}
+.pet-stage-dica {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  padding: 3px 10px;
+  border: 1.5px solid var(--ink);
+  border-radius: 11px 8px 12px 9px;
+  background: rgba(255, 250, 243, 0.94);
+  font: 700 11px 'Baloo 2', sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* O item na mão segue o dedo. `pointer-events: none` é obrigatório: se ele
+   capturasse o ponteiro, o `pointerup` cairia nele e nunca no palco — o item
+   nunca chegaria ao bichinho. */
+.arrasto-fantasma {
+  position: fixed;
+  z-index: 120;
+  transform: translate(-50%, -50%) rotate(-6deg);
+  pointer-events: none;
+  filter: drop-shadow(0 3px 0 rgba(51, 32, 58, 0.3));
+}
+.arrasto-fantasma.aceso { transform: translate(-50%, -50%) scale(1.18) rotate(4deg); }

@@ -371,3 +371,41 @@ pronto sem o bloco no smoke test e o print da tela.
   bichinho ACHATA (46 → 26 px) em vez de virar outro sprite.
 - **APK gerado e assinado** (`releases/NossoApp-casal-android.apk`, 4,6 MB), com
   `RECORD_AUDIO`, `POST_NOTIFICATIONS`, `READ_MEDIA_IMAGES` e o endereço cravado.
+
+### 24/08/2026 — Motor de animação do bichinho e minigames em tela cheia
+
+Pedido do dono, na íntegra: bichinhos estavam "muito simplificados"; usar um motor
+melhor e fazer animações completas de todos os animais (gato e cachorro deitando,
+andando, pulando; dragão e pássaro voando; coelho andando), com eles interagindo com
+caminha, brinquedos e comida; criar evolução de filhote a adulto; criar interações ao
+clicar na tela; pôr os minigames em tela cheia; e corrigir os controles da corrida
+para arrastar na tela (arrasta pra cima pula, pra baixo abaixa).
+
+- **[x]** **Motor novo** `web/src/render/petRig.js`: esqueleto com plano de corpo,
+      clipes de pose e desenho separados em três camadas. Perna com cinemática inversa
+      de dois ossos, marcha diagonal no andar, galope no correr, cauda em corrente com
+      atraso, asa que bate. **22 clipes × 6 espécies = 132 combinações**, todas na
+      bancada `/lab`, aba **Animações**.
+- **[x]** **Animações por espécie:** deitar, dormir, sentar, andar, correr, pular,
+      saltitar, comer, beber, roer, banho, brincar, coçar, rolar, implorar, cavar,
+      voar e planar. Coelho e pássaro saltitam em vez de andar; só quem tem asa voa.
+- **[x]** **Interação com os móveis:** `petWander.js` ganhou pontos de interesse por
+      código do catálogo — ele vai até a caminha e dorme, até o pote e come, até o
+      arranhador e se coça, rola no tapete, cavuca a planta. Antes o destino era
+      sorteado e ele andava em linha reta pra lugar nenhum.
+- **[x]** **Evolução contínua filhote → adulto:** `pet_care.growth_of()` (0 a 1) sai da
+      mesma progressão do nível; o desenho interpola a PROPORÇÃO, não a escala.
+      Bancada: aba **Crescimento**.
+- **[x]** **Interação ao tocar:** na tela do bichinho a reação depende de onde se toca
+      (cabeça / corpo / barriga); dentro do cômodo, cinco reações sorteadas.
+- **[x]** **Minigames em tela cheia**, com sobreposição de CSS (a API nativa não existe
+      no iPhone) e a API do Android como extra.
+- **[x]** **Corrida por arrasto**: cima pula, baixo abaixa, toque seco ainda pula.
+- **[x]** Correções do dono na mesma rodada: silhueta que parecia dinossauro, emendas
+      nas articulações, coelho e cachorro sem orelha, e conferência dos acessórios
+      (coleira, gravata, chapéu, óculos) em todas as espécies e poses — aba
+      **Vestidos** na bancada.
+
+Estado: **537 verificações, 0 falha**; build Vite aprovada; conferido no navegador
+contra o app publicado. As causas de cada defeito estão no HANDOFF, seção 9.4 — vale
+ler antes de mexer no motor de desenho.

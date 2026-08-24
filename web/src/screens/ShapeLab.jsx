@@ -19,6 +19,7 @@ import { AVATAR_H, AVATAR_W, STYLE_LISTS, drawAvatar } from '../render/avatar'
 import { drawPetIcon, PET_ICON_CODES } from '../render/petitems'
 import { drawSticker, STICKER_CODES, STICKER_LABEL, STICKER_SIZE } from '../render/stickers'
 import { drawPet } from '../render/PetCanvas'
+import { CODIGOS_ESPECIE, NOMES_CLIPES, clipeDe, planoDe } from '../render/petRig'
 
 // As seis espécies, os três estágios e os humores que MUDAM o desenho.
 // Estão aqui porque o bichinho é desenhado por espécie: um `if` esquecido numa
@@ -33,6 +34,28 @@ const LAB_SPECIES = [
   ['dragao', ['#7fd6b0', '#6b4fa0', '#e8879b', '#f2c53d']],
 ]
 const LAB_STAGES = ['filhote', 'jovem', 'adulto']
+
+// O crescimento agora e CONTINUO (ver `petRig.planoDe`), entao a bancada precisa
+// olhar os pontos do meio tambem: e entre um estagio e outro que uma conta de
+// proporcao errada faz a perna atravessar o corpo, e nos tres estagios redondos
+// isso pode nao aparecer.
+const LAB_CRESCIMENTO = [0, 0.25, 0.5, 0.75, 1]
+
+// Acessório vestido, em TODA espécie e em pose que MEXE no corpo.
+//
+// Antes só existia "gato parado com coleira". Isso bastava enquanto o bichinho
+// era uma pilha de retângulos parada: o chapéu ficava num y fixo e pronto. Com
+// o esqueleto, a cabeça abaixa pra comer, tomba pra dormir e sobe no pulo — e um
+// acessório presilhado em coordenada fixa flutua no ar ou atravessa o pescoço.
+// Por isso a conferência é cruzada: acessório × espécie, e cada um numa pose
+// diferente, justamente as que mais deslocam a cabeça.
+const LAB_ACESSORIOS = [
+  ['pet_coleira', 'neck', 'comer'],
+  ['pet_gravata', 'neck', 'dormir'],
+  ['pet_chapeu', 'head', 'pular'],
+  ['pet_oculos_pet', 'head', 'sentar'],
+  ['pet_chapeu', 'head', 'deitar'],
+]
 const LAB_MOODS = ['feliz', 'triste', 'faminto', 'doente']
 
 const MIN_PIXELS = 20 // abaixo disso, considera que a peça não desenhou nada
@@ -69,13 +92,27 @@ function Tile({ label, width, height, paint, animate = false }) {
     const painter = new Painter(ref.current)
     painter.resize(width, height)
     let raf
-    const loop = (t) => {
+    const pintar = (t) => {
       painter.clear()
       paint(painter, t)
-      if (animate) raf = requestAnimationFrame(loop)
     }
+    const loop = (t) => {
+      pintar(t)
+      raf = requestAnimationFrame(loop)
+    }
+
+    // Um quadro NA HORA, antes de pedir animação — e isto vale também aqui.
+    //
+    // Esta era a última peça do app que ainda caía na armadilha já registrada no
+    // HANDOFF: `requestAnimationFrame` não roda em aba que o navegador não está
+    // compondo. O bloco animado só desenhava dentro do laço, então em aba de
+    // segundo plano ele ficava com **zero pixel pintado** — e apareceu do jeito
+    // mais irônico possível: conferindo os 132 blocos de animação novos, os 132
+    // leram vazio na tela enquanto a marca de "⚠ vazio" dizia que estava tudo
+    // certo (ela conta num canvas de rascunho, que é pintado de forma síncrona).
+    // Ou seja: a bancada estava aprovando arte que ninguém veria.
+    pintar(0)
     if (animate) raf = requestAnimationFrame(loop)
-    else loop(0)
     return () => cancelAnimationFrame(raf)
   }, [label, width, height, animate])
 
@@ -107,6 +144,9 @@ export default function ShapeLab() {
     { key: 'avatar', name: 'Avatar' },
     { key: 'bichinhos', name: `Bichinhos (${LAB_SPECIES.length * LAB_STAGES.length})` },
     { key: 'humores', name: `Humores (${LAB_MOODS.length * 2})` },
+    { key: 'animacoes', name: `Animações (${LAB_SPECIES.length * NOMES_CLIPES.length})` },
+    { key: 'crescimento', name: `Crescimento (${LAB_SPECIES.length * LAB_CRESCIMENTO.length})` },
+    { key: 'vestidos', name: `Vestidos (${LAB_SPECIES.length * LAB_ACESSORIOS.length})` },
     { key: 'itens', name: `Itens (${PET_ICON_CODES.length})` },
     { key: 'figurinhas', name: `Figurinhas (${STICKER_CODES.length})` },
     { key: 'cores', name: 'Acabamentos' },
@@ -274,6 +314,112 @@ export default function ShapeLab() {
             )
           )}
         </div>
+      )}
+
+      {/* Toda especie em TODA acao.
+          Esta e a aba que faltava: o motor novo tem clipe por acao, e clipe que
+          nao desenha nada (ou que joga o bichinho pra fora da caixa de 128x108)
+          nao da erro nenhum — some calado, exatamente como sumiram os icones
+          `drop`/`sparkle`/`lock` na revisao anterior. Aqui cada combinacao e
+          pintada e CONTADA. */}
+      {aba === 'animacoes' && (
+        <>
+          {LAB_SPECIES.map(([code, colors]) => (
+            <div key={code}>
+              <p className="card-title">{code}</p>
+              <div className="lab-grid">
+                {NOMES_CLIPES.map((clipe) => {
+                  // O clipe pedido nem sempre e o clipe rodado: coelho nao anda
+                  // (saltita) e capivara nao voa (pula). A bancada mostra os dois
+                  // nomes pra essa traducao ficar visivel, e nao escondida.
+                  const real = clipeDe(clipe, planoDe(code, 1))
+                  return (
+                    <Tile
+                      key={`${code}-${clipe}`}
+                      label={real === clipe ? clipe : `${clipe} → ${real}`}
+                      width={128}
+                      height={108}
+                      animate
+                      paint={(p, t) =>
+                        drawPet(
+                          p,
+                          {
+                            species: code, colors, growth: 1, mood: 'feliz',
+                            accessories: {}, mess_count: 0, action: clipe,
+                          },
+                          t
+                        )
+                      }
+                    />
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
+      {/* O crescimento, lado a lado. Filhote e adulto tem que ser a MESMA especie
+          com outra proporcao — se saissem iguais, so menor, a evolucao seria zoom. */}
+      {aba === 'crescimento' && (
+        <>
+          {LAB_SPECIES.map(([code, colors]) => (
+            <div key={code}>
+              <p className="card-title">{code}</p>
+              <div className="lab-grid">
+                {LAB_CRESCIMENTO.map((g) => (
+                  <Tile
+                    key={`${code}-${g}`}
+                    label={`${code} · ${Math.round(g * 100)}%`}
+                    width={128}
+                    height={108}
+                    paint={(p, t) =>
+                      drawPet(
+                        p,
+                        {
+                          species: code, colors, growth: g, mood: 'feliz',
+                          accessories: {}, mess_count: 0, action: 'parado',
+                        },
+                        t
+                      )
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
+      {aba === 'vestidos' && (
+        <>
+          {LAB_SPECIES.map(([code, colors]) => (
+            <div key={code}>
+              <p className="card-title">{code}</p>
+              <div className="lab-grid">
+                {LAB_ACESSORIOS.map(([item, slot, acao]) => (
+                  <Tile
+                    key={`${code}-${item}-${acao}`}
+                    label={`${item.replace('pet_', '')} · ${acao}`}
+                    width={128}
+                    height={108}
+                    animate
+                    paint={(p, t) =>
+                      drawPet(
+                        p,
+                        {
+                          species: code, colors, growth: 1, mood: 'feliz',
+                          accessories: { [slot]: item }, mess_count: 0, action: acao,
+                        },
+                        t
+                      )
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </>
       )}
 
       {aba === 'itens' && (

@@ -97,13 +97,38 @@ def level_progress(xp: int) -> dict:
     return {"level": level, "into": into, "need": need, "ratio": round(into / need, 3)}
 
 
+ADULT_LEVEL = 8           # a partir daqui ele esta formado
+
+
 def stage_for(level: int) -> str:
     """Como ele aparece no desenho. Evolucao visual, nao so um numero subindo."""
-    if level >= 8:
+    if level >= ADULT_LEVEL:
         return "adulto"
     if level >= 4:
         return "jovem"
     return "filhote"
+
+
+def growth_of(xp: int) -> float:
+    """Quanto ele ja cresceu, de 0 (filhote recem-adotado) a 1 (adulto).
+
+    O estagio acima da tres degraus, e degrau e o suficiente pra ESCREVER
+    "jovem" na tela. Pro DESENHO nao e: com tres degraus, o bichinho passa a
+    vida inteira sem mudar e um dia acorda com outro corpo. Aqui a mesma
+    progressao vira um numero continuo, e o motor de desenho interpola a
+    proporcao (cabeca perde espaco, perna e focinho ganham) a cada nivel.
+
+    E deliberadamente a MESMA fonte do nivel — nao um segundo relogio. Se fosse
+    tempo de vida, cuidar bem e largar num canto dariam o mesmo adulto, e a
+    evolucao deixaria de ser recompensa.
+    """
+    progress = level_progress(int(xp or 0))
+    level = progress["level"]
+    if level >= ADULT_LEVEL:
+        return 1.0
+    # o quanto falta DENTRO do nivel conta tambem, senao ele cresceria em pulos
+    andado = (level - 1) + (progress["ratio"] if progress["need"] else 1.0)
+    return round(min(1.0, max(0.0, andado / (ADULT_LEVEL - 1))), 4)
 
 
 # ------------------------------------------------------------------ sujeira

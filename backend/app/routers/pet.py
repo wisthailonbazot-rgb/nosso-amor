@@ -112,6 +112,9 @@ def pet_out(db: Session, pet: Pet) -> dict:
         "mood": pet_care.mood_of(pet, len(mess)),
         "level": progress["level"],
         "stage": pet_care.stage_for(progress["level"]),
+        # crescimento continuo (0 a 1): e o que o desenho usa pra interpolar a
+        # proporcao do corpo. O `stage` acima continua pro texto da tela.
+        "growth": pet_care.growth_of(int(pet.xp or 0)),
         "xp": int(pet.xp or 0),
         "xp_into": progress["into"],
         "xp_need": progress["need"],

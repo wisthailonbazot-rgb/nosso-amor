@@ -636,3 +636,142 @@ Estado: **516 verificações, 0 falha**. Bancada: 30 móveis × 4 rotações, 18
 
 **Próximo passo:** seção 8.1 — mapa navegável do bairro: avatar andando na rua,
 fachadas e mercado como lugar. Os outros minigames continuam depois desse passo.
+
+### 9.4 Motor de animação do bichinho (24/08/2026)
+
+O pedido do dono foi que os bichinhos deixassem de ser "muito simplificados": motor
+melhor, animações completas por espécie (gato e cachorro deitando/andando/pulando,
+dragão e pássaro voando, coelho saltitando), interação com caminha/brinquedo/comida,
+evolução de filhote a adulto, reação ao toque, minigames em tela cheia e a corrida
+controlada por arrasto.
+
+**Por que o desenho antigo tinha chegado ao limite.** Ele era uma pilha de retângulos
+com UM número de deslocamento vertical (`bob`, de 0 a 2 px). Andar, comer, tomar banho
+e dormir usavam a mesma peça, só com período diferente — não existia perna, joelho,
+nem asa que batesse. Acrescentar uma ação significava mais um `if` no meio do desenho,
+e acrescentar uma espécie, mais um `if` no meio das ações: cada um multiplicava o outro.
+
+Agora existe `web/src/render/petRig.js`, com três camadas separadas:
+
+| Camada | O que é | O que NÃO sabe |
+|---|---|---|
+| `planoDe(especie, g)` | quanto mede cada parte | nada de tempo nem de animação |
+| `CLIPES[nome].pose(ph, plano)` | o que cada parte faz neste instante | nada de desenho |
+| `desenharRig(p, plano, pose, cores)` | pinta o esqueleto posado | qual ação está rodando |
+
+São **22 clipes** (parado, andar, correr, saltitar, pular, sentar, deitar, dormir,
+comer, beber, roer, banho, brincar, feliz, triste, doente, voar, planar, coçar, rolar,
+implorar, cavar) × 6 espécies = 132 combinações, todas na bancada. `clipeDe()` traduz
+o que a espécie sabe fazer: coelho e pássaro **saltitam** em vez de andar, e quem não
+tem asa nunca voa (pedir `voar` pra capivara devolveria o bicho boiando no ar).
+
+A perna dobra por **cinemática inversa de dois ossos**, e o traseiro dobra ao contrário
+do dianteiro — é isso que entrega "quadrúpede" antes de olhar a cabeça. A marcha é
+diagonal no andar e galope no correr, com uma parte do ciclo com tudo no ar.
+
+**Evolução contínua.** `pet_care.growth_of()` devolve 0 a 1 a partir da MESMA
+progressão do nível (não de um segundo relógio — se fosse tempo de vida, cuidar bem e
+largar num canto dariam o mesmo adulto). O `stage` de três degraus continua para o
+TEXTO; o desenho usa o número contínuo e interpola a proporção: filhote tem cabeça
+grande, perna curta, focinho quase inexistente e olho enorme; crescer é a cabeça perder
+espaço relativo enquanto perna, focinho e cauda ganham. Cada medida tem o seu fator —
+uma escala única faria o filhote parecer só um zoom do adulto.
+
+**Cinco defeitos reais que só apareceram medindo, e as causas:**
+
+1. **Cápsula era um polígono que se cruzava.** As duas meias-voltas das pontas varriam
+   de π/2 a 3π/2, e metade de cada arco caía DENTRO da peça. O preenchimento por
+   varredura conta cruzamentos e **cancela o miolo** de um polígono em laço: a peça
+   aparecia só nas duas pontas. Em perna e cauda (curtas e grossas) o buraco era
+   pequeno e passou batido; na orelha do coelho — comprida e fina — engoliu a peça
+   inteira, e o coelho ficou **sem orelha**. Mesmo defeito, tamanhos diferentes.
+
+2. **Emenda em cada articulação.** Cada peça era pintada inteira (contorno +
+   preenchimento) antes da seguinte, então o contorno da coxa ficava carimbado por
+   cima da canela e o bichinho aparecia costurado. Agora cada camada de profundidade é
+   pintada em **dois passes**: contorno de tudo, depois preenchimento de tudo. Sobra
+   traço só na silhueta externa. **Regra que saiu disso:** junção de CARNE
+   (coxa/barriga, pescoço/peito) é pra ser sem emenda; APÊNDICE que se destaca da
+   silhueta (orelha) precisa do próprio traço, e por isso tem camada própria — foi
+   justamente ao pôr a orelha junto do crânio que ela sumiu no coelho branco.
+
+3. **As 4 cores da espécie nunca foram uma rampa de sombra.** O desenho lia
+   `[principal, escuro, claro, traço]`, mas no catálogo elas são quatro cores de
+   ACENTO (no gato: laranja, cinza, quase-preto, creme). Com retângulos chapados dava
+   pra viver com o engano; com esqueleto, o "escuro" caía nas quatro patas e na cauda
+   e o gato laranja ficava com pernas cinza-chumbo numa mancha só. `paletaDe()` deriva
+   sombra e luz **da cor principal** e usa o resto como acento (asa, marca, espinho).
+
+4. **Silhueta de dinossauro.** Tronco de uma elipse comprida + pescoço projetado pra
+   frente + cabeça pequena na ponta é a silhueta de um terópode. Agora o tronco é
+   peito + barriga + garupa (três massas que se sobrepõem, então as costas afundam no
+   meio), a cabeça fica ACIMA do peito e o focinho é curto. A cauda nasce pra cima e
+   arqueia sobre a anca — saindo na horizontal, ela virava o prolongamento do tronco.
+
+5. **A bancada aprovava arte que ninguém veria.** `Tile` só desenhava dentro do
+   `requestAnimationFrame`, que não roda em aba que o navegador não está compondo. Os
+   132 blocos novos liam **zero pixel** na tela enquanto a marca "⚠ vazio" dizia que
+   estava tudo certo — ela conta num canvas de rascunho, pintado de forma síncrona.
+   Era a última peça do app que ainda caía nessa armadilha (ver 9.2, defeito 1).
+
+**Acessórios.** `vestir()` agora escreve tudo em coordenadas DO BICHINHO
+(`naCabeca`/`noCorpo`, que já vêm com a rotação e o tamanho da pose). A gravata pende
+no eixo do pescoço (deitado, ela acompanha o peito em vez de atravessar o chão), o
+chapéu é medido em fração da cabeça (servia no gato e sobrava no coelho) e os óculos
+saem das MESMAS âncoras do rosto — usavam uma cópia que envelheceu quando a cabeça
+mudou de lugar, e apareciam sobre o corpo no passarinho. A bancada ganhou a aba
+**Vestidos**: acessório × espécie, cada um numa pose que desloca a cabeça.
+
+**O bichinho usa a casa.** `petWander.js` tinha destino sorteado — um bicho que anda em
+linha reta pra lugar nenhum. Agora o cômodo tem **pontos de interesse** (`INTERESSES`,
+por código do catálogo): ele escolhe a caminha, o pote, o arranhador, o sofá, o tapete
+ou a planta, anda até uma célula livre encostada nela e **faz a coisa certa lá** —
+dorme, come, se coça, rola, cavuca. Sem móvel por perto existe um repertório ocioso
+(sentar, deitar, coçar, rolar, brincar; voar e planar pra quem tem asa). A legenda da
+casa lê esse estado, então ela conta o que se vê — sempre depois do estado ruim, que
+continua vindo primeiro. Medido: "esparramado no sofá", "dormindo na caminha",
+"rolando no chão" e 14 posições distintas em 4 s.
+
+**Toque.** Na tela do bichinho, a reação depende de ONDE se toca: cabeça faz coçar,
+corpo faz pular de alegria, barriga faz rolar. Dentro do cômodo o toque sorteia entre
+cinco reações — uma reação única vira botão, e na terceira vez ninguém mais encosta.
+O acerto no cômodo é medido em **pixel, contra onde o bichinho está DESENHADO**: o
+corpo é colado ~42 px acima da célula em que ele pisa, então comparar célula com
+célula só pegava quem acertasse a sombra.
+
+**Minigames em tela cheia.** Sobreposição de CSS (`.jogo-cheio`), porque a API de tela
+cheia **não existe no iPhone** fora de vídeo — pedir só ela deixaria o botão sem efeito
+e sem explicação. A API nativa entra como extra no Android. Mesma lição do push no iOS.
+
+**Corrida por arrasto** (o pedido: arrasta pra cima pula, pra baixo abaixa). O que
+existia era "metade de cima da tela pula, metade de baixo abaixa" — obriga a mirar numa
+metade invisível enquanto se olha pro obstáculo, e na prática só dava pra pular. Agora
+a DIREÇÃO é o comando, disparada no meio do arrasto (na soltura sairia tarde demais
+pra servir de reflexo); toque seco continua pulando. O quadro usa `touch-action: none`,
+senão o navegador entende o arrasto vertical como rolagem e a página desce em vez de o
+bichinho pular. Medido: arrastar pra cima sobe 40 px, pra baixo achata de 20 para
+10 px, e volta sozinho.
+
+Na pista, a **largura da arte é fixa em 320** e a altura é que acompanha o quadro. Na
+primeira versão era o contrário, e deu errado por dois motivos medidos: o pixel deixava
+de ser quadrado em tela cheia (arte 240×150 esticada num quadro 942×723) e a
+dificuldade mudava, porque a distância entre obstáculos é contada em pixels de arte.
+
+**Conferido no navegador**, contra o app publicado: 132 combinações de espécie × clipe
+desenham (774 a 1.629 px); as 20 poses reais do gato são distintas entre si (as 2
+repetidas são `voar`/`planar` traduzidos para `pular`, correto para quem não tem asa);
+o dragão tem 22/22 distintas e voando sobe a y=15 contra y=43 parado; o crescimento é
+suave e muda a proporção (aspecto 1,275 → 1,421, não é zoom). **537 verificações,
+0 falha**, e a build Vite passa.
+
+> **Como medir animação nesta bancada:** o painel do navegador mantém a página com
+> `document.hidden` verdadeiro, e aí `requestAnimationFrame` não dispara — o jogo fica
+> congelado no primeiro quadro e qualquer medição dá falso negativo. Para medir, troque
+> `requestAnimationFrame` por um baseado em `setTimeout` **na página** antes de montar
+> a tela. Isso é ferramenta de medição, não vai pro app.
+
+Ponte nova no smoke, no mesmo modelo da que já barra móvel sem arte: toda espécie do
+catálogo Python tem plano de corpo no motor JS (e nenhum plano sobrando), todo clipe
+que o app pede existe, e nenhum apelido de ação aponta pra clipe inexistente.
+
+**Próximo passo:** continua sendo a seção 8.1 — mapa navegável do bairro.

@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { api } from '../api'
 import RoomCanvas from '../render/RoomCanvas'
-import { criarPasseio, passearAte } from '../render/petWander'
+import { project, roomMetrics } from '../render/iso'
+import { WALL_HEIGHT } from '../render/room'
+import { criarPasseio, passearAte, pontosDeInteresse } from '../render/petWander'
 import PropertyCanvas from '../render/PropertyCanvas'
 import ItemPreview from '../components/ItemPreview'
 import Icon from '../components/Icon'
@@ -68,31 +70,55 @@ export default function House() {
   const passeio = useRef(null)
   const aqui = data?.pet?.chosen && room && data.pet.room_code === room.code
 
+  // Quem tem asa levanta voo de vez em quando; quem nao tem, nunca — pedir
+  // `voar` pra capivara devolveria o bicho boiando sem asa nenhuma.
+  const voador = ['passaro', 'dragao'].includes(data?.pet?.species)
+
   useEffect(() => {
     if (!aqui) { passeio.current = null; return }
+    const livre = (c, r) =>
+      c >= 0 && r >= 0 && c < room.w && r < room.h && !bloqueadas.has(`${c}:${r}`)
     // recria so quando troca de comodo; dentro do mesmo comodo ele continua de
     // onde estava, so respeitando os obstaculos novos
     if (!passeio.current || passeio.current.comodo !== room.code) {
-      passeio.current = criarPasseio(room.w, room.h, bloqueadas, [
-        Math.floor(room.w / 2),
-        Math.floor(room.h / 2),
-      ])
+      passeio.current = criarPasseio(
+        room.w, room.h, bloqueadas,
+        [Math.floor(room.w / 2), Math.floor(room.h / 2)],
+        draft, voador
+      )
       passeio.current.comodo = room.code
     } else {
-      passeio.current.livre = (c, r) =>
-        c >= 0 && r >= 0 && c < room.w && r < room.h && !bloqueadas.has(`${c}:${r}`)
+      passeio.current.livre = livre
+      // Os pontos de interesse sao recalculados junto com os obstaculos: mover
+      // a caminha e mudar PRA ONDE ele vai dormir. Sem esta linha ele andaria
+      // ate o lugar onde a caminha ESTAVA e dormiria no chao, sem erro nenhum.
+      passeio.current.interesses = pontosDeInteresse(draft, livre)
+      passeio.current.voador = voador
     }
-  }, [aqui, room?.code, room?.w, room?.h, bloqueadas])
+  }, [aqui, room?.code, room?.w, room?.h, bloqueadas, draft, voador])
 
   // A acao que ele esta fazendo agora. `reacao` e temporaria (o "Interagir"),
   // o resto sai do estado dele — e por isso um bicho doente NAO aparece
   // brincando feliz no meio da sala.
   const [reacao, setReacao] = useState(null)
+
+  // O que ele esta fazendo, em palavras, saindo do proprio passeio.
+  //
+  // O passeio roda FORA do React de proposito (60 quadros por segundo nao podem
+  // virar `setState`). Entao a legenda le esse estado de tempos em tempos, e nao
+  // a cada quadro: 1,2 s e devagar o bastante pra nao pesar e rapido o bastante
+  // pra frase acompanhar o que se ve na tela.
+  const [afazer, setAfazer] = useState('')
+  useEffect(() => {
+    if (!aqui) { setAfazer(''); return }
+    const id = setInterval(() => setAfazer(passeio.current?.frase || ''), 1200)
+    return () => clearInterval(id)
+  }, [aqui])
   const acaoDoBicho = () => {
     if (reacao) return reacao
     if (!data?.pet) return 'idle'
-    if (data.pet.sick) return 'sleep'
-    if (data.pet.mood === 'sonolento') return 'sleep'
+    if (data.pet.sick) return 'doente'
+    if (data.pet.mood === 'sonolento') return 'dormir'
     return null // null = deixa o passeio decidir entre andar e parar
   }
 
@@ -119,7 +145,10 @@ export default function House() {
                     col: passo.col,
                     row: passo.row,
                     olhando: passo.olhando,
-                    action: forcado || (passo.andando ? 'walk' : 'idle'),
+                    // Tres origens, nesta ordem: o que a tela mandou (carinho,
+                    // doente), o que ele foi FAZER no movel (dormir na caminha,
+                    // comer no pote) e, por ultimo, andar ou estar parado.
+                    action: forcado || passo.acao || (passo.andando ? 'andar' : 'parado'),
                   }
                 }
               : null,
@@ -129,7 +158,7 @@ export default function House() {
             ],
           }
         : null,
-    [room, draft, aqui, data?.pet, reacao]
+    [room, draft, aqui, data?.pet, reacao, voador]
   )
 
   async function save() {
@@ -194,8 +223,41 @@ export default function House() {
       })
     }
   }
+  /**
+   * Reacoes ao TOQUE no bichinho dentro do comodo.
+   *
+   * Sorteadas, e nao uma so, porque uma reacao unica vira botao: na terceira vez
+   * a pessoa ja sabe o que vai acontecer e para de encostar. `null` no fim
+   * devolve o controle pro passeio.
+   */
+  const REACOES = ['feliz', 'brincar', 'pular', 'rolar', 'implorar']
+
+  function cutucarNoComodo(tile) {
+    if (!aqui || !passeio.current) return false
+
+    // O acerto é medido em PIXEL, contra onde o bichinho está DESENHADO.
+    //
+    // A primeira versão comparava a célula do toque com a célula em que ele
+    // pisa, e não funcionava: o corpo é colado uns 42 px ACIMA dessa célula
+    // (ver `drawHousePet` em `room.js`). Quem toca no bichinho está tocando,
+    // pela grade, num pedaço de chão duas ou três linhas atrás dele — e o toque
+    // era descartado. Só pegava quem acertasse a sombra.
+    const m = roomMetrics(room.w, room.h, WALL_HEIGHT)
+    const [px, py] = project(passeio.current.col + 0.5, passeio.current.row + 0.5, 0.05, m.origin)
+    const dentro =
+      tile.x >= px - 30 && tile.x <= px + 30 &&
+      tile.y >= py - 46 && tile.y <= py + 8
+    if (!dentro) return false
+    const acao = data.pet.sick ? 'triste' : REACOES[Math.floor(Math.random() * REACOES.length)]
+    setReacao(acao)
+    window.casalSound?.('pet', data.pet.species)
+    clearTimeout(cutucarNoComodo.timer)
+    cutucarNoComodo.timer = setTimeout(() => setReacao(null), 1800)
+    return true
+  }
+
   function pick(tile,_event,moving) {
-    if(!editing) return
+    if(!editing) { if(!moving) cutucarNoComodo(tile); return }
     if(!moving){ const hit=[...draft].reverse().find((i)=>tile.col>=i.col&&tile.col<i.col+i.w&&tile.row>=i.row&&tile.row<i.row+i.d); dragging.current=hit?.id||null; setSelectedId(hit?.id||null); return }
     const id=dragging.current; if(!id)return
     const item=draft.find((i)=>i.id===id); const others=draft.filter((i)=>i.id!==id)
@@ -205,14 +267,21 @@ export default function House() {
   // O que ele esta fazendo, em palavras. O estado ruim vem ANTES do movel
   // favorito: a legenda simpatica escondendo bichinho doente ja foi bug uma vez.
   function fraseDoBicho() {
-    if (reacao === 'happy') return 'todo feliz com o carinho'
+    if (reacao) return {
+      feliz: 'todo feliz com o carinho', happy: 'todo feliz com o carinho',
+      brincar: 'querendo brincar com vocês', pular: 'pulando de alegria',
+      rolar: 'rolando de barriga pra cima', implorar: 'pedindo mais atenção',
+      triste: 'sem ânimo nem pra reagir',
+    }[reacao] || 'reagindo ao carinho'
     if (data.pet.sick) return 'largado num canto, doente'
     if (data.pet.mood === 'faminto') return 'rondando o comedouro, com fome'
     if (data.pet.mood === 'imundo') return 'precisando muito de um banho'
     if (data.pet.mood === 'sonolento') return 'tirando uma soneca'
     if (data.pet.mood === 'triste') return 'quietinho, sentindo falta de vocês'
     if (room.mess.length > 2) return 'sem saber onde pisar, de tanta sujeira'
-    return 'passeando pelo cômodo'
+    // Nenhum estado ruim: agora da pra contar o que ele esta fazendo DE VERDADE,
+    // que sai do proprio passeio (dormindo na caminha, cavucando a planta).
+    return afazer || 'passeando pelo cômodo'
   }
 
   if(!data||!room||!scene) return <div className="full-center"><div className="spinner" /></div>

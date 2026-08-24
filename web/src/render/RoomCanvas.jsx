@@ -95,7 +95,10 @@ export default function RoomCanvas({
     const y = (point.clientY - rect.top) / (rect.height / metrics.height)
     const [col, row] = unproject(x, y, metrics.origin)
     if (col < 0 || row < 0 || col >= scene.cols || row >= scene.rows) return null
-    return { col, row }
+    // `x` e `y` vão junto de propósito: quem quiser acertar o que está DESENHADO
+    // (e não a célula do chão) precisa do pixel. O bichinho é o caso — o corpo
+    // dele é pintado bem acima da célula em que ele pisa.
+    return { col, row, x, y }
   }
 
   // ------------------------------------------------------------------ arrastar

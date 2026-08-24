@@ -190,6 +190,7 @@ def read(user: User = Depends(current_user), db: Session = Depends(get_db)) -> d
             "room_code": pet.room_code or "sala",
             "mood": pet_care.mood_of(pet, sum(len(v) for v in mess_by_room.values())),
             "stage": pet_care.stage_for(pet_care.level_for(int(pet.xp or 0))),
+            "growth": pet_care.growth_of(int(pet.xp or 0)),
             "accessories": pet.accessories or {},
             "colors": (catalog.PET_SPECIES_BY_CODE.get(pet.species) or {}).get("colors", []),
             "sick": bool(pet.sick),

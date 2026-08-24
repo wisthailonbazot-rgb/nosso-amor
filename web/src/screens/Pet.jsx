@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { api } from '../api'
@@ -55,6 +55,71 @@ export default function Pet() {
   // atras da bolinha, em vez de so o numero da barra subir.
   const [emUso, setEmUso] = useState(null)
 
+  // ------------------------------------------------------------- arrastar
+  //
+  // Arrastar a comida (ou o brinquedo, ou o acessório) até o bichinho, em vez de
+  // só apertar um botão. É o gesto que a criança faz com o brinquedo de verdade,
+  // e dá ao item um destino: você vê a ração ir até ele.
+  //
+  // Feito com eventos de PONTEIRO, não com a API de arrastar do HTML. A API de
+  // arrastar do navegador simplesmente **não existe em toque** — no celular ela
+  // nunca dispara, e o recurso ficaria só no computador, que é onde ninguém usa
+  // este app. Ponteiro é o mesmo caminho para dedo, caneta e mouse.
+  //
+  // O toque simples continua valendo: só vira arrasto depois de o dedo andar uns
+  // pixels. Sem essa folga, qualquer tremida no dedo viraria arrasto e o toque
+  // deixaria de funcionar — e a rolagem da lista morreria junto.
+  const palcoRef = useRef(null)
+  const [arrasto, setArrasto] = useState(null)
+  const arrastoRef = useRef(null)
+
+  const sobreOPalco = useCallback((x, y) => {
+    const caixa = palcoRef.current?.getBoundingClientRect()
+    if (!caixa) return false
+    return x >= caixa.left && x <= caixa.right && y >= caixa.top && y <= caixa.bottom
+  }, [])
+
+  function comecarArrasto(e, item, path, label) {
+    if (busy || item.quantity <= 0) return
+    arrastoRef.current = {
+      item, path, label,
+      x0: e.clientX, y0: e.clientY,
+      x: e.clientX, y: e.clientY,
+      virou: false, sobre: false,
+    }
+    const mover = (ev) => {
+      const a = arrastoRef.current
+      if (!a) return
+      const dist = Math.hypot(ev.clientX - a.x0, ev.clientY - a.y0)
+      if (!a.virou && dist < 8) return
+      a.virou = true
+      a.x = ev.clientX
+      a.y = ev.clientY
+      a.sobre = sobreOPalco(ev.clientX, ev.clientY)
+      // impede a página de rolar junto enquanto o item está na mão
+      ev.preventDefault?.()
+      setArrasto({ code: a.item.code, name: a.item.name, x: a.x, y: a.y, sobre: a.sobre })
+    }
+    const soltar = (ev) => {
+      window.removeEventListener('pointermove', mover)
+      window.removeEventListener('pointerup', soltar)
+      window.removeEventListener('pointercancel', soltar)
+      const a = arrastoRef.current
+      arrastoRef.current = null
+      setArrasto(null)
+      if (!a) return
+      // Toque simples (não virou arrasto) continua fazendo o que sempre fez.
+      if (!a.virou) { act(a.path, { code: a.item.code }, a.label); return }
+      if (sobreOPalco(ev.clientX, ev.clientY)) act(a.path, { code: a.item.code }, a.label)
+      // Soltar fora do bichinho não faz nada, de propósito: é como desistir no
+      // meio. Aplicar mesmo assim gastaria um item do inventário sem a pessoa
+      // ter escolhido isso.
+    }
+    window.addEventListener('pointermove', mover, { passive: false })
+    window.addEventListener('pointerup', soltar)
+    window.addEventListener('pointercancel', soltar)
+  }
+
   async function act(path, body, label) {
     setBusy(path + (body?.code || '')); setStatus(null)
     if (body?.code) {
@@ -79,13 +144,35 @@ export default function Pet() {
   return <>
     <div className="row between"><div><h1 className="screen-title pet-name">{pet.name}</h1><p className="muted small pet-sub">{pet.species_name} · nível {pet.level} · {pet.stage}</p></div><span className={`pill ${pet.sick ? 'rose' : 'sage'}`}>{MOOD[pet.mood] || pet.mood}</span></div>
     {status && <p className={`notice ${status.kind}`}>{status.text}</p>}
-    <div className={`pet-stage card ${pet.sick ? 'sick' : ''}`}><PetCanvas pet={{ ...pet, prop: emUso }} /><div className="pet-stage-note"><strong>{pet.mood === 'feliz' ? 'Tudo em ordem por aqui' : 'Ele está tentando avisar vocês'}</strong><span>{pet.mess_count ? `${pet.mess_count} sujeira${pet.mess_count > 1 ? 's' : ''} pela casa` : 'Casa limpinha'}</span></div></div>
+    <div ref={palcoRef} className={`pet-stage card ${pet.sick ? 'sick' : ''} ${arrasto ? (arrasto.sobre ? 'alvo-aceso' : 'alvo') : ''}`}>
+      <PetCanvas pet={{ ...pet, prop: emUso }} />
+      {arrasto && <span className="pet-stage-dica">{arrasto.sobre ? `Solte para dar ${arrasto.name}` : `Arraste até ${pet.name}`}</span>}<div className="pet-stage-note"><strong>{pet.mood === 'feliz' ? 'Tudo em ordem por aqui' : 'Ele está tentando avisar vocês'}</strong><span>{pet.mess_count ? `${pet.mess_count} sujeira${pet.mess_count > 1 ? 's' : ''} pela casa` : 'Casa limpinha'}</span></div></div>
     <div className="pet-stats">{Object.entries(pet.stats).map(([key, value]) => <div className={`pet-stat ${value < 30 ? 'low' : ''}`} key={key}><div className="row between"><span><Icon name={STAT[key][1]} size={15} /> {STAT[key][0]}</span><strong>{value}</strong></div><div className="stat-track"><i style={{ width: `${value}%` }} /></div>{pet.empty_in_hours[key] != null && <small>zera em cerca de {pet.empty_in_hours[key]}h</small>}</div>)}</div>
     <div className="xp-strip"><span>Nível {pet.level}</span><div><i style={{ width: `${pet.xp_ratio * 100}%` }} /></div><small>{pet.xp_need ? `${pet.xp_into}/${pet.xp_need} XP` : 'máximo'}</small></div>
     <div className="pet-tabs">{[['comida','Alimentar'],['brinquedo','Brincar'],['acessorio','Vestir']].map(([code, label]) => <button key={code} className={tab === code ? 'active' : ''} onClick={() => setTab(code)}>{label}</button>)}</div>
-    <div className="pet-items">{shown.map((item) => { const can = item.quantity > 0 && (tab !== 'brinquedo' || item.ready); const path = tab === 'comida' && item.effect.hygiene ? 'bathe' : tab === 'comida' ? 'feed' : tab === 'brinquedo' ? 'play' : 'accessory'; return <button key={item.code} className="pet-item" disabled={busy || !can} onClick={() => act(path, { code: item.code }, tab === 'acessorio' ? `${item.name} vestido.` : `${pet.name} recebeu ${item.name}.`)}><span className="pet-item-art"><ItemPreview item={{ ...item, category: 'pet' }} scale={1.35} /></span><strong>{item.name}</strong><small>{item.quantity ? `vocês têm ${item.quantity}` : `${item.price} Corações na loja`}</small></button> })}</div>
+    <div className="pet-items">{shown.map((item) => {
+      const can = item.quantity > 0 && (tab !== 'brinquedo' || item.ready)
+      const path = tab === 'comida' && item.effect.hygiene ? 'bathe' : tab === 'comida' ? 'feed' : tab === 'brinquedo' ? 'play' : 'accessory'
+      const label = tab === 'acessorio' ? `${item.name} vestido.` : `${pet.name} recebeu ${item.name}.`
+      return <button
+        key={item.code}
+        className={`pet-item ${arrasto?.code === item.code ? 'na-mao' : ''}`}
+        disabled={busy || !can}
+        onPointerDown={(e) => { if (can) comecarArrasto(e, item, path, label) }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (can) act(path, { code: item.code }, label) } }}
+      ><span className="pet-item-art"><ItemPreview item={{ ...item, category: 'pet' }} scale={1.35} /></span><strong>{item.name}</strong><small>{item.quantity ? `vocês têm ${item.quantity}` : `${item.price} Corações na loja`}</small></button>
+    })}</div>
     {!shown.some((i) => i.quantity) && <Link to="/loja" className="btn btn-accent btn-block"><Icon name="bag" size={17} /> Ir comprar na loja</Link>}
     <button className="btn btn-ghost btn-block pet-cuddle" disabled={busy || !cuddleReady} onClick={() => act('cuddle', undefined, `${pet.name} ganhou um carinho.`)}><Icon name="heart" size={17} /> {cuddleReady ? 'Carinho (descansa 4 horas)' : 'Carinho ainda descansando'}</button>
+    {arrasto && (
+      <span
+        className={`arrasto-fantasma ${arrasto.sobre ? 'aceso' : ''}`}
+        style={{ left: arrasto.x, top: arrasto.y }}
+        aria-hidden="true"
+      >
+        <ItemPreview item={{ code: arrasto.code, category: 'pet', subcategory: tab }} scale={1.6} />
+      </span>
+    )}
     {pet.mess_count > 0 && <div className="card mess-list"><p className="card-title">A casa não se limpa sozinha</p>{pet.mess.map((m) => <div className="row between" key={m.id}><span><Icon name="drop" size={16} /> Sujeira na {m.room_code}</span><button className="btn btn-sm btn-sage" onClick={() => act(`mess/${m.id}/clean`, undefined, 'Uma sujeira a menos.')}>Limpar</button></div>)}</div>}
   </>
 }
