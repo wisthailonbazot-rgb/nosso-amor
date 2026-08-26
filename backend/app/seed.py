@@ -60,8 +60,20 @@ def _ensure_user(db: Session, slug: str, name: str, password: str) -> User | Non
             db, user.id, INITIAL_COINS, "admin", note="saldo inicial",
             dedupe_key=f"initial-coins:{user.id}",
         )
-    if db.get(Avatar, user.id) is None:
-        db.add(Avatar(user_id=user.id, config=dict(catalog.DEFAULT_AVATAR)))
+    avatar = db.get(Avatar, user.id)
+    if avatar is None:
+        avatar = Avatar(user_id=user.id, config=dict(catalog.DEFAULT_AVATAR))
+        db.add(avatar)
+    else:
+        # Silhueta: campo novo. Quem ja tinha avatar nao tem a chave, e sem ela
+        # os dois bonecos continuam identicos do pescoco pra baixo — que foi a
+        # reclamacao. Preenche UMA VEZ, e so quando a chave nao existe: quem
+        # escolher outra forma no editor nao pode ter a escolha desfeita no
+        # proximo deploy (mesma regra da senha, ver o topo deste arquivo).
+        config = dict(avatar.config or {})
+        if "corpo" not in config:
+            config["corpo"] = "curvas" if user.tracks_cycle else "reto"
+            avatar.config = config
     db.flush()
     return user
 

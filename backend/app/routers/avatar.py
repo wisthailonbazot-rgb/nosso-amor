@@ -29,10 +29,13 @@ COLOR_FIELDS = {
     "bottom_color": None,
     "shoes_color": None,
 }
+# Escolhas livres: nao custam nada e nao passam pela posse, porque nao sao
+# roupa — sao tracos da pessoa.
 FACE_FIELDS = {
     "eyes": ["redondo", "amendoado", "fechado", "sonolento", "animado"],
     "mouth": ["sorriso", "serio", "risada", "bico", "lingua"],
     "brows": ["reta", "arqueada", "grossa", "fina"],
+    "corpo": ["reto", "curvas"],
 }
 
 

@@ -8,7 +8,7 @@
 // "nunca cachear" pra /api. Um app de casal com chat nao pode servir mensagem
 // velha do cache achando que e a atual.
 
-const CACHE = 'casal-v3'
+const CACHE = 'casal-v4'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', (event) => {
@@ -31,7 +31,25 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/media')) return
 
   if (event.request.mode === 'navigate') {
-    event.respondWith(fetch(event.request).catch(() => caches.match('/index.html')))
+    // `cache: 'reload'` pula o cache HTTP do proprio navegador.
+    //
+    // "Rede primeiro" nao bastava: o `fetch` daqui ainda passava pelo cache do
+    // Safari, que guardava o index.html por adivinhacao (ele vinha sem
+    // `Cache-Control`). O aparelho reabria o app com um HTML velho apontando
+    // pra um bundle ja apagado pelo deploy, e a tela ficava BRANCA. O servidor
+    // agora manda `no-cache` nessa resposta; isto aqui e o cinto de seguranca,
+    // e tambem o que destrava um aparelho que ja esta com o HTML velho preso.
+    event.respondWith(
+      fetch(new Request(event.request.url, { cache: 'reload', credentials: 'same-origin' }))
+        .then((res) => {
+          if (res.ok) {
+            const copia = res.clone()
+            caches.open(CACHE).then((c) => c.put('/index.html', copia))
+          }
+          return res
+        })
+        .catch(() => caches.match('/index.html'))
+    )
     return
   }
   // Rede primeiro também para JS/CSS. Cache primeiro aqui misturava módulos de

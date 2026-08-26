@@ -1675,7 +1675,19 @@ button:disabled,
 }
 .room-zoom button:disabled { opacity: 0.35; }
 .room-zoom span { font: 700 11px 'Baloo 2', sans-serif; min-width: 20px; text-align: center; }
-.room-wrap { position: relative; }
+.room-wrap {
+  position: relative;
+  width: 100%;
+  /* `min-width: 0` é o que impede o zoom de disparar sozinho.
+     O `.scene-frame` é flex, e item de flex tem `min-width: auto` — ou seja,
+     ele CRESCE até caber o conteúdo. Ao aproximar, o canvas ficava maior, o
+     contêiner crescia junto, e a conta de "quanto cabe na tela" (que mede esse
+     contêiner) passava a ler 1736 px em vez de 375. Um clique no + pulava de
+     1× direto pra 4×, e depois travava lá. Com `min-width: 0` o contêiner fica
+     do tamanho da tela e o cômodo rola dentro dele, que era a ideia. */
+  min-width: 0;
+  max-width: 100%;
+}
 
 /* --------------------------------------------- HUD de canto do bichinho
    Quatro tracinhos, como em jogo. Antes eram quatro cartões num grid embaixo do
@@ -1874,3 +1886,51 @@ button:disabled,
 .pet-tela .pet-lateral .pet-cuddle { background: rgba(255, 250, 243, 0.9); }
 .pet-tela .pet-hud { left: 6px; bottom: 6px; }
 .pet-tela .pet-stage-note { right: auto; max-width: min(270px, calc(100% - 96px)); }
+
+/* ------------------------------------------- a fila de bichinhos da casa
+   Aparece só quando há mais de um. Com um bichinho só ela seria uma linha
+   inútil ocupando altura de cenário. */
+.pet-fila {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 0 6px;
+  scrollbar-width: none;
+}
+.pet-fila::-webkit-scrollbar { display: none; }
+.pet-chip {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 3px 6px 4px;
+  border: 1.5px solid var(--ink);
+  border-radius: 12px 9px 13px 10px;
+  background: var(--cream);
+  color: var(--ink);
+}
+.pet-chip canvas { image-rendering: pixelated; display: block; }
+.pet-chip span {
+  font: 700 9px 'Baloo 2', sans-serif;
+  max-width: 52px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pet-chip.ativo { background: var(--rose, #e8879b); box-shadow: 0 2px 0 var(--ink); }
+.pet-chip.ativo span { color: #fff; }
+/* O aviso de "este aqui precisa de você" fica no RETRATO, não numa lista à
+   parte: com vários bichinhos, ninguém vai abrir um por um pra descobrir qual
+   está com fome. */
+.pet-chip.precisa i {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+  background: #e8556f;
+}

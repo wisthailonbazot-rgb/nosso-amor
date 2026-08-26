@@ -295,11 +295,20 @@ class Avatar(Base):
 
 # ------------------------------------------------------------------ pet
 class Pet(Base):
-    """Um pet so, do casal. Linha unica (id=1)."""
+    """Um bichinho do casal. Podem ser varios; um deles e o ATIVO.
+
+    Era linha unica (id=1). Virou varias linhas porque o dono pediu mais de um
+    bichinho. O que NAO mudou, de proposito: todos continuam vivos ao mesmo
+    tempo. Congelar os que nao estao na tela transformaria trocar de bichinho
+    numa forma de fugir do cuidado — bastaria deixar o faminto de lado — e
+    "o bichinho tem que dar trabalho" e decisao travada (HANDOFF 8.2).
+    """
 
     __tablename__ = "pet"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # Qual deles a tela mostra e quem recebe carinho/comida agora.
+    active: Mapped[bool] = mapped_column(Boolean, default=False)
     name: Mapped[str] = mapped_column(String(40), default="")
     species: Mapped[str] = mapped_column(String(30), default="")
     level: Mapped[int] = mapped_column(Integer, default=1)

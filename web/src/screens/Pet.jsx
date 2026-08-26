@@ -5,6 +5,8 @@ import { api } from '../api'
 import Icon from '../components/Icon'
 import ItemPreview from '../components/ItemPreview'
 import PetCanvas from '../render/PetCanvas'
+import { drawPet } from '../render/PetCanvas'
+import { Painter } from '../render/pixel'
 import { subscribe } from '../store'
 
 const STAT = {
@@ -18,6 +20,41 @@ const MOOD = {
 }
 
 function readyAt(value) { return !value || new Date(value).getTime() <= Date.now() }
+
+/**
+ * O retrato pequeno de um bichinho, pra fila de troca.
+ *
+ * Desenhado UMA vez, sem animação: são vários na tela ao mesmo tempo, e manter
+ * um laço por retrato só pra eles respirarem custaria mais bateria do que
+ * qualquer coisa que se ganhasse. O da vez continua animado no palco.
+ */
+const CHIP = 46
+function PetChip({ dados, ativo, onTrocar }) {
+  const ref = useRef(null)
+  useEffect(() => {
+    const p = new Painter(ref.current)
+    p.resize(CHIP, Math.round(CHIP * 108 / 128))
+    p.clear()
+    drawPet(p, {
+      species: dados.species, colors: dados.colors, growth: dados.growth,
+      mood: dados.mood, sick: dados.sick, accessories: {}, action: 'parado',
+    }, 0)
+  }, [dados.species, dados.growth, dados.mood, dados.sick])
+  // O pior atributo vira um aviso no retrato: é assim que dá pra ver quem está
+  // precisando de você SEM ter que entrar em cada bichinho pra conferir.
+  const precisa = dados.sick || dados.worst < 30
+  return (
+    <button
+      className={`pet-chip ${ativo ? 'ativo' : ''} ${precisa ? 'precisa' : ''}`}
+      onClick={() => !ativo && onTrocar(dados)}
+      title={`${dados.name} · nível ${dados.level}${precisa ? ' · precisando de cuidado' : ''}`}
+    >
+      <canvas ref={ref} />
+      <span>{dados.name}</span>
+      {precisa && <i aria-label="precisando de cuidado" />}
+    </button>
+  )
+}
 
 function SpeciesChooser({ species, onChoose, busy }) {
   const [picked, setPicked] = useState(species[0]?.code || '')
@@ -34,6 +71,7 @@ function SpeciesChooser({ species, onChoose, busy }) {
 
 export default function Pet() {
   const [pet, setPet] = useState(null)
+  const [pets, setPets] = useState([])
   const [species, setSpecies] = useState([])
   const [items, setItems] = useState([])
   const [tab, setTab] = useState('comida')
@@ -46,7 +84,7 @@ export default function Pet() {
     // escrita; primeiro envelhece o pet, depois busca as listas em paralelo.
     const state = await api.get('/api/pet')
     const [kinds, owned] = await Promise.all([api.get('/api/pet/species'), api.get('/api/pet/items')])
-    setPet(state.pet); setSpecies(kinds.species); setItems(owned.items)
+    setPet(state.pet); setPets(state.pets || []); setSpecies(kinds.species); setItems(owned.items)
     if (state.since?.mess_born) setStatus({ kind: 'warn', text: `${state.since.mess_born} sujeira nova apareceu na casa.` })
   }
   useEffect(() => { load().catch((e) => setStatus({ kind: 'error', text: e.message })); return subscribe('pet', (next) => setPet(next)) }, [])
@@ -127,13 +165,32 @@ export default function Pet() {
       clearTimeout(act.timer)
       act.timer = setTimeout(() => setEmUso(null), 2600)
     }
-    try { const result = await api.post(`/api/pet/${path}`, body); setPet(result.pet); setStatus({ kind: 'ok', text: label }); setItems((await api.get('/api/pet/items')).items) }
+    try {
+      const result = await api.post(`/api/pet/${path}`, body)
+      setPet(result.pet)
+      setStatus({ kind: 'ok', text: label })
+      const [inv, estado] = await Promise.all([api.get('/api/pet/items'), api.get('/api/pet')])
+      setItems(inv.items)
+      setPets(estado.pets || [])
+    }
     catch (e) {
       setStatus({ kind: 'error', text: e.message })
       setEmUso(null)  // deu errado: nao mostra cena de uso que nao aconteceu
     }
     setBusy('')
   }
+  async function trocarPara(alvo) {
+    setStatus(null)
+    try {
+      const r = await api.post(`/api/pet/${alvo.id}/select`)
+      setPet(r.pet)
+      window.casalSound?.('nav')
+      const estado = await api.get('/api/pet')
+      setPets(estado.pets || [])
+      setItems((await api.get('/api/pet/items')).items)
+    } catch (e) { setStatus({ kind: 'error', text: e.message }) }
+  }
+
   const shown = useMemo(() => items.filter((i) => i.subcategory === tab), [items, tab])
   if (!pet) return status?.kind === 'error'
     ? <div className="card center"><Icon name="paw" size={42} /><p>{status.text}</p><button className="btn btn-primary" onClick={load}>Tentar de novo</button></div>
@@ -145,6 +202,15 @@ export default function Pet() {
     <div className="pet-tela">
     <div className="row between"><div><h1 className="screen-title pet-name">{pet.name}</h1><p className="muted small pet-sub">{pet.species_name} · nível {pet.level} · {pet.stage}</p></div><span className={`pill ${pet.sick ? 'rose' : 'sage'}`}>{MOOD[pet.mood] || pet.mood}</span></div>
     {status && <p className={`notice ${status.kind}`}>{status.text}</p>}
+    {/* A casa pode ter mais de um bichinho. A fila mostra todos e troca quem
+        está na tela — de graça, e sem apagar nada de ninguém. */}
+    {pets.length > 1 && (
+      <div className="pet-fila">
+        {pets.map((x) => (
+          <PetChip key={x.id} dados={x} ativo={x.id === pet.id} onTrocar={trocarPara} />
+        ))}
+      </div>
+    )}
     {/* A ARENA: o bichinho grande no meio, as opções na lateral.
         Antes o palco era uma faixa baixa e a lista de itens ocupava a largura
         toda embaixo — o bichinho ficava pequeno e longe do que se faz com ele.

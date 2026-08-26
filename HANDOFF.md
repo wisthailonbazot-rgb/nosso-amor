@@ -930,3 +930,97 @@ responde, segurar marca (com as quatro ações), a citação sai com o autor e o
 vertical não rouba a rolagem.
 
 **537 verificações, 0 falha.**
+
+### 9.7 App em branco no iPhone, zoom, coleira, avatar dela e vários bichinhos (25/08/2026)
+
+**1. O app parou de abrir no iPhone — e a causa era cabeçalho de cache.**
+
+O `index.html` era servido **sem `Cache-Control`**. Sem essa instrução o navegador
+aplica cache por adivinhação, e o iPhone é o mais agressivo nisso, principalmente
+aberto pela Tela de Início. O detalhe que transforma isso em tela branca: o nome do
+arquivo em `/assets` é um resumo do conteúdo (`index-ABC123.js`) e **cada deploy apaga
+os antigos**. O aparelho guardava um `index.html` velho, que apontava para um bundle
+que já não existia — o HTML carregava, o script dava 404, e o app abria em branco. Sem
+erro visível, e só no celular, porque no computador eu recarregava forçado o tempo todo.
+Foram três deploys num dia; foi o bastante.
+
+Três camadas de conserto, da causa para o sintoma:
+
+- **servidor**: `index.html` e a casca vão com `no-cache, must-revalidate`; `/assets`
+  vai com `max-age=31536000, immutable`. Guardar `/assets` para sempre é seguro
+  justamente porque o nome muda quando o conteúdo muda;
+- **service worker** (`casal-v4`): a navegação busca com `cache: 'reload'`, que pula o
+  cache HTTP do próprio Safari. "Rede primeiro" não bastava — o `fetch` ainda passava
+  por esse cache. Isto também é o que **destrava um aparelho que já está preso**;
+- **rede de segurança no `index.html`**: se um arquivo de `/assets` falhar em carregar,
+  a página joga fora service worker e caches e recarrega **uma vez** (travada por
+  `sessionStorage`, senão viraria laço de recarregamento quando a falha for de
+  internet).
+
+**2. O zoom da casa saltava de 1× para 4× e travava lá.** Realimentação: `.scene-frame`
+é flex, e item de flex tem `min-width: auto` — ou seja, cresce até caber o conteúdo. Ao
+aproximar, o canvas ficava maior, o contêiner crescia junto, e a conta de "quanto cabe
+na tela" (que mede esse contêiner) passava a ler 1736 px em vez de 375. Com
+`min-width: 0` no `.room-wrap` o contêiner fica do tamanho da tela e o cômodo rola
+dentro dele. Medido: 1×→2×→3×→4×, teto em 4, e volta.
+
+> É a **terceira** vez nesta série que uma medida realimenta o que ela mede (antes: a
+> altura da pista da corrida e a resolução da arte). Vale como regra: quem mede o
+> espaço disponível nunca pode medir um elemento que cresce com o conteúdo.
+
+**3. A coleira ainda ficava torta.** Ela era perpendicular a um "eixo de pescoço"
+calculado entre o peito e a cabeça. Isso funciona no cachorro e falha no coelho e na
+capivara, que praticamente não têm pescoço: os dois pontos ficam quase em cima um do
+outro, a direção sai de uma diferença minúscula (portanto instável) e a faixa acabava
+**atravessando o rosto**. Agora ela é ancorada **na cabeça**, logo abaixo do queixo, e
+acompanha a mesma rotação do rosto — em qualquer espécie e em qualquer pose. O que
+*pende* (gravata, plaquinha) continua seguindo o "para baixo" do corpo, porque quem
+manda nisso é a gravidade, não a inclinação da cabeça.
+
+**4. O boneco dela não parecia feminino.** O corpo era um retângulo só, igual para os
+dois do pescoço para baixo — a única diferença entre eles era cabelo e roupa.
+
+O caminho óbvio (desenhar um segundo corpo) seria o pior: as 48 peças de roupa são
+retângulos posicionados sobre o tronco, então cada peça precisaria de uma segunda
+versão — 48 desenhos novos para mudar uma silhueta. Aqui o corpo é **esculpido no fim**:
+recorta-se ombro e cintura com `clearRect` depois da roupa, o que tira pele e tecido de
+uma vez, e o contorno é redesenhado na borda nova. Toda roupa acompanha a forma sozinha,
+inclusive as que ainda nem existem. Medido: ombro 22→20, cintura 22→18, quadril 22.
+
+São **duas** formas, e não três. Havia um "largo" que só faria sentido *alargando* a
+silhueta — e alargar exigiria pintar fora do tronco sem saber que roupa está por baixo.
+Ele saía idêntico ao "reto": botão que não muda nada é pior do que não ter o botão.
+
+A silhueta é escolha **livre** (como o tom de pele), não item de loja: fica em Perfil →
+montar personagem → Base. O `seed` preenche o campo uma única vez em quem já tinha
+avatar, e só quando a chave não existe — quem escolher outra forma não perde a escolha
+no próximo deploy, mesma regra da senha.
+
+**5. Mais de um bichinho.**
+
+O que sustenta a feature: **todos continuam vivos ao mesmo tempo**. Congelar o que não
+está na tela transformaria trocar de bichinho na forma de fugir do cuidado — bastava
+deixar o faminto de lado — e "o bichinho tem que dar trabalho" é decisão travada (8.2).
+Há teste para isso: adianta o relógio, lê uma vez, e exige que o ativo **e** o inativo
+tenham perdido fome.
+
+| Peça | Como ficou |
+|---|---|
+| `Pet.active` | um booleano; a exclusividade é garantida em `_ativar()`, não por um `if` na tela |
+| `get_pet(db)` | passou a devolver o ATIVO — ponto único por onde casa, jogo e cuidado já passavam, e foi o que permitiu a mudança sem espalhar "qual deles?" pelo código |
+| `POST /pet/adopt` | **cria um bichinho novo** (antes trocava a espécie do único), com nome e vida próprios |
+| `POST /pet/{id}/select` | troca quem está na tela; de graça e sem apagar nada |
+| `GET /pet` | devolve também `pets`: a fila curta, com o pior atributo de cada um |
+| licença de espécie | virou **consumível**: uma compra, um bichinho. Sem isso, uma licença daria bichinho infinito — era só chamar a rota de novo |
+| teto | 4 na casa. Não é limite técnico: a sujeira de todos cai na mesma sala |
+
+Na tela, a fila só aparece quando há mais de um (com um só seria uma linha inútil
+ocupando altura de cenário). Cada retrato é desenhado **uma vez, sem animação** — são
+vários ao mesmo tempo, e um laço por retrato custaria mais bateria do que entrega. O
+retrato mostra um ponto vermelho quando aquele bichinho está precisando de cuidado: com
+vários, ninguém vai abrir um por um para descobrir qual está com fome.
+
+**Conferido no navegador (375×812)**: o zoom anda em passos e volta; a coleira fica sob
+o queixo nas seis espécies e nas cinco poses da aba Vestidos; três bichinhos na casa,
+troca pelo retrato funcionando e a casa acompanhando o ativo; os cabeçalhos de cache
+saem certos (`no-cache` no HTML, `immutable` nos assets). **555 verificações, 0 falha.**

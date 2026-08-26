@@ -53,10 +53,16 @@ class MoveIn(BaseModel):
 
 class AdoptIn(BaseModel):
     species: str = Field(min_length=1, max_length=30)
+    name: str = Field(default="", max_length=40)
 
 
 # Os minijogos. O `teto` e o limite de pontos que a rota aceita: qualquer coisa
 # acima disso e app adulterado, e o servidor recusa em vez de pagar.
+# Teto de bichinhos na casa. Nao e limitacao tecnica: quatro ja e mais cuidado
+# do que duas pessoas dao conta, e a sujeira de cada um cai na mesma casa. Sem
+# teto, dava pra encher a sala de sujeira sem querer.
+MAX_PETS = 4
+
 JOGOS = {
     "bolinha": {"nome": "Aventura da bolinha", "teto": 12, "descanso_min": 2, "energia": 8},
     "corrida": {"nome": "Corrida do bichinho", "teto": 40, "descanso_min": 3, "energia": 10},
@@ -70,12 +76,62 @@ class GameIn(BaseModel):
 
 
 def get_pet(db: Session) -> Pet:
-    pet = db.query(Pet).order_by(Pet.id).first()
-    if pet is None:  # o seed cria; isto e cinto de seguranca
-        pet = Pet(id=1, name="", species="", appearance_config={})
+    """O bichinho ATIVO: o que a tela mostra e o que recebe cuidado agora.
+
+    Ponto unico de entrada — a casa, o jogo e todas as rotas de cuidado passam
+    por aqui. Foi o que permitiu passar de um bichinho pra varios sem espalhar
+    "qual deles?" por todo o codigo.
+    """
+    pets = db.query(Pet).order_by(Pet.id).all()
+    if not pets:  # o seed cria; isto e cinto de seguranca
+        pet = Pet(id=1, name="", species="", appearance_config={}, active=True)
         db.add(pet)
         db.flush()
-    return pet
+        return pet
+    for pet in pets:
+        if pet.active:
+            return pet
+    # Nenhum marcado: e o banco de antes de existirem varios bichinhos, ou
+    # alguem apagou o ativo. O primeiro com especie assume; sem nenhum, o
+    # primeiro da fila (que e a linha vazia esperando a escolha).
+    escolhido = next((p for p in pets if p.species), pets[0])
+    escolhido.active = True
+    db.flush()
+    return escolhido
+
+
+def _ativar(db: Session, pet: Pet) -> None:
+    """Marca UM como ativo e desmarca os outros.
+
+    A exclusividade e garantida aqui, e nao por um `if` na tela: dois ativos
+    fariam a casa mostrar um bichinho e o cuidado cair em outro.
+    """
+    for outro in db.query(Pet).all():
+        if outro.active and outro.id != pet.id:
+            outro.active = False
+    pet.active = True
+    db.flush()
+
+
+def pets_resumo(db: Session) -> list[dict]:
+    """A lista curta pra tela trocar de bichinho sem carregar tudo de cada um."""
+    return [
+        {
+            "id": p.id,
+            "name": p.name,
+            "species": p.species,
+            "species_name": (catalog.PET_SPECIES_BY_CODE.get(p.species) or {}).get("name", ""),
+            "colors": (catalog.PET_SPECIES_BY_CODE.get(p.species) or {}).get("colors", []),
+            "active": bool(p.active),
+            "level": pet_care.level_for(int(p.xp or 0)),
+            "growth": pet_care.growth_of(int(p.xp or 0)),
+            "sick": bool(p.sick),
+            "mood": pet_care.mood_of(p, 0),
+            # o pior atributo: e o que denuncia, na lista, quem esta precisando
+            "worst": min(getattr(p, stat) for stat in pet_care.STATS),
+        }
+        for p in pet_care.all_pets(db)
+    ]
 
 
 def _item(db: Session, code: str, subcategory: str | None = None) -> ShopItem:
@@ -93,6 +149,7 @@ def pet_out(db: Session, pet: Pet) -> dict:
     progress = pet_care.level_progress(int(pet.xp or 0))
     species = pet_care.species_of(pet)
     return {
+        "id": pet.id,
         "chosen": bool(pet.species),
         "name": pet.name,
         "species": pet.species,
@@ -193,12 +250,17 @@ def species_list() -> dict:
 def read(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     pet = get_pet(db)
     report = pet_care.apply_decay(db, pet)
+    # Os OUTROS tambem envelhecem. Se so o ativo caisse, bastaria trocar de
+    # bichinho pra congelar o faminto — e o cuidado deixaria de custar.
+    for outro in pet_care.all_pets(db):
+        if outro.id != pet.id:
+            pet_care.apply_decay(db, outro)
     db.commit()
     body = pet_out(db, pet)
     if report["mess_born"]:
         # o outro precisa ver a sujeira aparecer sem recarregar
         publish("pet", body)
-    return {"pet": body, "since": report}
+    return {"pet": body, "since": report, "pets": pets_resumo(db)}
 
 
 @router.get("/items")
@@ -254,6 +316,7 @@ def choose(payload: ChooseIn, user: User = Depends(current_user), db: Session = 
     pet.decay_residue = {}
     for stat in pet_care.STATS:
         setattr(pet, stat, 80)
+    _ativar(db, pet)
 
     partner = partner_of(db, user)
     if partner:
@@ -280,20 +343,73 @@ def rename(payload: RenameIn, user: User = Depends(current_user), db: Session = 
 
 @router.post("/adopt")
 def adopt(payload: AdoptIn, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    """Adota MAIS UM bichinho, usando uma licenca de especie comprada na loja.
+
+    Antes esta rota TROCAVA a especie do unico bichinho, mantendo nome e
+    progressao. Agora ela cria um bichinho novo, com a vida dele — que e o que
+    o dono pediu ao querer mais de um.
+
+    A licenca e CONSUMIDA. Sem isso, uma compra viraria bichinho infinito: era
+    so chamar a rota de novo. Trocar entre os que ja moram na casa continua de
+    graca (`/select`) — o que custa e trazer mais um pra dentro.
+    """
     if payload.species not in catalog.PET_SPECIES_BY_CODE:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Essa espécie não existe")
     item = db.query(ShopItem).filter(ShopItem.code == f"pet_especie_{payload.species}").first()
     if item is None or owns(db, user, item) < 1:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Adote essa espécie na loja primeiro")
-    pet = get_pet(db)
-    pet_care.apply_decay(db, pet)
+
+    atual = get_pet(db)
+    if not atual.species:
+        # Ainda nao escolheram nenhum: a licenca preenche a linha que ja existe,
+        # em vez de deixar um bichinho vazio pra sempre no banco.
+        pet = atual
+    else:
+        if len(pet_care.all_pets(db)) >= MAX_PETS:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                f"A casa já está com {MAX_PETS} bichinhos. Cuidar de mais que isso não dá.",
+            )
+        pet = Pet(name="", species="", appearance_config={})
+        db.add(pet)
+        db.flush()
+
+    take_from_inventory(db, user, item, 1)
+    now = utcnow()
     pet.species = payload.species
-    if not pet.name:
-        pet.name = catalog.PET_SPECIES_BY_CODE[payload.species]["name"]
-        pet.born_at = utcnow()
-        pet.last_decay_at = utcnow()
-        for stat_name in pet_care.STATS:
-            setattr(pet, stat_name, 80)
+    especie = catalog.PET_SPECIES_BY_CODE[payload.species]
+    pet.name = (payload.name or "").strip() or especie["name"]
+    pet.born_at = now
+    pet.last_decay_at = now
+    pet.mess_debt = 0.0
+    pet.decay_residue = {}
+    pet.sick = False
+    pet.room_code = atual.room_code or "sala"
+    for stat_name in pet_care.STATS:
+        setattr(pet, stat_name, 80)
+    _ativar(db, pet)
+
+    partner = partner_of(db, user)
+    if partner:
+        push.send_to_user(
+            db,
+            partner.id,
+            title="Chegou mais um!",
+            body=f"{user.name} adotou {pet.name}, um {especie['name'].lower()}",
+            url="/pet",
+            kind="pet",
+        )
+    return _respond(db, pet)
+
+
+@router.post("/{pet_id}/select")
+def select(pet_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    """Troca qual bichinho esta na tela. Nao custa nada e nao apaga nada."""
+    pet = db.get(Pet, pet_id)
+    if pet is None or not pet.species:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Esse bichinho não existe")
+    pet_care.decay_all(db)
+    _ativar(db, pet)
     return _respond(db, pet)
 
 

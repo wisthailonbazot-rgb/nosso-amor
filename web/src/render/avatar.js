@@ -359,6 +359,67 @@ const EXTRA_ACC = {
   },
 }
 
+// ------------------------------------------------------------------ silhueta
+/**
+ * Esculpe a silhueta DEPOIS da roupa.
+ *
+ * O boneco era um retângulo só, igual pros dois do pescoço pra baixo — a única
+ * diferença entre eles era cabelo e roupa. A dona do app disse, com razão, que
+ * o dela não parecia ela.
+ *
+ * O jeito óbvio seria desenhar um segundo corpo. Seria o pior caminho: as 48
+ * peças de roupa são retângulos posicionados em cima do tronco, então cada
+ * peça teria que ganhar uma segunda versão — 48 desenhos novos pra mudar uma
+ * silhueta.
+ *
+ * Aqui o corpo é ESCULPIDO no fim: recorta-se a cintura (e o ombro, no caso
+ * curvilíneo) com `clearRect`, que tira skin e tecido de uma vez. Como o corte
+ * acontece depois de tudo, TODA roupa acompanha a forma sozinha — inclusive as
+ * que ainda nem existem. Depois o contorno é redesenhado na borda nova, senão o
+ * corte deixaria a silhueta sem traço justamente onde ela mais aparece.
+ */
+// Duas formas, e não três. Existia um "largo" que só fazia sentido ALARGANDO a
+// silhueta — e alargar exigiria pintar por fora do tronco, sem saber que roupa
+// está por baixo. Ele saía idêntico ao "reto": um botão que não muda nada é pior
+// do que não ter o botão.
+const CORPOS = {
+  reto: null,   // o padrão: nada a esculpir
+  curvas: { ombro: 1, cintura: 2, cinturaY: 6, cinturaH: 5 },
+}
+
+function esculpirCorpo(p, o, c) {
+  const forma = CORPOS[c.corpo]
+  if (!forma) return
+  const ctx = p.ctx
+  const yTopo = o.y + TORSO.y - 1
+  const x0 = o.x + TORSO.x - 1
+  const x1 = o.x + TORSO.x + TORSO.w + 1
+
+  const corta = (x, y, w, h) => { if (w > 0) ctx.clearRect(x, y, w, h) }
+  const traco = (x, y, w, h) => p.rect(x, y, w, h, OUT)
+
+  // ombro
+  if (forma.ombro > 0) {
+    corta(x0, yTopo, forma.ombro, 3)
+    corta(x1 - forma.ombro, yTopo, forma.ombro, 3)
+    traco(x0 + forma.ombro, yTopo, 1, 3)
+    traco(x1 - forma.ombro - 1, yTopo, 1, 3)
+  }
+  // cintura
+  if (forma.cintura > 0) {
+    const cy = yTopo + forma.cinturaY
+    corta(x0, cy, forma.cintura, forma.cinturaH)
+    corta(x1 - forma.cintura, cy, forma.cintura, forma.cinturaH)
+    traco(x0 + forma.cintura, cy, 1, forma.cinturaH)
+    traco(x1 - forma.cintura - 1, cy, 1, forma.cinturaH)
+    // os cantos, pra transição não ficar em degrau seco
+    traco(x0 + forma.cintura - 1, cy - 1, 1, 1)
+    traco(x1 - forma.cintura, cy - 1, 1, 1)
+    traco(x0 + forma.cintura - 1, cy + forma.cinturaH, 1, 1)
+    traco(x1 - forma.cintura, cy + forma.cinturaH, 1, 1)
+  }
+}
+
 // ------------------------------------------------------------------ tudo junto
 export function drawAvatar(p, config, x = 0, y = 0) {
   const c = { ...config }
@@ -371,6 +432,7 @@ export function drawAvatar(p, config, x = 0, y = 0) {
   if (!wearingDress && BOTTOMS[c.bottom]) BOTTOMS[c.bottom](p, o, c.bottom_color)
   if (TOPS[c.top]) TOPS[c.top](p, o, c.top_color)
   if (SHOES[c.shoes]) SHOES[c.shoes](p, o, c.shoes_color)
+  esculpirCorpo(p, o, c)
   if (HAIR[c.hair_style]) HAIR[c.hair_style](p, o, c.hair_color)
   drawFace(p, o, c)
   if (HEAD_ACC[c.head]) HEAD_ACC[c.head](p, o)
@@ -399,4 +461,5 @@ export const STYLE_LISTS = {
   eyes: Object.keys(EYES),
   mouth: Object.keys(MOUTHS),
   brows: Object.keys(BROWS),
+  corpo: Object.keys(CORPOS),
 }

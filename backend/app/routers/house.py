@@ -156,7 +156,8 @@ def read(user: User = Depends(current_user), db: Session = Depends(get_db)) -> d
     # O bichinho envelhece mesmo quando quem abriu foi a tela da casa: e aqui
     # que a sujeira dele aparece, entao ela precisa estar em dia.
     pet = get_pet(db)
-    pet_care.apply_decay(db, pet)
+    # todos envelhecem, nao so o que esta na tela (ver `pet_care.decay_all`)
+    pet_care.decay_all(db)
     db.commit()
 
     mess_by_room: dict[int, list] = {}

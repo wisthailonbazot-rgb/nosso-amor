@@ -453,3 +453,29 @@ Estado: **537 verificações, 0 falha**. Detalhes e causas no HANDOFF, seção 9
       escreveu. A rolagem da conversa continua ganhando do gesto.
 
 Estado: **537 verificações, 0 falha**. Causas no HANDOFF, seção 9.6.
+
+### 25/08/2026 — iPhone em branco, zoom, coleira, avatar dela e vários bichinhos
+
+- **[x]** **O app web parou de funcionar no iPhone.** Causa: o `index.html` era servido
+      **sem `Cache-Control`**. O aparelho guardava o HTML velho, que apontava para um
+      bundle já apagado pelo deploy seguinte — o script dava 404 e a tela ficava branca.
+      Corrigido em três camadas: `no-cache` no HTML e `immutable` nos assets (servidor),
+      navegação com `cache: 'reload'` no service worker (destrava quem já está preso), e
+      uma recuperação automática no próprio `index.html` se um asset falhar.
+- **[x]** **O zoom da casa não funcionava direito.** Um clique pulava de 1× para 4× e
+      travava: o contêiner que rola crescia junto com o canvas, e a conta de "quanto
+      cabe na tela" media esse contêiner. Agora anda em passos e volta.
+- **[x]** **A coleira ainda ficava bugada na aba bichinho.** Ela saía perpendicular a um
+      eixo peito→cabeça, que é instável em quem não tem pescoço (coelho, capivara) — a
+      faixa atravessava o rosto. Agora é ancorada na cabeça, abaixo do queixo.
+- **[x]** **O boneco dela não parecia feminino.** O corpo era o mesmo retângulo para os
+      dois. Agora existe silhueta (`reto` / `curvas`), esculpida DEPOIS da roupa — então
+      todas as 48 peças acompanham a forma sem precisarem ser redesenhadas. Fica em
+      Perfil → montar personagem → Base, e é de graça (não é item de loja).
+- **[x]** **O sistema permite mais de um bichinho.** Cada licença de espécie da loja
+      traz um bichinho novo, com nome, atributos e progressão próprios; a fila de
+      retratos troca quem está na tela, de graça. Teto de 4 na casa.
+      **Todos continuam vivos ao mesmo tempo** — trocar de bichinho não congela o outro,
+      senão seria o jeito de escapar do cuidado. Há teste para isso.
+
+Estado: **555 verificações, 0 falha**. Causas no HANDOFF, seção 9.7.

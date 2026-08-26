@@ -70,6 +70,21 @@ PET_COOLDOWN_MIN = 240    # carinho de graca so de 4 em 4 horas
 
 
 # ------------------------------------------------------------------ especie
+def all_pets(db: Session) -> list[Pet]:
+    """Todos os bichinhos ja escolhidos, em ordem de adocao."""
+    return [p for p in db.query(Pet).order_by(Pet.id).all() if p.species]
+
+
+def decay_all(db: Session) -> None:
+    """Envelhece TODOS os bichinhos, nao so o que esta na tela.
+
+    Sem isto, o que nao esta ativo ficaria congelado — e trocar de bichinho
+    viraria o jeito de escapar da fome. Cada um suja o comodo em que ELE esta.
+    """
+    for pet in all_pets(db):
+        apply_decay(db, pet)
+
+
 def species_of(pet: Pet) -> dict:
     """Tracos da especie escolhida. Sem especie, o ritmo base."""
     return catalog.PET_SPECIES_BY_CODE.get(pet.species or "", {})

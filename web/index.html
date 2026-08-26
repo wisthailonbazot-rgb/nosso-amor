@@ -16,6 +16,43 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Rede de seguranca pro aparelho que ficou preso num index.html velho.
+         Se o arquivo do app nao carregar (o nome dele muda a cada versao, e o
+         deploy apaga os antigos), o aparelho apagaria a tela e ficaria em
+         branco pra sempre — foi o que aconteceu no iPhone. Aqui a gente
+         percebe a falha, joga fora o service worker e os caches, e recarrega
+         UMA vez. A trava no sessionStorage e o que impede isso de virar um
+         laco de recarregamento quando a falha for de internet, e nao de
+         versao. -->
+    <script>
+      window.addEventListener('error', function (e) {
+        var alvo = e && e.target
+        if (!alvo || alvo === window) return
+        var src = alvo.src || alvo.href || ''
+        if (src.indexOf('/assets/') === -1) return
+        if (sessionStorage.getItem('casal.recuperando')) return
+        sessionStorage.setItem('casal.recuperando', '1')
+        var pronto = function () { location.reload() }
+        try {
+          Promise.all([
+            navigator.serviceWorker && navigator.serviceWorker.getRegistrations
+              ? navigator.serviceWorker.getRegistrations().then(function (rs) {
+                  return Promise.all(rs.map(function (r) { return r.unregister() }))
+                })
+              : Promise.resolve(),
+            window.caches
+              ? caches.keys().then(function (ks) {
+                  return Promise.all(ks.map(function (k) { return caches.delete(k) }))
+                })
+              : Promise.resolve(),
+          ]).then(pronto, pronto)
+        } catch (_) { pronto() }
+      }, true)
+      // carregou direito: pode esquecer que houve recuperacao
+      window.addEventListener('load', function () {
+        setTimeout(function () { sessionStorage.removeItem('casal.recuperando') }, 4000)
+      })
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

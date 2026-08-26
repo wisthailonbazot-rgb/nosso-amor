@@ -29,6 +29,11 @@ DEFAULT_AVATAR = {
     "eye_color": "#3b2a20",
     "mouth": "sorriso",
     "brows": "reta",
+    # Silhueta do corpo. Nao e roupa nem item de loja: e como a pessoa e, entao
+    # e de graca e nao passa pela posse. Existe porque o boneco unico deixava
+    # os dois iguais do pescoco pra baixo — e a dona do app disse, com razao,
+    # que o dela nao parecia ela.
+    "corpo": "reto",
     "top": "camiseta",
     "top_color": "#5b8def",
     "bottom": "jeans",
@@ -75,9 +80,16 @@ def _pet(code, name, sub, price, effect, description="", consumable=False):
 
 
 def _pet_species(code, name, price):
+    # `consumable`: a licenca VIRA um bichinho e some do inventario.
+    #
+    # Antes ela nao se gastava, porque so trocava a especie do unico bichinho —
+    # nao fazia sentido consumir. Agora cada licenca traz um bichinho novo, com a
+    # vida dele; se continuasse sem gastar, uma compra so daria bichinho infinito
+    # (bastava chamar a rota de novo). Trocar entre os que ja moram na casa segue
+    # de graca — o que custa e trazer mais um pra dentro.
     return _pet(
         f"especie_{code}", name, "especie", price, {"species": code},
-        "Uma nova espécie para a família",
+        "Mais um bichinho para a família", consumable=True,
     )
 
 

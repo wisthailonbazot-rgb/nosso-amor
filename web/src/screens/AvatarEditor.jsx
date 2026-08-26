@@ -175,6 +175,17 @@ export default function AvatarEditor() {
         <div className="card">
           <p className="card-title">Tom de pele</p>
           <Swatches colors={options.colors.skin} value={config.skin} onPick={(v) => set({ skin: v })} />
+          <div style={{ height: 14 }} />
+          {/* Silhueta. Fica junto do tom de pele porque é da mesma natureza:
+              é como a pessoa é, não é roupa — não custa nada e não passa pela
+              posse. Antes o corpo era o mesmo retângulo pros dois, e a única
+              diferença entre os bonecos era cabelo e roupa. */}
+          <p className="card-title">Corpo</p>
+          <Choices
+            options={['reto', 'curvas']}
+            value={config.corpo || 'reto'}
+            onPick={(v) => set({ corpo: v })}
+          />
         </div>
       )}
 

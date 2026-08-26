@@ -45,6 +45,33 @@ async def security_headers(request: Request, call_next):
     if request.url.path.endswith("sw.js"):
         response.headers["Cache-Control"] = "no-cache"
         response.headers["Service-Worker-Allowed"] = "/"
+
+    # ------------------------------------------------------------ cache
+    #
+    # O index.html NAO PODE ser guardado, e os arquivos de /assets podem ser
+    # guardados pra sempre. Nao e afinacao de desempenho: e o que impede o app
+    # de parar de abrir.
+    #
+    # O nome do arquivo em /assets e um resumo do conteudo (index-ABC123.js), e
+    # cada deploy apaga os antigos. O index.html e o unico lugar que diz QUAL
+    # deles carregar. Servido sem `Cache-Control`, como estava, o navegador
+    # aplica cache por adivinhacao — e o iPhone e o mais agressivo nisso,
+    # principalmente aberto pela Tela de Inicio. Resultado: o aparelho guardava
+    # um index.html velho, que apontava pra um bundle que o deploy seguinte ja
+    # tinha apagado. O HTML carregava, o script dava 404 e o app abria EM
+    # BRANCO — sem erro visivel, e so no celular, porque no computador eu
+    # recarregava forcado o tempo todo.
+    #
+    # Como o nome do arquivo de /assets muda quando o conteudo muda, guardar ele
+    # pra sempre e seguro: versao nova e outro nome, nunca o mesmo.
+    caminho = request.url.path
+    if caminho.startswith("/assets/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    elif caminho.startswith("/api") or caminho.startswith("/media"):
+        pass  # a API ja decide sozinha; midia tem token na URL
+    elif not caminho.endswith("sw.js"):
+        # o resto e a casca do app (index.html, manifesto, icones)
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
     return response
 
 

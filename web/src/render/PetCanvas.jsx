@@ -129,37 +129,39 @@ function vestir(p, pet, m, cores, plano) {
   const traco = (pts, cor) => { p.fillPoly(pts, cor); p.strokePoly(pts, OUT) }
 
   if (neck) {
-    // O EIXO DO PESCOÇO vai da base dele até o CENTRO da cabeça.
+    // A coleira é ancorada NA CABEÇA, logo abaixo do queixo — não num "eixo de
+    // pescoço" calculado entre o peito e a cabeça.
     //
-    // Estava indo até a *base* da cabeça, e com a anatomia nova isso quebrou: a
-    // cabeça agora fica acima e um pouco à frente do peito, então o vetor
-    // peito→queixo aponta quase na HORIZONTAL. A coleira, que é perpendicular a
-    // esse vetor, virava uma tira em pé atravessando o bichinho de cima a baixo,
-    // e a gravata saía para a frente, na direção do focinho.
+    // Aquele eixo funcionava no cachorro e falhava no coelho e na capivara, que
+    // praticamente não têm pescoço: os dois pontos ficam quase em cima um do
+    // outro, a direção sai de uma diferença minúscula (portanto instável) e a
+    // faixa acabava atravessando o ROSTO do bichinho. Deitado, com a cabeça
+    // tombada, ficava pior ainda.
     //
-    // Do peito até o centro da cabeça o vetor aponta pra cima, que é como um
-    // pescoço realmente corre — e aí a coleira volta a atravessá-lo.
-    const [nx, ny] = m.pescoco
-    const [hx, hy] = m.cabeca
-    const d = Math.hypot(hx - nx, hy - ny) || 1
-    const ux = (hx - nx) / d
-    const uy = (hy - ny) / d
-    const px = -uy      // atravessa o pescoço
+    // Preso à cabeça isso não tem como acontecer: coleira fica embaixo do
+    // queixo em qualquer espécie e em qualquer pose, porque acompanha a mesma
+    // rotação que o rosto.
+    const centro = m.naCabeca(-0.06, 1.02)
+    const o = m.naCabeca(0, 0)
+    const b = m.naCabeca(0, 1)
+    const dc = Math.hypot(b[0] - o[0], b[1] - o[1]) || 1
+    const ux = (b[0] - o[0]) / dc   // "para baixo" DA CABEÇA
+    const uy = (b[1] - o[1]) / dc
+    const px = -uy                  // atravessa o pescoço
     const py = ux
 
-    // "Para baixo" sai do CORPO, não do pescoço: é o que faz a gravata e a
-    // plaquinha penderem certo mesmo com ele deitado ou de cabeça baixa.
-    const o = m.noCorpo(0, 0)
-    const b = m.noCorpo(0, 1)
-    const bd = Math.hypot(b[0] - o[0], b[1] - o[1]) || 1
-    const gx = (b[0] - o[0]) / bd
-    const gy = (b[1] - o[1]) / bd
+    // O que PENDE (gravata, plaquinha) segue o "para baixo" do CORPO: é a
+    // gravidade que manda nisso, não a inclinação da cabeça.
+    const co = m.noCorpo(0, 0)
+    const cb = m.noCorpo(0, 1)
+    const db = Math.hypot(cb[0] - co[0], cb[1] - co[1]) || 1
+    const gx = (cb[0] - co[0]) / db
+    const gy = (cb[1] - co[1]) / db
 
-    const meia = Math.max(3, m.cabecaL * 0.30)
-    const esp = Math.max(1.5, m.cabecaA * 0.11)
-    // encostada no queixo, não no meio das costas
-    const cx = nx + ux * d * 0.62
-    const cy = ny + uy * d * 0.62
+    const meia = Math.max(3, m.cabecaL * 0.32)
+    const esp = Math.max(1.5, m.cabecaA * 0.1)
+    const cx = centro[0]
+    const cy = centro[1]
     const cor = neck.includes('gravata') ? '#e8879b' : '#5bb9e8'
     traco([
       [cx + px * meia - ux * esp, cy + py * meia - uy * esp],
@@ -171,13 +173,12 @@ function vestir(p, pet, m, cores, plano) {
     const bx = cx + gx * esp
     const by = cy + gy * esp
     if (neck.includes('gravata')) {
-      // A gravata pende pra baixo, mas PARA no chão: deitado, o bichinho tem o
-      // peito quase no piso, e uma gravata de comprimento fixo atravessaria o
-      // assoalho. O teto é a distância que sobra até a linha do chão.
+      // Pende pra baixo, mas PARA no chão: deitado, o peito fica quase no piso
+      // e uma gravata de comprimento fixo atravessaria o assoalho.
       const ateOChao = Math.max(0, plano.chao - by)
       const comp = Math.max(4, Math.min(m.cabecaA * 0.6, ateOChao))
       const larg = Math.max(2, m.cabecaL * 0.13)
-      const lx = -gy   // atravessa a gravata
+      const lx = -gy
       const ly = gx
       traco([
         [bx + lx * larg, by + ly * larg],
@@ -187,18 +188,14 @@ function vestir(p, pet, m, cores, plano) {
         [bx - lx * larg, by - ly * larg],
       ], cor)
     } else {
-      // plaquinha pendurada, sempre pra baixo
       const r = Math.max(1.6, m.cabecaL * 0.09)
-      p.fillPoly([
+      const pin = [
         [bx - gy * r, by + gx * r],
         [bx + gy * r, by - gx * r],
         [bx + gx * r * 2.2, by + gy * r * 2.2],
-      ], '#f2c53d')
-      p.strokePoly([
-        [bx - gy * r, by + gx * r],
-        [bx + gy * r, by - gx * r],
-        [bx + gx * r * 2.2, by + gy * r * 2.2],
-      ], OUT)
+      ]
+      p.fillPoly(pin, '#f2c53d')
+      p.strokePoly(pin, OUT)
     }
   }
 
