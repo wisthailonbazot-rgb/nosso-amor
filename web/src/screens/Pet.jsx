@@ -179,6 +179,33 @@ export default function Pet() {
     }
     setBusy('')
   }
+  /**
+   * Fazer carinho com o DEDO, passando a mao nele no palco.
+   *
+   * O botao "Carinho" continua existindo — mas botao e botao. Passar a mao em
+   * cima do bichinho e o gesto que o dono pediu quando falou do Kinectimals, e
+   * e o unico que parece carinho de verdade.
+   *
+   * A regra ja travada continua valendo: a REACAO e sempre, o PREMIO tem hora.
+   * Fora da janela o servidor recusa com 400, e aqui isso vira um aviso
+   * tranquilo — nao um erro vermelho. Ele reagiu de qualquer jeito; o que
+   * estava em descanso era a alegria, nao o afeto.
+   */
+  const afagoRef = useRef(0)
+  async function aoAfagar(acao) {
+    if (acao !== 'carinho') return
+    const agora = Date.now()
+    if (agora - afagoRef.current < 3500) return
+    afagoRef.current = agora
+    try {
+      const result = await api.post('/api/pet/cuddle')
+      setPet(result.pet)
+      setStatus({ kind: 'ok', text: `${pet.name} adorou o carinho.` })
+    } catch (e) {
+      setStatus({ kind: 'warn', text: `${pet.name} gostou, mas a alegria dele já está no talo — volte mais tarde.` })
+    }
+  }
+
   async function trocarPara(alvo) {
     setStatus(null)
     try {
@@ -218,7 +245,7 @@ export default function Pet() {
         um caminho curto: o item sai da lateral e cai em cima dele. */}
     <div className="pet-arena">
       <div ref={palcoRef} className={`pet-stage card ${pet.sick ? 'sick' : ''} ${arrasto ? (arrasto.sobre ? 'alvo-aceso' : 'alvo') : ''}`}>
-        <PetCanvas pet={{ ...pet, prop: emUso }} />
+        <PetCanvas pet={{ ...pet, prop: emUso }} onPoke={aoAfagar} />
         {/* As barras viraram um HUD de canto.
             Elas ocupavam quatro cartões num grid embaixo do cenário — metade da
             tela pra dizer quatro números. Aqui são quatro tracinhos no canto,

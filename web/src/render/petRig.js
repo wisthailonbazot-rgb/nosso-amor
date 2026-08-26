@@ -868,12 +868,56 @@ export function clipeDe(acao, plano) {
 }
 
 /** A pose desta especie, nesta acao, neste instante. `vel` acelera o ciclo. */
+// As medidas do plano que sao COMPRIMENTO. O resto (tipo, andar, codigo, os
+// fatores) nao tem escala e passa direto.
+const MEDIDAS = [
+  'cx', 'chao', 'corpoL', 'corpoA', 'cabecaL', 'cabecaA',
+  'focinho', 'pescoco', 'pernaA', 'pernaE', 'caudaL', 'olho',
+]
+
+/**
+ * O plano SEM a escala, que e o que os clipes esperam receber.
+ *
+ * ---------------------------------------------------------------- por que
+ *
+ * Havia uma escala aplicada DUAS VEZES, e era ela a "animacao contorcendo o
+ * corpo".
+ *
+ * O desenho multiplica todo valor de pose pela escala — `corpoCY` soma
+ * `q.corpoY * plano.escala`, a perna mira em `pe.y * plano.escala`. Ou seja: o
+ * clipe deveria falar em unidades CRUAS. Só que quase todos os clipes escrevem
+ * as poses em cima do proprio plano (`q.pes[0] = { y: -plano.pernaA * 0.85 }`),
+ * e `plano.pernaA` JA vem multiplicado pela escala. O resultado e escala ao
+ * quadrado em tudo que e deslocamento de pose.
+ *
+ * Enquanto a caixa foi sempre 128x108 a escala era 1, e 1 x 1 continua 1: o
+ * defeito existia e nao aparecia. Desenhando o bichinho grande (escala perto de
+ * 4), os deslocamentos passaram a ser ~15 vezes em vez de 4 — pata mirando
+ * muito alem do chao, cabeca deslocada pra fora do pescoco, corpo afundando.
+ * Cada clipe deformava de um jeito diferente, porque cada um mexe num conjunto
+ * diferente de valores. Era isso que se via como o corpo se contorcendo.
+ *
+ * O conserto e uma linha em vez de mexer nos 22 clipes: eles recebem o plano
+ * com os comprimentos divididos pela escala. Aí `plano.pernaA * 0,85` volta a
+ * ser uma fracao CRUA, a multiplicacao do desenho aplica a escala uma vez so, e
+ * os numeros soltos que alguns clipes usam (`{ x: 3.5 }`) passam a escalar
+ * junto — coisa que antes nao acontecia, e que deixava esses pes parados no
+ * lugar enquanto o resto crescia.
+ */
+function semEscala(plano) {
+  const e = plano.escala || 1
+  if (e === 1) return plano
+  const copia = { ...plano, escala: 1 }
+  for (const k of MEDIDAS) copia[k] = plano[k] / e
+  return copia
+}
+
 export function poseEm(acao, plano, tMs, vel = 1) {
   const nome = clipeDe(acao, plano)
   const clipe = CLIPES[nome]
   const dur = clipe.dur / Math.max(0.15, vel * (plano.velPasso || 1))
   const ph = ((tMs % dur) + dur) % dur / dur
-  const q = clipe.pose(ph, plano)
+  const q = clipe.pose(ph, semEscala(plano))
   q.clipe = nome
   q.fase = ph
   return q
@@ -990,10 +1034,21 @@ export function desenharRig(p, plano, q, cores, extra = {}) {
   // vez de empurrá-la pra longe — é a diferença entre um cachorro e um bípede.
   const peito = noCorpo(bipede ? 0.1 : 0.52, -0.42)
   const cabecaCX = peito[0] + (bipede ? 1 : plano.pescoco * 0.55 + plano.cabecaL * 0.10) + q.cabecaX * plano.escala
-  const cabecaCY = peito[1] - plano.cabecaA * (bipede ? 0.62 : 0.42) - plano.pescoco * 0.30 + q.cabecaY * plano.escala
+  const miraPre = extra.mirar || null
+  const cabecaCY = peito[1] - plano.cabecaA * (bipede ? 0.62 : 0.42) - plano.pescoco * 0.30
+    + q.cabecaY * plano.escala + (miraPre ? miraPre.dy * plano.cabecaA * 0.10 : 0)
   const pescocoBase = noCorpo(bipede ? 0.1 : 0.46, -0.34)
 
-  const ca = q.cabecaAng
+  // O BICHINHO OLHA PRA VOCE.
+  //
+  // E a coisa mais barata e mais eficaz que o Kinectimals faz: o filhote segue a
+  // sua mao com a cabeca e com o olho. Sem isso o bicho e um desenho que anima
+  // sozinho; com isso ele parece estar do outro lado do vidro, prestando
+  // atencao em voce. `extra.mirar` chega em -1..1 (esquerda/direita e
+  // cima/baixo) e entra como um ACRESCIMO na pose — a animacao continua mandando
+  // no resto, entao ele consegue olhar pra voce enquanto anda, come ou dorme.
+  const mira = extra.mirar || null
+  const ca = q.cabecaAng + (mira ? mira.dx * 0.22 + mira.dy * 0.10 : 0)
   const naCabeca = (fx, fy) => {
     const x = (fx * plano.cabecaL) / 2
     const y = (fy * plano.cabecaA) / 2
@@ -1009,8 +1064,11 @@ export function desenharRig(p, plano, q, cores, extra = {}) {
   const alturaDoChao = Math.max(0, ANCHAO - (corpoCY + corpoA))
   const solta = clamp(alturaDoChao / (pernaA * 2.6), 0, 1)
   p.fillPoly(
-    elipse(ANCX, ANCHAO + 3 * plano.escala, plano.corpoL * (1 - solta * 0.45) * 0.5,
-      Math.max(1.2, 3.4 * plano.escala) * (1 - solta * 0.4), 0, 14),
+    // A sombra ficava 3 unidades ABAIXO do chao — 3 px na caixa pequena, mas 11
+    // px com o bichinho grande, e aparecia um vao entre a pata e a sombra. Ela
+    // tem que nascer na linha em que ele pisa.
+    elipse(ANCX, ANCHAO + 1 * plano.escala, plano.corpoL * (1 - solta * 0.45) * 0.5,
+      Math.max(1.2 * e, 3.4 * plano.escala) * (1 - solta * 0.4), 0, 14),
     `rgba(51,32,58,${(0.2 - solta * 0.1).toFixed(3)})`
   )
 
@@ -1029,10 +1087,10 @@ export function desenharRig(p, plano, q, cores, extra = {}) {
     // A coxa é mais grossa que a canela: perna de espessura constante é a
     // segunda coisa que faz um bicho parecer de brinquedo (a primeira é ela
     // não dobrar).
-    lista.push({ pts: capsula(base[0], base[1], jx, jy, Math.max(1, plano.pernaE * 1.05), Math.max(0.8, plano.pernaE * 0.72)), fill: cor })
-    lista.push({ pts: capsula(jx, jy, alvoX, alvoY, Math.max(0.9, plano.pernaE * 0.68), Math.max(0.7, plano.pernaE * 0.5)), fill: cor })
+    lista.push({ pts: capsula(base[0], base[1], jx, jy, Math.max(1 * e, plano.pernaE * 1.05), Math.max(0.8 * e, plano.pernaE * 0.72)), fill: cor })
+    lista.push({ pts: capsula(jx, jy, alvoX, alvoY, Math.max(0.9 * e, plano.pernaE * 0.68), Math.max(0.7 * e, plano.pernaE * 0.5)), fill: cor })
     // patinha achatada, virada pra frente
-    lista.push({ pts: elipse(alvoX + 1.5, alvoY - 1, plano.pernaE * 1.15, plano.pernaE * 0.6, 0, 10), fill: cor })
+    lista.push({ pts: elipse(alvoX + 1.5 * e, alvoY - 1 * e, plano.pernaE * 1.15, plano.pernaE * 0.6, 0, 10), fill: cor })
     return [alvoX, alvoY]
   }
 
@@ -1043,16 +1101,27 @@ export function desenharRig(p, plano, q, cores, extra = {}) {
     const env = plano.corpoL * 0.95 * abrir * plano.asaF
     const alt = plano.corpoA * 1.25 * plano.asaF
     const a = q.asaAng * (frenteDele ? 1 : 0.86)
-    const ox = corpoCX - (frenteDele ? 1 : 4)
-    const oy = corpoCY - corpoA * 0.45 - (frenteDele ? 0 : 2)
-    const px1 = ox - env * Math.cos(0.5 - a * 0.4)
-    const py1 = oy - alt * Math.sin(0.9 + a)
+    const ox = corpoCX - (frenteDele ? 1 : 4) * e
+    const oy = corpoCY - corpoA * 0.45 - (frenteDele ? 0 : 2) * e
+    // A ASA VIVIA PRA CIMA porque o angulo dela passava por dentro de um seno
+    // que ja estava perto do pico. `sin(0.9 + a)`, com `a` indo de -1,15 a
+    // +1,15, percorre 0,9 -> 2,05 radianos — e o pico do seno (1,57) esta bem
+    // no meio disso. Resultado: em TODA a metade de cima da batida o valor mal
+    // saia de 0,8, a ponta quase nao se mexia, e so no extremo de baixo ela
+    // desabava. Lido na tela, isso e uma asa parada la em cima com um tranco.
+    //
+    // O conserto e nao usar o seno como curva de controle: `a` vira o ANGULO de
+    // elevacao da asa, e a ponta gira em torno do ombro. A batida passa a subir
+    // e descer a mesma coisa dos dois lados.
+    const elev = 0.15 + a * 0.75
+    const px1 = ox - env * Math.cos(elev)
+    const py1 = oy - alt * Math.sin(elev)
     if (plano.asa === 'membrana') {
       lista.push({
         pts: [
-          [ox + 3, oy], [px1 + 4, py1 - 2], [px1 - 3, py1 + alt * 0.35],
-          [ox - env * 0.55, oy + alt * 0.3 + a * 3],
-          [ox - env * 0.22, oy + alt * 0.16], [ox - 1, oy + 3],
+          [ox + 3 * e, oy], [px1 + 4 * e, py1 - 2 * e], [px1 - 3 * e, py1 + alt * 0.35],
+          [ox - env * 0.55, oy + alt * 0.3 + a * 3 * e],
+          [ox - env * 0.22, oy + alt * 0.16], [ox - 1 * e, oy + 3 * e],
         ],
         fill: cor,
       })
@@ -1061,8 +1130,8 @@ export function desenharRig(p, plano, q, cores, extra = {}) {
         const f = 1 - i * 0.2
         lista.push({
           pts: capsula(
-            ox + 1 - i * 2, oy + i * 2.2,
-            px1 * f + ox * (1 - f), py1 * f + oy * (1 - f) + i * 2.4,
+            ox + (1 - i * 2) * e, oy + i * 2.2 * e,
+            px1 * f + ox * (1 - f), py1 * f + oy * (1 - f) + i * 2.4 * e,
             plano.corpoA * 0.19, plano.corpoA * 0.1
           ),
           fill: i === 0 ? cor : mix(cor, '#3b2a33', 0.18),
@@ -1075,13 +1144,13 @@ export function desenharRig(p, plano, q, cores, extra = {}) {
   const cauda = (lista) => {
     if (plano.cauda === 'toco') {
       const [bx, by] = noCorpo(-0.92, -0.15)
-      lista.push({ pts: elipse(bx - 1, by, plano.caudaL * 0.55, plano.caudaL * 0.5, 0, 10), fill: shade(principal, -0.12) })
+      lista.push({ pts: elipse(bx - 1 * e, by, plano.caudaL * 0.55, plano.caudaL * 0.5, 0, 10), fill: shade(principal, -0.12) })
       return
     }
     if (plano.cauda === 'pompom') {
       const [bx, by] = noCorpo(-0.94, -0.1)
       const bal = Math.sin(q.caudaOnda) * q.caudaAmp
-      lista.push({ pts: elipse(bx - 2 + bal, by - 1, plano.caudaL * 0.66, plano.caudaL * 0.62, 0, 12), fill: claro })
+      lista.push({ pts: elipse(bx - 2 * e + bal, by - 1 * e, plano.caudaL * 0.66, plano.caudaL * 0.62, 0, 12), fill: claro })
       return
     }
     if (plano.cauda === 'leque') {
@@ -1115,24 +1184,39 @@ export function desenharRig(p, plano, q, cores, extra = {}) {
     // O sinal de `caudaAng` importa: positivo ABAIXA (rabo entre as pernas, no
     // triste e no doente), negativo LEVANTA (correndo, brincando). Com o sinal
     // trocado, o bichinho corria de rabo caído e ficava triste de rabo em pé.
-    let a = Math.PI * 0.80 + q.caudaAng
+    // A CAUDA SAIA QUASE EM PE e ia ficando mais vertical a cada elo: comecava
+    // a 144 graus e o `a -= 0,075` de cada segmento a levava pra perto dos 119.
+    // Uma peca grossa, comprida e quase vertical passando por cima das costas
+    // nao le como cauda — le como braco levantado, e era isso que dava ao gato
+    // aquele ar de bicho em pe. Agora ela sai quase pra tras (166 graus) e SO A
+    // PONTA sobe, que e a curva de uma cauda de verdade.
+    let a = Math.PI * 0.92 + q.caudaAng
     for (let i = 0; i < n; i++) {
-      a -= 0.075 - Math.sin(q.caudaOnda - i * 0.7) * q.caudaAmp * 0.3
+      // A curvatura CRESCE do inicio pro fim: os primeiros elos quase nao
+      // viram (a cauda sai reta pra tras) e os ultimos e que levantam.
+      a -= (0.02 + 0.10 * (i / n)) - Math.sin(q.caudaOnda - i * 0.7) * q.caudaAmp * 0.3
       const nx = x + Math.cos(a) * passoSeg
       const ny = y - Math.sin(a) * passoSeg
       // A cauda AFINA de verdade da base pra ponta. Antes ela mantinha quase a
       // mesma grossura e virava um cabo saindo do bicho.
-      const r1 = Math.max(1.0, plano.corpoA * 0.22 * (1 - i / (n + 0.6)))
-      const r2 = Math.max(0.8, plano.corpoA * 0.22 * (1 - (i + 1) / (n + 0.6)))
+      // 0,22 da altura do corpo e a grossura de uma PERNA. Cauda de gato e
+      // fina; grossa assim, ela competia com o corpo e reforcava a leitura de
+      // "braco". Os pisos tambem passaram a acompanhar a escala, senao em
+      // resolucao alta a ponta virava um fio.
+      const r1 = Math.max(1.0 * e, plano.corpoA * 0.15 * (1 - i / (n + 0.9)))
+      const r2 = Math.max(0.8 * e, plano.corpoA * 0.15 * (1 - (i + 1) / (n + 0.9)))
       lista.push({ pts: capsula(x, y, nx, ny, r1, r2), fill: shade(principal, -0.13) })
       if (plano.cauda === 'espinho' && i > 0) {
-        lista.push({ pts: [[nx, ny - r2 - 3.5], [nx - 2.5, ny - r2 + 0.5], [nx + 2.5, ny - r2 + 0.5]], fill: pal.detalhe })
+        lista.push({
+          pts: [[nx, ny - r2 - 3.5 * e], [nx - 2.5 * e, ny - r2 + 0.5 * e], [nx + 2.5 * e, ny - r2 + 0.5 * e]],
+          fill: pal.detalhe,
+        })
       }
       x = nx
       y = ny
     }
     if (plano.cauda === 'longa') {
-      corpo.push({ pts: elipse(x, y, 2.3, 2.3, 0, 8), fill: pal.marca })  // pontinha
+      corpo.push({ pts: elipse(x, y, 2.3 * e, 2.3 * e, 0, 8), fill: pal.marca })  // pontinha
     }
   }
 
@@ -1170,8 +1254,8 @@ export function desenharRig(p, plano, q, cores, extra = {}) {
     perna(corpo, quadril, q.pes[2], shade(principal, -0.09), -1, false)
     peFrente = perna(corpo, ombro, q.pes[3], principal, 1, false)
   } else {
-    perna(corpo, [ombro[0] - 2, ombro[1]], q.pes[0], shade(pal.detalhe, -0.2), 1, true)
-    peFrente = perna(corpo, [ombro[0] + 2, ombro[1]], q.pes[1], pal.detalhe, 1, true)
+    perna(corpo, [ombro[0] - 2 * e, ombro[1]], q.pes[0], shade(pal.detalhe, -0.2), 1, true)
+    peFrente = perna(corpo, [ombro[0] + 2 * e, ombro[1]], q.pes[1], pal.detalhe, 1, true)
   }
 
   // ORELHA TEM CAMADA PRÓPRIA, e isso não é detalhe de organização.
@@ -1191,8 +1275,18 @@ export function desenharRig(p, plano, q, cores, extra = {}) {
     for (const lado of [-1, 1]) {
       const [bx, by] = naCabeca(lado * 0.5, -0.74)
       const alt = plano.cabecaA * 0.74 * plano.orelhaF
-      const pt = [bx + Math.sin(oa) * alt * lado * 0.4 - lado * 1.5, by - Math.cos(oa) * alt]
-      orelhas.push({ pts: [[bx - 4.2, by + 3], pt, [bx + 4.2, by + 2]], fill: lado < 0 ? shade(principal, -0.12) : principal })
+      const pt = [bx + Math.sin(oa) * alt * lado * 0.4 - lado * 1.5 * e, by - Math.cos(oa) * alt]
+      // A BASE DA ORELHA MEDIA 8,4 px FIXOS. Enquanto a caixa foi sempre 128x108
+      // isso passou; desenhando o bichinho em resolucao maior, a cabeca triplica
+      // e a orelha continua com a mesma base — vira uma agulha. E agulha some no
+      // contorno: o traco (que agora acompanha a escala) e pintado em quatro
+      // copias deslocadas, e numa peca fina elas cobrem quase todo o miolo. O
+      // preenchimento so sobra num fiozinho no meio, e a PONTA, que afina ate
+      // zero, fica so de traco. Era esse o "orelha apagada na ponta".
+      orelhas.push({
+        pts: [[bx - 4.2 * e, by + 3 * e], pt, [bx + 4.2 * e, by + 2 * e]],
+        fill: lado < 0 ? shade(principal, -0.12) : principal,
+      })
     }
   } else if (plano.orelha === 'caida') {
     for (const lado of [-1, 1]) {
@@ -1207,11 +1301,16 @@ export function desenharRig(p, plano, q, cores, extra = {}) {
   } else if (plano.orelha === 'longa') {
     for (const lado of [-1, 1]) {
       const [bx, by] = naCabeca(lado * 0.3, -0.78)
-      const comp = plano.cabecaA * 1.95 * plano.orelhaF
+      // 1,95x a altura da cabeca era orelha de lebre, nao de coelho de desenho:
+      // ela dominava o bicho inteiro e puxava o olhar pra longe do rosto.
+      const comp = plano.cabecaA * 1.45 * plano.orelhaF
       const incl = oa + lado * 0.16
+      // A ponta e quase tao larga quanto a base (0,17 -> 0,15). Afinando muito,
+      // ela desaparecia dentro do proprio contorno — o mesmo defeito da orelha
+      // de gato, so que aqui em cima de uma peca comprida, onde da mais na vista.
       orelhas.push({
         pts: capsula(bx, by, bx + Math.sin(incl) * comp, by - Math.cos(incl) * comp,
-          plano.cabecaL * 0.17, plano.cabecaL * 0.14),
+          plano.cabecaL * 0.19, plano.cabecaL * 0.15),
         fill: lado < 0 ? shade(principal, -0.14) : principal,
       })
     }
@@ -1224,7 +1323,10 @@ export function desenharRig(p, plano, q, cores, extra = {}) {
     for (const lado of [-1, 1]) {
       const [bx, by] = naCabeca(lado * 0.46, -0.76)
       const alt = plano.cabecaA * 0.58 * plano.orelhaF
-      orelhas.push({ pts: [[bx - 2.4, by + 2], [bx + 1 + lado, by - alt], [bx + 3, by + 1.5]], fill: pal.detalhe })
+      orelhas.push({
+        pts: [[bx - 2.4 * e, by + 2 * e], [bx + (1 + lado) * e, by - alt], [bx + 3 * e, by + 1.5 * e]],
+        fill: pal.detalhe,
+      })
     }
   }
 
@@ -1232,7 +1334,7 @@ export function desenharRig(p, plano, q, cores, extra = {}) {
   corpo.push({ pts: elipse(cabecaCX, cabecaCY, plano.cabecaL / 2, plano.cabecaA / 2, ca, 16), fill: principal })
   const [fx, fy] = naCabeca(0.8, 0.34)
   if (plano.bico) {
-    corpo.push({ pts: [[fx - 2, fy - 3.5], [fx + plano.focinho, fy + 0.4], [fx - 2, fy + 3.5]], fill: pal.detalhe })
+    corpo.push({ pts: [[fx - 2 * e, fy - 3.5 * e], [fx + plano.focinho, fy + 0.4 * e], [fx - 2 * e, fy + 3.5 * e]], fill: pal.detalhe })
   } else if (plano.focinho > 1.2) {
     // Focinho CURTO e colado no crânio. Comprido e projetado é bico de réptil.
     corpo.push({
@@ -1255,13 +1357,13 @@ export function desenharRig(p, plano, q, cores, extra = {}) {
   p.fillPoly(elipse(bax, bay, corpoL * 0.62, corpoA * 0.4, ang, 14), claro)
   const [cox, coy] = noCorpo(0.08, -0.5)
   p.ditherPoly(elipse(cox, coy, corpoL * 0.55, corpoA * 0.3, ang, 14), mix(principal, '#fffaf2', 0.3), 2)
-  p.ditherPoly(elipse(cabecaCX + 1, cabecaCY - plano.cabecaA * 0.26, plano.cabecaL * 0.32, plano.cabecaA * 0.2, ca, 12),
+  p.ditherPoly(elipse(cabecaCX + 1 * e, cabecaCY - plano.cabecaA * 0.26, plano.cabecaL * 0.32, plano.cabecaA * 0.2, ca, 12),
     mix(principal, '#fffaf2', 0.3), 2)
 
   if (plano.marca === 'escamas') {
     for (let i = -2; i <= 2; i++) {
       const [ex, ey] = noCorpo(i * 0.3, 0.34)
-      p.fillPoly(elipse(ex, ey, 2.3, 1.5, 0, 8), pal.marca)
+      p.fillPoly(elipse(ex, ey, 2.3 * e, 1.5 * e, 0, 8), pal.marca)
     }
   } else if (plano.marca === 'manchas') {
     const [mx, my] = noCorpo(-0.36, -0.12)
@@ -1291,14 +1393,49 @@ export function desenharRig(p, plano, q, cores, extra = {}) {
       const incl = oa + lado * 0.16
       const ex = bx + Math.sin(incl) * comp
       const ey = by - Math.cos(incl) * comp
-      p.fillPoly(capsula(bx + (ex - bx) * 0.35, by + (ey - by) * 0.35, ex, ey, 1.4 * e, 1.1 * e), '#e8879b')
+      // O rosa PARA ANTES DA PONTA (vai de 30% a 76% da orelha) e e estreito.
+      // Indo ate a ponta, ele cobria justamente a parte que ja tinha pouco
+      // preenchimento e a orelha virava uma listra rosa com a borda apagada.
+      // Ficar dentro deixa a orelha com miolo, borda e ponta cheia.
+      const rosaR = plano.cabecaL * 0.075
+      p.fillPoly(
+        capsula(
+          bx + (ex - bx) * 0.30, by + (ey - by) * 0.30,
+          bx + (ex - bx) * 0.76, by + (ey - by) * 0.76,
+          rosaR, rosaR * 0.8,
+        ),
+        '#e8879b',
+      )
     }
   }
 
   // ------------------------------------------------------- rosto
-  const [oxE, oyE] = naCabeca(0.1, -0.2)
-  const [oxD, oyD] = naCabeca(0.58, -0.18)
-  const r = Math.max(1.2 * e, 2.3 * plano.olho * lerp(0.9, 1, plano.g))
+  //
+  // OS OLHOS NAO PODEM SE CRUZAR, e por isso a posicao deles sai do TAMANHO.
+  //
+  // Eles ficavam em duas fracoes fixas da cabeca (0.1 e 0.58) enquanto o raio
+  // vinha de outra conta, que nao sabia da primeira. Na cabeca de filhote — que
+  // e proporcionalmente MAIOR e ainda por cima tem o olho aumentado, que e o
+  // que da cara de bebe — os dois brancos se encontravam no meio da cara e
+  // viravam UMA mancha branca com dois pontos dentro. Era isso o "olhos se
+  // sobrepondo", e acontecia em toda escala: no gato adulto os brancos ja
+  // encostavam, no filhote se cruzavam fundo.
+  //
+  // Agora existe uma conta so: o raio manda, a meia-distancia entre os centros
+  // e o raio do branco mais uma folga, e o teto garante que o par inteiro cabe
+  // na testa. Assim eles nunca se cruzam, cresca o olho o quanto crescer — e o
+  // filhote continua de olho grande, so que mais afastado, que e exatamente o
+  // que se ve num rosto de bebe.
+  const FOLGA_OLHOS = 1.2 * e          // o vao entre os dois brancos
+  const testa = plano.cabecaL * 0.80   // o quanto da cabeca o par pode ocupar
+  const rQuerido = Math.max(1.2 * e, 2.3 * plano.olho * lerp(0.9, 1, plano.g))
+  // 2 brancos + o vao tem que caber em `testa`; o branco mede r + 0.9e
+  const rTeto = (testa - FOLGA_OLHOS) / 4 - 0.9 * e
+  const r = Math.max(1.0 * e, Math.min(rQuerido, rTeto))
+  const meiaOlhos = r + 0.9 * e + FOLGA_OLHOS / 2
+  const dFx = meiaOlhos / (plano.cabecaL / 2)
+  const [oxE, oyE] = naCabeca(0.16 - dFx, -0.2)
+  const [oxD, oyD] = naCabeca(0.16 + dFx, -0.18)
   const olho = (x, y) => {
     if (extra.doente) {
       grossa(p, x - r, y - r, x + r, y + r, traco)
@@ -1308,8 +1445,13 @@ export function desenharRig(p, plano, q, cores, extra = {}) {
     if (q.olhos < 0.25) { p.rect(x - r, y, r * 2, 1.4 * e, OUT); return }
     if (q.olhos < 0.75) { p.rect(x - r, y - r * 0.4, r * 2, r * 1.1, OUT); return }
     p.fillPoly(elipse(x, y, r + 0.9 * e, r + 1.1 * e, 0, 10), '#ffffff')
-    p.fillPoly(elipse(x, y + 0.3 * e, r * 0.78, r * 0.95, 0, 10), OUT)
-    p.rect(x - r * 0.5, y - r * 0.7, 1.6 * e, 1.6 * e, '#ffffff')   // brilho: o olhar acende
+    // A PUPILA anda dentro do branco, na direcao do dedo. E o que separa "tem
+    // dois olhos desenhados" de "esta olhando pra mim" — e o passo que faz o
+    // toque parecer conversa em vez de botao.
+    const pdx = mira ? mira.dx * r * 0.42 : 0
+    const pdy = mira ? mira.dy * r * 0.34 : 0
+    p.fillPoly(elipse(x + pdx, y + 0.3 * e + pdy, r * 0.78, r * 0.95, 0, 10), OUT)
+    p.rect(x + pdx - r * 0.5, y + pdy - r * 0.7, 1.6 * e, 1.6 * e, '#ffffff')   // brilho: o olhar acende
   }
   olho(oxE, oyE)
   olho(oxD, oyD)

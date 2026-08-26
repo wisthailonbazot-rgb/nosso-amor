@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
-import { Painter } from './pixel'
+import { Painter, mix } from './pixel'
+import { desenharCena, desenharFrente, periodoDe } from './petCena'
 import { cenaDoItem } from './petProps'
 import {
   OUT, clipeDe, crescimentoDe, planoDe, poseEm, desenharRig,
@@ -60,7 +61,7 @@ export function acaoDe(pet) {
  * Com a escala, o motor desenha DIRETO no tamanho final: menos pixels, porém
  * todos escolhidos pelo desenho, e não pela conta de redução.
  */
-export function drawPet(p, pet, tick, escala) {
+export function drawPet(p, pet, tick, escala, enquadrar) {
   const t = tick || 0
   // A escala sai do PRÓPRIO canvas quando ninguém manda uma. Uma fonte só, de
   // propósito: já aconteceu de eu trocar o tamanho do canvas de rascunho da
@@ -71,16 +72,50 @@ export function drawPet(p, pet, tick, escala) {
   if (escala == null) escala = (p.h || 108) / 108
   const cores = pet.colors?.length >= 3 ? pet.colors : PADRAO
   const plano = planoDe(pet.species || 'gato', crescimentoDe(pet), escala)
+  // ENQUADRAMENTO: onde ele pisa e onde fica o meio dele.
+  //
+  // Por padrao as ancoras saem da caixa de referencia (x=64, chao=92, vezes a
+  // escala) — e isso vale pro comodo e pra corrida, onde o bichinho e colado
+  // dentro de uma cena que ja existe. Na tela DELE nao serve: pra ele aparecer
+  // grande, a escala tem que subir, e a escala subindo joga o x=64*escala pra
+  // fora do canvas. Quem manda ali e o palco, entao o palco passa as ancoras.
+  if (enquadrar) {
+    if (enquadrar.cx != null) plano.cx = enquadrar.cx
+    if (enquadrar.chao != null) plano.chao = enquadrar.chao
+  }
   const acao = acaoDe(pet)
   const nome = clipeDe(acao, plano)
   const pose = poseEm(acao, plano, t + (pet.fase || 0), pet.velocidade || 1)
 
   const marcos = desenharRig(p, plano, pose, cores, {
     doente: !!pet.sick && nome !== 'dormir',
-    bochechas: pet.mood === 'feliz' && !pet.sick,
+    bochechas: (pet.mood === 'feliz' || pet.carinho > 0) && !pet.sick,
+    // Pra onde ele esta olhando. Vem da tela (o dedo), nao da animacao.
+    mirar: pet.mirar || null,
   })
 
   vestir(p, pet, marcos, cores, plano)
+
+  // Enquanto a mao passa nele, sobem coracoes do lombo. E o retorno imediato do
+  // carinho: sem ele, arrastar o dedo em cima do bichinho nao parece fazer nada,
+  // e a pessoa desiste antes de o carinho valer.
+  if (pet.carinho > 0) {
+    const [lx, ly] = marcos.noCorpo(0, -0.6)
+    const n = 3
+    for (let i = 0; i < n; i++) {
+      const fase = ((t / 900) + i / n) % 1
+      const cx2 = lx + Math.sin(fase * 6 + i * 2) * plano.corpoL * 0.28
+      const cy2 = ly - fase * plano.corpoA * 2.2
+      const tam = Math.max(1.5, plano.corpoA * 0.13) * (1 - fase * 0.35) * Math.min(1, pet.carinho)
+      p.fillPoly(
+        [
+          [cx2, cy2 + tam], [cx2 - tam, cy2], [cx2 - tam * 0.5, cy2 - tam * 0.8],
+          [cx2, cy2 - tam * 0.25], [cx2 + tam * 0.5, cy2 - tam * 0.8], [cx2 + tam, cy2],
+        ],
+        '#e8879b',
+      )
+    }
+  }
   extras(p, nome, t, marcos, cores, plano)
 
   // O objeto do item que ele esta usando de verdade (o osso, o potinho, a
@@ -89,16 +124,39 @@ export function drawPet(p, pet, tick, escala) {
   // O objeto do item só é desenhado no tamanho cheio: ele foi escrito em pixel
   // fixo (`petProps.js`) e, reduzido, viraria três pontinhos sem leitura.
   const cena = escala > 0.8 ? cenaDoItem(pet.prop) : null
-  if (cena) cena.desenhar(p, t, 0)
+  if (cena) {
+    // O objeto do item e escrito na caixa de 128x108 (`petProps.js`), com
+    // numero cru: `p.solid(58, 88, ...)` quer dizer "ao lado do focinho" so
+    // enquanto o canvas TEM 128 de largura. Desenhando o bichinho maior, esses
+    // numeros passaram a apontar pro canto de cima do canvas — o potinho ficava
+    // longe do bicho, sem erro nenhum pra denunciar.
+    //
+    // Em vez de reescrever as treze cenas, o desenho delas entra numa
+    // transformacao que leva a caixa de 128x108 pras ancoras de verdade. Assim
+    // `58, 88` volta a querer dizer o que sempre quis.
+    const ctx = p.ctx
+    ctx.save()
+    ctx.translate(plano.cx - 64 * escala, plano.chao - 92 * escala)
+    ctx.scale(escala, escala)
+    cena.desenhar(p, t, 0)
+    ctx.restore()
+  }
 
   // Aviso desenhado, sem emoji.
   if (pet.sick || pet.mess_count > 2) {
-    const e = escala
-    const tri = [[103 * e, 10 * e], [115 * e, 30 * e], [91 * e, 30 * e]]
+    // Preso ao CANTO DO CANVAS, e nao a caixa de 128: com o bichinho grande, as
+    // coordenadas antigas jogavam o aviso pra fora da tela.
+    // O tamanho sai do CANVAS, nao da escala do bicho. Preso a escala, ele
+    // crescia junto com o bichinho e virava uma placa de transito tapando a
+    // cena — aviso e aviso, nao e o assunto da tela.
+    const g = Math.max(6, p.w * 0.045)
+    const ax = p.w - g * 1.5
+    const ay = g * 0.7
+    const tri = [[ax, ay], [ax + g, ay + g * 1.7], [ax - g, ay + g * 1.7]]
     p.fillPoly(tri, '#f2b33d')
     p.strokePoly(tri, OUT)
-    p.rect(102 * e, 17 * e, Math.max(1, 2 * e), Math.max(2, 7 * e), OUT)
-    p.rect(102 * e, 26 * e, Math.max(1, 2 * e), Math.max(1, 2 * e), OUT)
+    p.rect(ax - g * 0.09, ay + g * 0.6, Math.max(1, g * 0.18), Math.max(2, g * 0.6), OUT)
+    p.rect(ax - g * 0.09, ay + g * 1.35, Math.max(1, g * 0.18), Math.max(1, g * 0.18), OUT)
   }
 }
 
@@ -141,7 +199,11 @@ function vestir(p, pet, m, cores, plano) {
     // Preso à cabeça isso não tem como acontecer: coleira fica embaixo do
     // queixo em qualquer espécie e em qualquer pose, porque acompanha a mesma
     // rotação que o rosto.
-    const centro = m.naCabeca(-0.06, 1.02)
+    // 1,02 e a BORDA de baixo da cabeca — e a borda de baixo de uma cabeca
+    // grande e ainda a bochecha. Na tela pequena isso passava; desenhado
+    // grande, a coleira aparecia atravessada no focinho de todas as especies.
+    // 1,38 poe ela abaixo do queixo, no pescoco, que e onde coleira fica.
+    const centro = m.naCabeca(-0.06, 1.38)
     const o = m.naCabeca(0, 0)
     const b = m.naCabeca(0, 1)
     const dc = Math.hypot(b[0] - o[0], b[1] - o[1]) || 1
@@ -158,8 +220,8 @@ function vestir(p, pet, m, cores, plano) {
     const gx = (cb[0] - co[0]) / db
     const gy = (cb[1] - co[1]) / db
 
-    const meia = Math.max(3, m.cabecaL * 0.32)
-    const esp = Math.max(1.5, m.cabecaA * 0.1)
+    const meia = Math.max(3, m.cabecaL * 0.26)
+    const esp = Math.max(1.5, m.cabecaA * 0.085)
     const cx = centro[0]
     const cy = centro[1]
     const cor = neck.includes('gravata') ? '#e8879b' : '#5bb9e8'
@@ -169,6 +231,22 @@ function vestir(p, pet, m, cores, plano) {
       [cx - px * meia + ux * esp, cy - py * meia + uy * esp],
       [cx + px * meia + ux * esp, cy + py * meia + uy * esp],
     ], cor)
+    // Faixa clara em cima e fivela no meio. Sao dois detalhes que so existem
+    // porque agora ha pixel pra eles: chapada, a coleira lia como uma etiqueta
+    // de papel colada no bicho.
+    p.fillPoly([
+      [cx + px * meia * 0.86 - ux * esp * 0.9, cy + py * meia * 0.86 - uy * esp * 0.9],
+      [cx - px * meia * 0.86 - ux * esp * 0.9, cy - py * meia * 0.86 - uy * esp * 0.9],
+      [cx - px * meia * 0.86 - ux * esp * 0.1, cy - py * meia * 0.86 - uy * esp * 0.1],
+      [cx + px * meia * 0.86 - ux * esp * 0.1, cy + py * meia * 0.86 - uy * esp * 0.1],
+    ], mix(cor, '#ffffff', 0.4))
+    const fiv = Math.max(1.2, esp * 0.8)
+    p.fillPoly([
+      [cx + px * fiv - ux * esp * 1.15, cy + py * fiv - uy * esp * 1.15],
+      [cx - px * fiv - ux * esp * 1.15, cy - py * fiv - uy * esp * 1.15],
+      [cx - px * fiv + ux * esp * 1.15, cy - py * fiv + uy * esp * 1.15],
+      [cx + px * fiv + ux * esp * 1.15, cy + py * fiv + uy * esp * 1.15],
+    ], '#f2c53d')
 
     const bx = cx + gx * esp
     const by = cy + gy * esp
@@ -398,6 +476,12 @@ export default function PetCanvas({ pet, onPoke }) {
   // a arvore e reiniciaria o laco de desenho no meio da animacao — o bichinho
   // daria um tranco justamente no quadro em que devia reagir.
   const reacao = useRef({ ate: 0, acao: null })
+  // Pra onde ele olha, e ha quanto tempo a mao passou por ele. Os dois vivem
+  // FORA do React de proposito: sao atualizados a cada movimento do dedo, e um
+  // `setState` por movimento re-renderizaria a arvore dezenas de vezes por
+  // segundo, reiniciando o laco de desenho no meio da animacao.
+  const olhar = useRef({ dx: 0, dy: 0, ate: 0 })
+  const afago = useRef({ forca: 0, andado: 0, ultimo: 0, premiado: 0 })
 
   useEffect(() => {
     let frame = 0
@@ -405,11 +489,52 @@ export default function PetCanvas({ pet, onPoke }) {
     const canvas = ref.current
     const painter = new Painter(canvas)
     painter.resize(128 * res, 108 * res)
+    // O bichinho ocupa o PALCO, e nao um cantinho dele.
+    //
+    // Com as ancoras da caixa de referencia ele saia com o tamanho relativo de
+    // sempre: um coelho filhote dava uns 26% da largura da tela, perdido no meio
+    // do quadro. Na referencia que o dono mandou (Kinectimals) o filhote ENCHE a
+    // tela — e nao e vaidade de enquadramento: e o que faz dar vontade de
+    // encostar nele. O 1,5 aumenta sem igualar filhote e adulto, entao crescer
+    // continua sendo visivel.
+    // A escala sai do TAMANHO DO BICHO, e nao de um numero escolhido a dedo.
+    //
+    // Um fator fixo serve pra um e estoura pro outro: a orelha do coelho mede
+    // quase tres cabecas, o dragao tem o corpo mais comprido de todos. Com 1,5
+    // fixo, o coelho saia com as orelhas cortadas em cima e o dragao com a
+    // cauda pra fora. Aqui a altura e a largura do bicho sao estimadas a partir
+    // do plano do corpo, e a escala e a maior que ainda cabe no palco — entao
+    // cada especie enche a tela ate onde da, sozinha.
+    const medida = planoDe(pet.species || 'gato', crescimentoDe(pet), 1)
+    const alturaU = medida.pernaA + medida.corpoA * 1.15
+      + medida.cabecaA * (medida.orelha === 'longa' ? 2.15 : 1.5)
+    const larguraU = medida.corpoL + medida.caudaL * 0.8 + medida.cabecaL
+    const escalaCena = Math.min((painter.h * 0.74) / alturaU, (painter.w * 0.92) / larguraU)
     const paint = (t) => {
       painter.clear()
       const r = reacao.current
-      const atual = r.ate > t ? { ...pet, action: r.acao } : pet
-      drawPet(painter, atual, t, res)
+      const ol = olhar.current
+      // O olhar volta ao normal sozinho depois que o dedo sai: ficar congelado
+      // olhando pro canto e pior do que nao olhar.
+      const vivo = ol.ate > Date.now()
+      const af = afago.current
+      af.forca = Math.max(0, af.forca - 0.02)
+      const atual = {
+        ...(r.ate > t ? { ...pet, action: r.acao } : pet),
+        mirar: vivo ? { dx: ol.dx, dy: ol.dy } : null,
+        carinho: af.forca,
+      }
+      const enq = { cx: painter.w / 2, chao: painter.h * 0.84 }
+      desenharCena(painter, {
+        t,
+        chao: enq.chao,
+        periodo: periodoDe(new Date().getHours()),
+        triste: !!pet.sick,
+      })
+      drawPet(painter, atual, t, escalaCena, enq)
+      // A grama da frente entra DEPOIS: o bichinho passa atras dela, e e essa
+      // camada que tira a cena do "figurinha colada no vidro".
+      desenharFrente(painter, { t, periodo: periodoDe(new Date().getHours()) })
     }
     const loop = (t) => {
       if (!alive) return
@@ -439,9 +564,67 @@ export default function PetCanvas({ pet, onPoke }) {
    * esta em descanso. O que reage depende de ONDE se toca, porque cocar a
    * barriga e mexer na cabeca nao sao o mesmo carinho.
    */
+  /** Onde o dedo esta, em -1..1, medido do meio do palco. */
+  function direcao(e) {
+    const caixa = ref.current.getBoundingClientRect()
+    const dx = ((e.clientX - caixa.left) / caixa.width - 0.5) * 2
+    // O rosto fica no terco de cima; medir do meio do quadro faria ele olhar
+    // pra baixo o tempo todo.
+    const dy = ((e.clientY - caixa.top) / caixa.height - 0.38) * 2
+    return { dx: Math.max(-1, Math.min(1, dx)), dy: Math.max(-1, Math.min(1, dy)) }
+  }
+
+  /**
+   * O dedo passeando: ele acompanha com o olhar, e ARRASTAR EM CIMA DELE e
+   * carinho.
+   *
+   * O afago e por DISTANCIA percorrida, nao por tempo parado — e a diferenca
+   * entre "a mao esta encostada" e "a mao esta fazendo carinho", que e
+   * exatamente o gesto do Kinectimals. A cada trecho andado ele reage; e de
+   * tanto em tanto o carinho vira o carinho DE VERDADE, o do servidor, que tem
+   * o descanso de sempre (decisao travada: carinho nao pode ser botao sem
+   * consequencia). A recusa por descanso nao vira erro — a reacao continua.
+   */
+  function mover(e) {
+    if (!ref.current) return
+    const d = direcao(e)
+    olhar.current = { ...d, ate: Date.now() + 2600 }
+    const apertado = e.buttons > 0 || e.pointerType === 'touch'
+    if (!apertado) return
+    const af = afago.current
+    const agora = performance.now()
+    const dist = af.ultimo ? Math.hypot(e.clientX - af.px, e.clientY - af.py) : 0
+    af.px = e.clientX
+    af.py = e.clientY
+    af.ultimo = agora
+    if (dist > 40) return   // pulo de dedo (ou primeiro toque): nao conta
+    af.andado += dist
+    if (af.andado > 30) {
+      af.andado = 0
+      af.forca = Math.min(1.6, af.forca + 0.5)
+      if (!pet.sick) reacao.current = { ate: agora + 1200, acao: 'feliz' }
+      // O carinho de verdade nao e a cada trechinho: seria uma chuva de
+      // chamadas no servidor enquanto o dedo anda.
+      if (agora - af.premiado > 4000) {
+        af.premiado = agora
+        window.casalSound?.('pet')
+        onPoke?.('carinho')
+      }
+    }
+  }
+
+  function soltar() {
+    afago.current.ultimo = 0
+    afago.current.andado = 0
+  }
+
   function tocar(e) {
     const canvas = ref.current
     if (!canvas) return
+    olhar.current = { ...direcao(e), ate: Date.now() + 2600 }
+    afago.current.px = e.clientX
+    afago.current.py = e.clientY
+    afago.current.ultimo = performance.now()
     const caixa = canvas.getBoundingClientRect()
     const y = (e.clientY - caixa.top) / caixa.height
     const acao = pet.sick
@@ -462,6 +645,10 @@ export default function PetCanvas({ pet, onPoke }) {
       className="pet-canvas"
       style={{ width: 128 * res * zoom, height: 108 * res * zoom }}
       onPointerDown={tocar}
+      onPointerMove={mover}
+      onPointerUp={soltar}
+      onPointerCancel={soltar}
+      onPointerLeave={soltar}
       aria-label={`${pet.species_name || 'bichinho'} ${pet.mood || ''}`}
     />
   )

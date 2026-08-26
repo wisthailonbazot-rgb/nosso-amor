@@ -2062,3 +2062,8 @@ button:disabled,
   text-align: center;
   line-height: 1.2;
 }
+
+/* A aba de escala grande da bancada: um por linha, no tamanho de verdade. */
+.lab-grid-grande { grid-template-columns: 1fr; }
+.lab-grid-grande canvas { width: 100%; height: auto; image-rendering: pixelated; }
+.lab-fora-de-escala { outline: 3px solid var(--danger); border-radius: 12px; }

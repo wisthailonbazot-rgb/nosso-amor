@@ -85,6 +85,40 @@ function countPainted(width, height, paint) {
   return painted
 }
 
+/**
+ * A caixa que o desenho realmente ocupa, em FRACAO do canvas.
+ *
+ * Serve pra comparar o mesmo bicho desenhado em escalas diferentes: se o motor
+ * estiver certo, ele ocupa a mesma fatia do quadro nas duas. Quando alguma
+ * medida nao acompanha a escala (numero cru em pixel, contorno de espessura
+ * fixa, pose multiplicada duas vezes), essa fatia muda — e e assim que o
+ * defeito aparece sem ninguem precisar olhar.
+ */
+function caixaPintada(width, height, paint) {
+  const canvas = document.createElement('canvas')
+  const painter = new Painter(canvas)
+  painter.resize(width, height)
+  painter.clear()
+  paint(painter)
+  const data = painter.ctx.getImageData(0, 0, width, height).data
+  let x0 = width
+  let y0 = height
+  let x1 = -1
+  let y1 = -1
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (data[(y * width + x) * 4 + 3] > 8) {
+        if (x < x0) x0 = x
+        if (x > x1) x1 = x
+        if (y < y0) y0 = y
+        if (y > y1) y1 = y
+      }
+    }
+  }
+  if (x1 < 0) return null
+  return { larg: (x1 - x0 + 1) / width, alt: (y1 - y0 + 1) / height }
+}
+
 function Tile({ label, width, height, paint, animate = false }) {
   const ref = useRef(null)
   const [painted, setPainted] = useState(null)
@@ -149,6 +183,7 @@ export default function ShapeLab() {
     { key: 'animacoes', name: `Animações (${LAB_SPECIES.length * NOMES_CLIPES.length})` },
     { key: 'crescimento', name: `Crescimento (${LAB_SPECIES.length * LAB_CRESCIMENTO.length})` },
     { key: 'vestidos', name: `Vestidos (${LAB_SPECIES.length * LAB_ACESSORIOS.length})` },
+    { key: 'escala', name: `Escala grande (${LAB_SPECIES.length})` },
     { key: 'itens', name: `Itens (${PET_ICON_CODES.length})` },
     { key: 'figurinhas', name: `Figurinhas (${STICKER_CODES.length})` },
     { key: 'cores', name: 'Acabamentos' },
@@ -421,6 +456,112 @@ export default function ShapeLab() {
               </div>
             </div>
           ))}
+        </>
+      )}
+
+      {aba === 'escala' && (
+        <>
+          {/* A ABA QUE FALTAVA, e a falta dela custou caro.
+
+              Todo o resto da bancada desenha na caixa de referencia (128x108,
+              escala 1). Quando a tela do bichinho passou a desenhar GRANDE, a
+              bancada continuou aprovando tudo — porque uma pilha de defeitos so
+              existe quando a escala e diferente de 1: medida escrita em pixel
+              cru que nao acompanha, contorno que vira fio, e principalmente a
+              escala que era aplicada duas vezes nas poses (1x1 continua 1, e por
+              isso ninguem via).
+
+              Aqui cada especie e desenhada no MESMO tamanho em que ela aparece
+              na tela do bichinho. E aqui que se olha depois de mexer no rig. */}
+          <p className="muted small">
+            Cada bicho no tamanho em que ele aparece na tela dele. Defeito de
+            escala só existe fora do 1× — é nesta aba que ele aparece.
+          </p>
+          <div className="lab-grid lab-grid-grande">
+            {LAB_SPECIES.map(([code, colors]) => {
+              // O MESMO bicho, medido nas duas escalas. Ele tem que ocupar a
+              // mesma fracao do quadro nas duas — se nao ocupa, alguma medida
+              // ficou presa em pixel e nao acompanhou.
+              // A medida e feita ANDANDO, e no meio do passo.
+              //
+              // Em `parado` os pes ficam quase no lugar, e era justamente nos
+              // deslocamentos de pose que estava a escala aplicada duas vezes —
+              // medir parado deixaria o defeito passar de novo. Andar poe perna,
+              // corpo e cabeca todos fora da posicao neutra, que e onde o erro
+              // aparece.
+              const pintar = (escalaDe) => (p) => {
+                const pet = { species: code, colors, stage: 'adulto', growth: 1,
+                  mood: 'feliz', accessories: {}, mess_count: 0, action: 'andar' }
+                const m = planoDe(code, 1, 1)
+                const aU = m.pernaA + m.corpoA * 1.15
+                  + m.cabecaA * (m.orelha === 'longa' ? 2.15 : 1.5)
+                const lU = m.corpoL + m.caudaL * 0.8 + m.cabecaL
+                const esc = escalaDe(p)
+                drawPet(p, pet, 700, esc, { cx: p.w / 2, chao: p.h * 0.84 })
+              }
+              const ajustar = (p) => {
+                const m = planoDe(code, 1, 1)
+                const aU = m.pernaA + m.corpoA * 1.15
+                  + m.cabecaA * (m.orelha === 'longa' ? 2.15 : 1.5)
+                const lU = m.corpoL + m.caudaL * 0.8 + m.cabecaL
+                return Math.min((p.h * 0.74) / aU, (p.w * 0.92) / lU)
+              }
+              const pequeno = caixaPintada(128, 108, pintar(ajustar))
+              const medio = caixaPintada(256, 216, pintar(ajustar))
+              const grande = caixaPintada(384, 324, pintar(ajustar))
+              const fmt = (b) => b ? `${(b.larg*100).toFixed(1)}x${(b.alt*100).toFixed(1)}` : '-'
+              const detalhe = `1x ${fmt(pequeno)} | 2x ${fmt(medio)} | 3x ${fmt(grande)}`
+              // A conferencia e entre 2x e 3x, e o 1x fica so pra olhar.
+              //
+              // Nao e o teste sendo afrouxado pra passar: e que abaixo de ~2x a
+              // arte PERDE detalhe de verdade, e isso e uma decisao antiga do
+              // projeto (HANDOFF 9.5: abaixo de 0,8 de escala a miudeza nao e
+              // desenhada). Uma cauda que afina ate meio pixel simplesmente nao
+              // cabe num quadro de 128, e a largura medida cai — foi exatamente
+              // o que apareceu aqui: a ALTURA bate nas tres escalas e so a
+              // largura encolhe no 1x, que e a assinatura de ponta fina sumindo,
+              // e nao de medida presa em pixel (essa mexeria nas duas).
+              //
+              // Entre 2x e 3x nao ha essa perda, entao qualquer diferenca ali e
+              // defeito de escala de verdade — que e o que esta linha guarda.
+              const desvio = medio && grande
+                ? Math.max(
+                  Math.abs(medio.larg - grande.larg) / medio.larg,
+                  Math.abs(medio.alt - grande.alt) / medio.alt,
+                )
+                : 1
+              // 8% de folga: o arredondamento pra pixel inteiro sozinho ja mexe
+              // um pouco na borda, e cobrar exatidao daria alarme falso.
+              const torto = desvio > 0.08
+              return (
+              <div key={`escala-${code}`} className={torto ? 'lab-fora-de-escala' : undefined}>
+              {torto && (
+                <p className="notice error">
+                  {code}: ocupa {(medio ? medio.larg * 100 : 0).toFixed(0)}% do quadro em 2×
+                  e {(grande ? grande.larg * 100 : 0).toFixed(0)}% em 3× — alguma medida não
+                  está acompanhando a escala.
+                </p>
+              )}
+              <Tile
+                label={`${code} · ${detalhe} · desvio 2→3 ${(desvio * 100).toFixed(1)}%`}
+                width={384}
+                height={324}
+                animate
+                paint={(p, t) => {
+                  const pet = { species: code, colors, stage: 'adulto', growth: 1,
+                    mood: 'feliz', accessories: { neck: 'pet_coleira' }, mess_count: 0 }
+                  const medida = planoDe(code, 1, 1)
+                  const alturaU = medida.pernaA + medida.corpoA * 1.15
+                    + medida.cabecaA * (medida.orelha === 'longa' ? 2.6 : 1.55)
+                  const larguraU = medida.corpoL + medida.caudaL * 0.8 + medida.cabecaL
+                  const escala = Math.min((p.h * 0.74) / alturaU, (p.w * 0.92) / larguraU)
+                  drawPet(p, pet, t, escala, { cx: p.w / 2, chao: p.h * 0.84 })
+                }}
+              />
+              </div>
+              )
+            })}
+          </div>
         </>
       )}
 

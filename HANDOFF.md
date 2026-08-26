@@ -216,6 +216,8 @@ app-casal/
         │   ├── room.js           ← parede, piso e ordem de desenho do cômodo
         │   ├── RoomCanvas.jsx    ← o cômodo na tela (escala inteira, toque → célula)
         │   ├── avatar.js         ← o boneco: 8 camadas, 48 peças
+        │   ├── petCena.js        ← o cenário da ilha atrás do bichinho (céu, mar,
+        │   │                        campo, hora do dia), na tela dele
         │   ├── petitems.js       ← 13 ícones de item, escritos como texto
         │   └── stickers.js       ← as 24 figurinhas do chat
         ├── components/           ← Icon (SVG desenhado), AvatarView, Sticker,
@@ -1237,5 +1239,186 @@ no editor, e toda carta da memória tem imagem no disco.
 
 **Estado: 609 verificações, 0 falha.** Build Vite aprovada. **Falta publicar em
 produção** — ver "Publicar em produção" na seção 2.
+
+**Próximo passo:** continua sendo a seção 8.1 — mapa navegável do bairro.
+
+### 9.11 Pente fino nos bichinhos, e o cenário da ilha (26/08/2026)
+
+O dono voltou depois de rodar a 9.8: olhos se sobrepondo, animações contorcendo o
+corpo, asa do passarinho sempre pra cima, ponta da orelha apagada, e o fundo da
+aba do bichinho "bem genérico" — com a referência do **Kinectimals** para o tipo
+de interação que ele queria.
+
+**Antes de tudo: a bancada estava aprovando o que ninguém via.** Todas as abas do
+`/lab` desenhavam na caixa de referência (128×108, escala 1). A tela do bichinho
+passou a desenhar GRANDE na 9.8 — e um monte de defeito só existe quando a escala
+é diferente de 1. Por isso existe agora a aba **Escala grande**, que desenha cada
+espécie no tamanho em que ela aparece de verdade. Foi olhando ali (e na tela) que
+tudo abaixo apareceu.
+
+**1. A escala aplicada DUAS VEZES — a causa da "animação contorcendo o corpo".**
+
+O desenho multiplica todo valor de pose pela escala: `corpoCY` soma
+`q.corpoY * plano.escala`, a perna mira em `pe.y * plano.escala`. Ou seja, o
+clipe deveria falar em unidades CRUAS. Só que quase todos os 22 clipes escrevem a
+pose em cima do próprio plano — `q.pes[0] = { y: -plano.pernaA * 0.85 }` — e
+`plano.pernaA` **já vem multiplicado pela escala**. Resultado: escala ao quadrado
+em tudo que é deslocamento de pose.
+
+Enquanto a caixa foi sempre 128×108 a escala era 1, e 1×1 continua 1: o defeito
+existia desde sempre e não aparecia. Com o bichinho grande (escala ≈ 3,8) os
+deslocamentos viraram ~15× em vez de 3,8 — pata mirando muito além do chão,
+cabeça saindo do pescoço, corpo afundando. Cada clipe deformava diferente, porque
+cada um mexe num conjunto diferente de valores.
+
+O conserto é **uma linha**, e não mexer nos 22 clipes: `poseEm` entrega ao clipe o
+plano com os comprimentos divididos pela escala (`semEscala`). Aí
+`plano.pernaA * 0,85` volta a ser uma fração crua, a multiplicação do desenho
+aplica a escala uma vez só, **e os números soltos que alguns clipes usam
+(`{ x: 3.5 }`) passam a escalar junto** — coisa que antes não acontecia e deixava
+esses pés parados no lugar enquanto o resto crescia.
+
+> Isto também conserta o cômodo, que desenha o bichinho a ~0,5 de escala: lá os
+> deslocamentos vinham 0,25 em vez de 0,5, ou seja, metade do movimento.
+
+**2. Os olhos se sobrepondo.**
+
+Ficavam em duas frações fixas da cabeça (0,1 e 0,58) enquanto o raio saía de
+outra conta, que não sabia da primeira. Na cabeça de filhote — proporcionalmente
+maior E com o olho aumentado, que é o que dá cara de bebê — os dois brancos se
+encontravam no meio da cara e viravam UMA mancha com dois pontos dentro.
+Acontecia em toda escala; no gato adulto já encostavam.
+
+Agora existe uma conta só: o raio manda, a meia-distância entre os centros é o
+raio do branco mais uma folga fixa, e um teto garante que o par inteiro cabe na
+testa. Eles não têm como se cruzar, cresça o olho o quanto crescer — e o filhote
+continua de olho grande, só que mais afastado, que é o que se vê num rosto de bebê.
+
+**3. A ponta da orelha apagada.**
+
+A base da orelha de gato media **8,4 px fixos**. Com a cabeça três vezes maior e a
+base igual, a orelha vira uma agulha — e agulha some dentro do próprio contorno:
+o traço é pintado em quatro cópias deslocadas, e numa peça fina elas cobrem quase
+todo o miolo. Sobra preenchimento num fiozinho, e a ponta, que afina até zero,
+fica só de traço.
+
+Todas as medidas cruas do desenho passaram a acompanhar a escala (orelha, chifre,
+bico, cauda, pata, asa, espinho, marca, sombra). Junto disso, duas decisões de
+desenho no coelho: a orelha encurtou de 1,95 para 1,45 da altura da cabeça (1,95
+é orelha de lebre, e ela dominava o bicho), e o **rosa por dentro para em 76% da
+orelha** em vez de ir até a ponta — indo até lá, ele cobria justamente a parte que
+já tinha pouco preenchimento e a orelha virava uma listra rosa de borda apagada.
+
+**4. A asa do passarinho sempre pra cima.**
+
+O ângulo da asa passava por dentro de um seno que já estava perto do pico:
+`sin(0,9 + a)`, com `a` indo de −1,15 a +1,15, percorre 0,9 → 2,05 radianos — e o
+pico do seno (1,57) fica bem no meio disso. A ponta mal saía do alto em toda a
+metade de cima da batida e só desabava no extremo.
+
+> Medido, com a altura da ponta normalizada ao longo de uma batida:
+> **antes** a ponta ficava acima de 80% da altura em **5 de 13** quadros e a
+> descida chegava só a −0,25; **agora** é **1 de 13**, e a descida vai a −0,65.
+> A batida deixou de ser "parada em cima com um tranco" e virou sobe-e-desce.
+
+O conserto é não usar o seno como curva de controle: `a` virou o ÂNGULO de
+elevação e a ponta gira em torno do ombro.
+
+**5. O resto do pente fino.**
+
+- **A cauda saía quase em pé** e ia ficando mais vertical a cada elo (144° → 119°).
+  Grossa, comprida e vertical por cima das costas, ela não lia como cauda: lia
+  como braço levantado, e era isso que dava ao gato aquele ar de bicho em pé.
+  Agora sai quase pra trás (166°), a curvatura CRESCE do início pro fim (só a
+  ponta sobe) e a grossura caiu de 0,22 para 0,15 da altura do corpo — 0,22 é a
+  grossura de uma perna.
+- **A coleira atravessava o focinho.** Ela era ancorada na borda de baixo da
+  cabeça (1,02) — e a borda de baixo de uma cabeça grande ainda é bochecha.
+  Desceu para 1,38, que é o pescoço, e ganhou faixa clara e fivela: chapada, ela
+  lia como etiqueta de papel colada no bicho.
+- **A sombra flutuava.** Nascia 3 unidades abaixo do chão — 3 px na caixa pequena,
+  11 px com o bichinho grande, e aparecia um vão entre a pata e a sombra.
+- **O objeto do item ia parar no canto.** `petProps.js` é escrito na caixa de
+  128×108 com número cru (`p.solid(58, 88, …)` quer dizer "ao lado do focinho"
+  só enquanto o canvas TEM 128 de largura). Em vez de reescrever as treze cenas,
+  o desenho delas entra numa transformação que leva a caixa de 128×108 para as
+  âncoras reais.
+- **O aviso de ⚠ virou uma placa de trânsito**: o tamanho estava preso à escala do
+  bicho. Agora sai do canvas.
+
+**6. O enquadramento: ele ocupa o palco.**
+
+Com as âncoras da caixa de referência, um coelho filhote dava uns 26% da largura
+da tela, perdido no quadro. A escala agora sai do TAMANHO DO BICHO — altura e
+largura estimadas do plano do corpo, e a maior escala que ainda cabe. Um fator
+fixo serviria para um e estouraria para o outro (a orelha do coelho mede quase
+três cabeças; o dragão tem o corpo mais comprido). Cada espécie enche a tela até
+onde dá, sozinha, e crescer continua visível.
+
+**7. O cenário: a ilha.**
+
+O fundo era `linear-gradient(#dcead9 0 62%, #c99e70 62%)` — duas faixas chapadas.
+O que o Kinectimals faz de certo não é a quantidade de detalhe: é o filhote estar
+num LUGAR, e o lugar estar vivo enquanto ele não faz nada.
+
+`web/src/render/petCena.js` desenha, na mesma linguagem de pixel do resto: céu em
+faixas com reticulado na emenda, sol (ou lua crescente) com halo, estrelas,
+nuvens com paralaxe, duas cordilheiras, mar com brilho que anda, praia, campo,
+moitas, flores, tufos de grama atrás E na frente do bichinho, borboletas de dia e
+vaga-lumes de noite, pólen subindo no sol. **A paleta inteira muda com a hora**
+(madrugada, amanhecer, dia, entardecer, noite): abrir o app de manhã e à noite
+viram duas coisas diferentes sem nenhum conteúdo novo.
+
+> **Desempenho:** a cena inteira a cada quadro sairia caro (o reticulado pinta um
+> pixel por vez). O que não se mexe é pintado UMA vez num canvas de rascunho e
+> colado; só nuvem, água, grama, borboleta e pólen são redesenhados. É a mesma
+> precaução já anotada na seção 8.1 para o mapa do bairro — aqui ela já valeu,
+> porque esta tela fica aberta animando enquanto a pessoa cuida do bicho.
+
+**8. A interação: ele olha pra você, e você faz carinho.**
+
+Duas coisas, e as duas são o que o Kinectimals faz:
+
+- **Ele acompanha o seu dedo** com a cabeça e com a PUPILA. É a coisa mais barata
+  e mais eficaz do jogo inteiro: sem isso o bicho é um desenho que anima sozinho;
+  com isso ele parece estar do outro lado do vidro prestando atenção em você. O
+  olhar entra como acréscimo na pose, então ele consegue olhar pra você enquanto
+  anda, come ou dorme — e volta ao normal sozinho depois que o dedo sai.
+- **Passar a mão nele é carinho.** O afago conta DISTÂNCIA percorrida, não tempo
+  parado — é a diferença entre "a mão está encostada" e "a mão está fazendo
+  carinho". A cada trecho ele reage e sobem coraçõezinhos do lombo; de tanto em
+  tanto isso vira o carinho de verdade, o do servidor.
+
+> A regra travada continua: **a reação é sempre, o prêmio tem hora**. Fora da
+> janela o servidor recusa, e aqui isso vira um aviso tranquilo ("gostou, mas a
+> alegria dele já está no talo"), não um erro vermelho. Ele reagiu de qualquer
+> jeito; o que estava em descanso era a alegria, não o afeto.
+
+**9. A bancada passou a conferir proporção sozinha.**
+
+A aba Escala grande mede a caixa que o desenho ocupa em 1×, 2× e 3× e **reprova
+em vermelho** quando a fração muda — é assim que "medida presa em pixel" aparece
+sem ninguém olhar. Dois cuidados que a própria medição ensinou:
+
+1. **Medir ANDANDO, e no meio do passo.** Em `parado` os pés ficam quase no lugar,
+   e era justamente nos deslocamentos de pose que estava a escala dupla — medir
+   parado deixaria o defeito passar de novo.
+2. **A conferência é entre 2× e 3×, com o 1× só para olhar.** Não é o teste sendo
+   afrouxado: abaixo de ~2× a arte perde detalhe de verdade (decisão antiga, 9.5).
+   A assinatura disso é clara nos números — a ALTURA bate nas três escalas e só a
+   LARGURA encolhe no 1×, que é ponta fina sumindo. Medida presa em pixel mexeria
+   nas duas. Entre 2× e 3× não há essa perda: gato 4,0%, cachorro 4,8%, coelho
+   5,1%, pássaro 5,4%, capivara 4,4%, dragão 3,1% — todos dentro da folga de 8%.
+
+> **Como medir animação nesta bancada** (vale repetir, porque custou tempo de
+> novo): com a janela do navegador escondida, `requestAnimationFrame` não dispara
+> e o canvas fica congelado no primeiro quadro. Duas capturas saem IDÊNTICAS e a
+> medida dá falso negativo — foi o que fez a primeira conferência do olhar
+> parecer que não funcionava. Trocar o `rAF` por um baseado em `setTimeout` na
+> página resolve; é ferramenta de medição, não vai pro app.
+
+**Estado: 609 verificações, 0 falha.** Build Vite aprovada. Conferido no navegador
+contra o app publicado: as 6 espécies no tamanho real, o cômodo, e o carinho
+ponta a ponta (corações subindo e o servidor aceitando).
 
 **Próximo passo:** continua sendo a seção 8.1 — mapa navegável do bairro.

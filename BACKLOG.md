@@ -585,3 +585,75 @@ materiais, que era o problema real e é exato.
 
 Estado: **609 verificações, 0 falha**; build Vite aprovada; tudo conferido no
 navegador contra o app publicado. Causas no HANDOFF, seção 9.8.
+
+### 26/08/2026 — Pente fino nos bichinhos, cenário da ilha e interação (Kinectimals)
+
+Pedido do dono, na íntegra: ainda há olhos se sobrepondo; animações contorcendo o
+corpo; asas do passarinho sempre pra cima; passar um pente fino em tudo que tem a
+ver com os animais; melhorar o fundo da aba bichinhos, que está bem genérico,
+usando o **Kinectimals** (jogo antigo de Windows Phone) como referência do tipo de
+interação; e as orelhas estão apagadas nas pontas.
+
+- **[x]** **A bancada estava aprovando o que ninguém via.** Todas as abas do
+      `/lab` desenhavam em 1×, e a tela do bichinho passou a desenhar grande na
+      entrega anterior — um monte de defeito só existe fora do 1×. Criada a aba
+      **Escala grande**, que desenha cada espécie no tamanho real. Foi ali que
+      tudo abaixo apareceu.
+- **[x]** **"Animações contorcendo o corpo": a escala era aplicada DUAS VEZES.**
+      O desenho multiplica todo valor de pose pela escala, então o clipe deveria
+      falar em unidade crua — mas quase todos os 22 clipes escrevem a pose em
+      cima do próprio plano (`-plano.pernaA * 0.85`), e o plano já vem escalado.
+      Escala ao quadrado em todo deslocamento. Com a caixa fixa de 128×108 a
+      escala era 1 e 1×1 continua 1: o defeito existia desde sempre e não
+      aparecia. Grande (escala ≈ 3,8), virou ~15× em vez de 3,8. Corrigido numa
+      linha, sem tocar nos clipes — e isso conserta também o cômodo, onde o
+      movimento vinha pela metade.
+- **[x]** **Olhos se sobrepondo.** A posição era fração fixa da cabeça e o raio
+      saía de outra conta, que não sabia da primeira; no filhote (cabeça maior E
+      olho aumentado) os dois brancos viravam uma mancha só. Agora a distância
+      entre eles é derivada do raio, com folga e teto: não têm como se cruzar, e
+      o filhote continua de olho grande, só que mais afastado.
+- **[x]** **Ponta da orelha apagada.** A base da orelha media 8,4 px FIXOS: com a
+      cabeça três vezes maior, virava agulha — e agulha some dentro do próprio
+      contorno, sobrando só traço na ponta. Todas as medidas cruas do motor
+      passaram a acompanhar a escala. No coelho, a orelha encurtou (1,95 → 1,45
+      da altura da cabeça, que era orelha de lebre) e o rosa de dentro passou a
+      parar em 76% dela.
+- **[x]** **Asa do passarinho sempre pra cima.** O ângulo passava por dentro de um
+      seno já perto do pico. Medido, ao longo de uma batida: antes a ponta ficava
+      acima de 80% da altura em **5 de 13** quadros e a descida chegava a −0,25;
+      agora é **1 de 13** e a descida vai a −0,65.
+- **[x]** **Pente fino:** a cauda saía quase em pé e grossa como uma perna (lia
+      como braço levantado — era isso que dava ao gato ar de bicho em pé); a
+      coleira atravessava o focinho (estava ancorada na borda de baixo da cabeça,
+      que numa cabeça grande ainda é bochecha) e ganhou fivela; a sombra flutuava
+      longe da pata; o objeto do item ia parar no canto do quadro; e o aviso de ⚠
+      virou uma placa de trânsito porque o tamanho estava preso à escala do bicho.
+- **[x]** **Ele ocupa o palco.** Um coelho filhote dava 26% da largura da tela. A
+      escala agora sai do tamanho do próprio bicho, então cada espécie enche a
+      tela até onde dá — e crescer continua visível.
+- **[x]** **O fundo virou um lugar.** Era um degradê de duas cores. Agora é uma
+      ilha desenhada em pixel: céu com reticulado, sol (ou lua crescente) com
+      halo, estrelas, nuvens com paralaxe, montanhas, mar com brilho que anda,
+      praia, campo, moitas, flores, grama atrás e na frente do bichinho,
+      borboletas de dia e vaga-lumes de noite. **A paleta muda com a hora** —
+      abrir de manhã e à noite são duas coisas diferentes. O que não se mexe é
+      pintado uma vez e colado, senão a tela esquentaria o celular à toa.
+- **[x]** **Interação no espírito do Kinectimals.** Ele **acompanha o seu dedo**
+      com a cabeça e com a pupila (é o que faz parecer que ele está do outro lado
+      do vidro prestando atenção em você), e **passar a mão nele é carinho** — o
+      afago conta distância percorrida, não tempo parado, que é a diferença entre
+      a mão encostada e a mão fazendo carinho. Sobem coraçõezinhos, e de tanto em
+      tanto vira o carinho de verdade no servidor. A regra travada continua: a
+      reação é sempre, o prêmio tem hora — e a recusa é aviso, não erro.
+- **[x]** **A bancada confere proporção sozinha.** Ela mede a caixa que o desenho
+      ocupa em 1×, 2× e 3× e reprova em vermelho quando a fração muda. Dois
+      cuidados que a medição ensinou: medir **andando** (parado os pés não saem do
+      lugar, e era ali que estava a escala dupla) e comparar **2× com 3×**,
+      deixando o 1× só para olhar — abaixo de ~2× a arte perde detalhe de verdade,
+      e a assinatura disso é a altura bater nas três escalas enquanto só a largura
+      encolhe.
+
+Estado: **609 verificações, 0 falha**; build Vite aprovada; as 6 espécies
+conferidas no tamanho real, o cômodo conferido, e o carinho testado ponta a ponta.
+Causas no HANDOFF, seção 9.11.
