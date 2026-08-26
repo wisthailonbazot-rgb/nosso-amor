@@ -6,11 +6,16 @@
 
 import { create } from 'zustand'
 import { api, getToken, setToken, wsUrl } from './api'
+import { limparAvisos } from './push'
 
 let socket = null
 let retry = 0
 let reconnectTimer = null
 let pingTimer = null
+// Se a conexao ja subiu alguma vez nesta sessao. Serve pra separar a PRIMEIRA
+// conexao (a tela ja carregou o historico sozinha) de uma RECONEXAO (houve um
+// buraco, e o que chegou nele precisa ser buscado).
+let jaConectou = false
 const listeners = new Map()
 
 /**
@@ -73,6 +78,9 @@ export const useStore = create((set, get) => ({
       await get().refreshMe()
       get().connect()
       get().refreshUnread()
+      // Abriu o app: a bandeja do celular nao pode continuar com a pilha de
+      // avisos que a pessoa acabou de vir ler.
+      limparAvisos()
     } catch {
       setToken('')
       set({ user: null })
@@ -122,6 +130,7 @@ export const useStore = create((set, get) => ({
 
   logout() {
     setToken('')
+    jaConectou = false
     get().disconnect()
     set({ user: null, partner: null, balance: 0, online: [], unread: 0, naoLidas: 0 })
     marcarIcone(0)
@@ -146,8 +155,22 @@ export const useStore = create((set, get) => ({
     socket = ws
 
     ws.onopen = () => {
+      const reconexao = jaConectou
+      jaConectou = true
       retry = 0
       set({ connection: 'online' })
+      // RECONEXÃO significa que houve um buraco: tudo o que o outro mandou
+      // enquanto a conexão estava caída não passou por evento nenhum — o
+      // WebSocket só entrega o que acontece com ele de pé. Quem estiver numa
+      // tela que depende de histórico (o chat) tem que ir BUSCAR o que perdeu.
+      //
+      // Isto é separado do `visibilitychange` de propósito: perder sinal na rua
+      // derruba a conexão sem esconder o app, então a visibilidade sozinha não
+      // cobriria o caso.
+      if (reconexao) {
+        get().refreshUnread()
+        emit('resumed', null)
+      }
       clearInterval(pingTimer)
       // ping periodico: proxy costuma matar conexao parada em 60s
       pingTimer = setInterval(() => {
@@ -248,6 +271,7 @@ if (typeof document !== 'undefined') {
     store.connect()
     store.refreshMe().catch(() => {})
     store.refreshUnread()
+    limparAvisos()
     emit('resumed', null)
   })
 }

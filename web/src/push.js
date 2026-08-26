@@ -189,6 +189,40 @@ export async function disablePush() {
   await subscription.unsubscribe().catch(() => {})
 }
 
+/**
+ * Tira os avisos da bandeja do celular. Chamado ao ENTRAR no app.
+ *
+ * Dois caminhos porque nenhum deles sozinho cobre os dois aparelhos:
+ *
+ *  1. `registration.getNotifications()` — a página consegue listar e fechar os
+ *     avisos do próprio service worker no Chrome/Android;
+ *  2. o recado `limpar-avisos` pro service worker — no iPhone o `controller`
+ *     é quem responde de forma confiável, e há o caso de a página ter sido
+ *     aberta pelo próprio aviso, quando a lista ainda não está pronta aqui.
+ *
+ * Fechar aviso não é o mesmo que marcá-lo como lido no servidor: a tela de
+ * Avisos continua com o histórico. O que some é a pilha na tela de bloqueio,
+ * que era a reclamação.
+ */
+export async function limparAvisos() {
+  try {
+    if (navigator.setAppBadge) navigator.clearAppBadge().catch(() => {})
+  } catch {
+    /* navegador sem badge */
+  }
+  if (!('serviceWorker' in navigator)) return
+  try {
+    const registration = await navigator.serviceWorker.getRegistration()
+    if (registration?.getNotifications) {
+      const lista = await registration.getNotifications()
+      lista.forEach((aviso) => aviso.close())
+    }
+    navigator.serviceWorker.controller?.postMessage({ tipo: 'limpar-avisos' })
+  } catch {
+    /* sem service worker registrado ainda: nada a limpar */
+  }
+}
+
 export function deviceLabel() {
   const ua = navigator.userAgent
   if (/iPhone/.test(ua)) return 'iPhone'

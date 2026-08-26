@@ -17,7 +17,9 @@ import { roomMetrics } from '../render/iso'
 import { drawScene, FLOOR_STYLES, WALL_STYLES } from '../render/room'
 import { AVATAR_H, AVATAR_W, STYLE_LISTS, drawAvatar } from '../render/avatar'
 import { drawPetIcon, PET_ICON_CODES } from '../render/petitems'
-import { drawSticker, STICKER_CODES, STICKER_LABEL, STICKER_SIZE } from '../render/stickers'
+import { STICKER_CODES, STICKER_LABEL } from '../render/stickers'
+import Sticker from '../components/Sticker'
+import { STICKERS_HD } from '../render/stickersHD'
 import { drawPet } from '../render/PetCanvas'
 import { CODIGOS_ESPECIE, NOMES_CLIPES, clipeDe, planoDe } from '../render/petRig'
 
@@ -446,20 +448,24 @@ export default function ShapeLab() {
               Sem nome: {STICKER_CODES.filter((c) => !STICKER_LABEL[c]).join(', ')}
             </p>
           )}
+        {/* A bancada mostra a figurinha COMO O CHAT MOSTRA.
+
+            Antes ela desenhava todas em pixel, chamando `drawSticker` direto.
+            Isso conferia um desenho que o app nao usa mais: `Sticker` prefere a
+            versao redonda (SVG) e so cai no pixel quando a redonda nao existe.
+            Ou seja, a unica arte que a bancada olhava era justamente a que o
+            chat NAO mostra — e um erro na versao redonda (que foi o que
+            aconteceu: um componente com o nome errado derrubando o app inteiro)
+            passava aqui como se estivesse tudo certo. */}
         <div className="lab-grid">
           {STICKER_CODES.map((code) => (
-            <Tile
-              key={code}
-              label={STICKER_LABEL[code] || `${code} ⚠ sem nome`}
-              width={STICKER_SIZE * 2}
-              height={STICKER_SIZE * 2}
-              paint={(p) => {
-                p.ctx.save()
-                p.ctx.scale(2, 2)
-                drawSticker(p, code)
-                p.ctx.restore()
-              }}
-            />
+            <div key={code} className="lab-tile">
+              <Sticker code={code} scale={2} />
+              <span className="lab-tile-label">
+                {STICKER_LABEL[code] || `${code} ⚠ sem nome`}
+                {!STICKERS_HD[code] && ' ⚠ ainda em pixel'}
+              </span>
+            </div>
           ))}
         </div>
         </>

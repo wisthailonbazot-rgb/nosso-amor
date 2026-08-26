@@ -254,11 +254,25 @@ export default function Chat() {
     fimRef.current?.scrollIntoView({ behavior: suave ? 'smooth' : 'auto' })
   }, [])
 
-  const carregar = useCallback(async () => {
+  /**
+   * Busca a página mais nova e junta com o que já está na tela.
+   *
+   * É o mesmo caminho da primeira carga e da RE-SINCRONIZAÇÃO. Ele junta em vez
+   * de substituir porque quem já rolou pra trás (`carregarAntigas`) perderia o
+   * histórico carregado se a lista fosse trocada inteira.
+   */
+  const sincronizar = useCallback(async () => {
     const data = await api.get('/api/chat')
-    setMsgs(data.items)
     setStickers(data.stickers)
-    setTemMais(data.has_more)
+    setMsgs((atual) => {
+      if (!data.items.length) return atual
+      const maisAntigaDaPagina = data.items[0].id
+      // O que veio do servidor é a verdade da janela nova (inclusive reação,
+      // edição e visto); o que é mais velho que ela continua como estava.
+      const anteriores = atual.filter((m) => m.id < maisAntigaDaPagina)
+      if (!anteriores.length) setTemMais(data.has_more)
+      return [...anteriores, ...data.items]
+    })
     await api.post('/api/chat/read').catch(() => {})
     // Abriu a conversa = leu. Zera o número da aba E o do ícone do app, senão
     // o iPhone fica com a bolinha vermelha pra sempre.
@@ -266,8 +280,29 @@ export default function Chat() {
     setTimeout(() => rolarPraBaixo(), 30)
   }, [rolarPraBaixo])
 
+  const carregar = sincronizar
+
   useEffect(() => {
     carregar().catch((e) => setErro(e.message))
+
+    // Voltar pro app precisa BUSCAR o que perdeu.
+    //
+    // O WebSocket entrega o que acontece enquanto ele está de pé — e o celular
+    // derruba a conexão assim que o app vai pro segundo plano. Tudo o que o
+    // outro mandar nesse intervalo não passa por evento nenhum: chega no banco
+    // e fica lá. Como a tela do chat continua MONTADA (o React não a remonta ao
+    // voltar), `carregar()` também não rodava de novo — e a conversa ficava
+    // parada no que existia antes de o app ser minimizado. Era esse o "saio e
+    // entro e não carrega as mensagens novas".
+    //
+    // `resumed` é emitido pelo store quando o app volta a ficar visível E
+    // quando o WebSocket reconecta depois de ter caído (queda de sinal não
+    // esconde o app, então só a visibilidade não bastaria).
+    const offVolta = subscribe('resumed', () => {
+      sincronizar().catch(() => {
+        /* sem rede: o próximo `resumed` tenta de novo */
+      })
+    })
 
     const offNova = subscribe('chat', ({ message }) => {
       setMsgs((atual) => (atual.some((m) => m.id === message.id) ? atual : [...atual, message]))
@@ -291,13 +326,14 @@ export default function Chat() {
     })
 
     return () => {
+      offVolta()
       offNova()
       offLida()
       offEditada()
       offApagada()
       offDigitando()
     }
-  }, [carregar, rolarPraBaixo, user.id])
+  }, [carregar, sincronizar, rolarPraBaixo, user.id])
 
   async function carregarAntigas() {
     if (!msgs.length) return

@@ -222,7 +222,17 @@ function Cabeca({ x, y, cabelo, s = 1 }) {
   )
 }
 
-// ------------------------------------------------------------------ as 18
+/** Chama de fogo — serve de figurinha inteira e de enfeite. */
+function Fogo({ x, y, s = 1 }) {
+  return (
+    <g transform={`translate(${x} ${y}) scale(${s})`}>
+      <path d="M 0 14 C -11 8 -12 -4 -4 -14 C -3 -7 1 -8 2 -12 C 8 -6 12 2 8 9 C 6 12 3 14 0 14 Z" fill="#f07a2a" />
+      <path d="M 0 13 C -6 9 -6 1 -1 -6 C 0 -2 2 -3 3 -5 C 6 -1 7 6 4 10 C 3 12 1 13 0 13 Z" fill="#ffd23f" />
+    </g>
+  )
+}
+
+// ------------------------------------------------------------------ o pacote
 export const STICKERS_HD = {
   saudade: (
     <>
@@ -476,6 +486,276 @@ export const STICKERS_HD = {
       {/* a lágrima */}
       <path d="M 68 56 C 73 63 75 66 75 69 a 7 7 0 0 1 -14 0 c 0 -3 2 -6 7 -13 Z" fill="#7fc7e8" opacity="0.9" />
       <path d="M 42 68 Q 50 64 58 68" stroke={TRACO} strokeWidth="3" fill="none" strokeLinecap="round" />
+    </>
+  ),
+
+  // ---------------------------------------------------------- as que faltavam
+  //
+  // Estas vinte continuavam em pixel enquanto as dezoito da referencia do dono
+  // ja eram redondas e com brilho — e as duas linguagens apareciam LADO A LADO
+  // no seletor do chat. Era isso a "qualidade das figurinhas": nao que as de
+  // pixel fossem malfeitas, e sim que metade do pacote era de outro material.
+  coracao: (
+    <>
+      <Coracao x={50} y={46} s={4.2} />
+      <Coracao x={80} y={22} s={1} opacity={0.85} />
+      <Coracao x={20} y={26} s={0.7} opacity={0.7} />
+    </>
+  ),
+
+  carinha_apaixonada: (
+    <>
+      <Rosto />
+      <Coracao x={38} y={46} s={0.9} />
+      <Coracao x={62} y={46} s={0.9} />
+      <Bochechas />
+      <Sorriso y={62} larg={20} />
+      <Coracao x={80} y={20} s={0.8} opacity={0.9} />
+      <Coracao x={20} y={24} s={0.55} opacity={0.7} />
+    </>
+  ),
+
+  risada: (
+    <>
+      <Rosto />
+      <OlhoFeliz x={38} y={45} larg={13} />
+      <OlhoFeliz x={62} y={45} larg={13} />
+      <Bochechas y={62} />
+      <BocaAberta y={58} larg={26} alt={17} />
+      {/* as lagriminhas de rir: e o que separa "rindo" de "boca aberta" */}
+      <path d="M 22 46 q -5 7 -1 9 q 5 -2 1 -9 Z" fill="#7fc7e8" />
+      <path d="M 78 46 q 5 7 1 9 q -5 -2 -1 -9 Z" fill="#7fc7e8" />
+    </>
+  ),
+
+  piscada: (
+    <>
+      <Rosto />
+      <OlhoAberto x={38} y={48} />
+      <OlhoFeliz x={62} y={48} />
+      <Bochechas />
+      <Sorriso y={62} larg={20} />
+      <Brilho x={80} y={26} s={0.75} />
+    </>
+  ),
+
+  dormindo: (
+    <>
+      <Rosto />
+      <OlhoFeliz x={38} y={50} />
+      <OlhoFeliz x={62} y={50} />
+      <Bochechas y={62} />
+      <ellipse cx="50" cy="66" rx="5" ry="6.5" fill="url(#fg-boca)" />
+      <Zezinho x={80} y={24} s={1.15} />
+      <Zezinho x={90} y={40} s={0.75} />
+    </>
+  ),
+
+  chateado: (
+    <>
+      <Rosto />
+      <OlhoAberto x={38} y={50} ry={5} />
+      <OlhoAberto x={62} y={50} ry={5} />
+      {/* sobrancelha caida E boca virada pra baixo: sem a sobrancelha, so a
+          boca le como "pensativo" em vez de "chateado" */}
+      <path d="M 30 40 L 44 44" stroke={TRACO} strokeWidth="3" strokeLinecap="round" />
+      <path d="M 70 40 L 56 44" stroke={TRACO} strokeWidth="3" strokeLinecap="round" />
+      <path d="M 41 68 Q 50 61 59 68" stroke={TRACO} strokeWidth="3.2" strokeLinecap="round" fill="none" />
+    </>
+  ),
+
+  com_fome: (
+    <>
+      <Rosto />
+      <OlhoAberto x={38} y={46} />
+      <OlhoAberto x={62} y={46} />
+      <Bochechas y={58} />
+      <BocaAberta y={58} larg={22} alt={15} />
+      <path d="M 64 68 q 3 7 0 9 q -3 -2 0 -9 Z" fill="#7fc7e8" />
+    </>
+  ),
+
+  quero_voce: (
+    <>
+      <Rosto />
+      <Coracao x={38} y={46} s={0.85} />
+      <OlhoFeliz x={62} y={47} />
+      <Bochechas />
+      <Biquinho y={64} />
+      <Coracao x={82} y={26} s={1} />
+      <Coracao x={18} y={24} s={0.6} opacity={0.75} />
+    </>
+  ),
+
+  hoje_tem: (
+    <>
+      <Rosto />
+      <OlhoFeliz x={38} y={47} />
+      <OlhoAberto x={62} y={47} />
+      <Bochechas />
+      <path d="M 40 64 Q 50 74 60 64" stroke={TRACO} strokeWidth="3.2" strokeLinecap="round" fill="none" />
+      <Fogo x={80} y={28} s={1.1} />
+      <Coracao x={18} y={26} s={0.7} opacity={0.8} />
+    </>
+  ),
+
+  beijo_pescoco: (
+    <>
+      {/* dois rostos encostados: o de tras beija o pescoco do da frente */}
+      <circle cx="62" cy="56" r="27" fill="url(#fg-rosto)" />
+      <ellipse cx="57" cy="42" rx="14" ry="7" fill="url(#fg-brilho)" />
+      <OlhoFeliz x={56} y={52} larg={9} />
+      <OlhoFeliz x={72} y={52} larg={9} />
+      <path d="M 58 66 Q 64 71 70 66" stroke={TRACO} strokeWidth="2.8" strokeLinecap="round" fill="none" />
+      <circle cx="28" cy="50" r="21" fill="url(#fg-pele)" />
+      <path d="M 7 46 A 21 21 0 0 1 49 46 L 49 40 A 21 21 0 0 0 7 40 Z" fill="#4a2c1a" />
+      <Biquinho x={44} y={56} />
+      <Coracao x={22} y={20} s={0.85} />
+      <Coracao x={88} y={30} s={0.6} opacity={0.75} />
+    </>
+  ),
+
+  debaixo_coberta: (
+    <>
+      {/* a coberta cobre os dois ate o pescoco; so as cabecas saem */}
+      <circle cx="36" cy="46" r="17" fill="url(#fg-pele)" />
+      <path d="M 19 44 A 17 17 0 0 1 53 44 L 53 38 A 17 17 0 0 0 19 38 Z" fill="#4a2c1a" />
+      <circle cx="64" cy="46" r="17" fill="url(#fg-pele)" />
+      <path d="M 47 44 A 17 17 0 0 1 81 44 L 81 38 A 17 17 0 0 0 47 38 Z" fill="#8a5a2b" />
+      <OlhoFeliz x={31} y={48} larg={7} />
+      <OlhoFeliz x={41} y={48} larg={7} />
+      <OlhoFeliz x={59} y={48} larg={7} />
+      <OlhoFeliz x={69} y={48} larg={7} />
+      <path d="M 8 66 Q 50 54 92 66 L 92 94 L 8 94 Z" fill={ROSA.meio} />
+      <path d="M 8 66 Q 50 54 92 66" stroke={ROSA.escuro} strokeWidth="2.4" fill="none" />
+      <path d="M 8 78 Q 50 68 92 78" stroke={ROSA.escuro} strokeWidth="1.8" fill="none" opacity="0.6" />
+      <Coracao x={50} y={22} s={1} />
+    </>
+  ),
+
+  fogo: <Fogo x={50} y={52} s={3.1} />,
+
+  estrela: (
+    <>
+      <path
+        d="M 50 14 L 60 40 L 88 42 L 66 60 L 73 88 L 50 72 L 27 88 L 34 60 L 12 42 L 40 40 Z"
+        fill="url(#fg-rosto)"
+        stroke={AMARELO.escuro}
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <ellipse cx="44" cy="36" rx="9" ry="5" fill="url(#fg-brilho)" />
+      <Brilho x={82} y={20} s={0.7} />
+    </>
+  ),
+
+  sol: (
+    <>
+      {[...Array(12)].map((_, i) => (
+        <path key={i} transform={`rotate(${i * 30} 50 50)`} d="M 50 6 L 54 17 L 46 17 Z" fill={AMARELO.escuro} />
+      ))}
+      <circle cx="50" cy="50" r="27" fill="url(#fg-rosto)" />
+      <ellipse cx="42" cy="38" rx="12" ry="6" fill="url(#fg-brilho)" />
+      <OlhoFeliz x={41} y={48} larg={9} />
+      <OlhoFeliz x={59} y={48} larg={9} />
+      <Bochechas y={57} dx={16} />
+      <Sorriso y={58} larg={14} />
+    </>
+  ),
+
+  chuva: (
+    <>
+      <path d="M 26 56 A 15 15 0 0 1 40 36 A 19 19 0 0 1 74 40 A 14 14 0 0 1 74 56 Z" fill="#c9d6e4" />
+      <path d="M 30 50 A 13 13 0 0 1 44 34" stroke="#fff" strokeWidth="4" fill="none" opacity="0.7" strokeLinecap="round" />
+      {[[34, 64], [46, 70], [58, 64], [68, 72]].map(([x, y], i) => (
+        <path key={i} d={`M ${x} ${y} q 4 9 0 12 q -4 -3 0 -12 Z`} fill="#5a93b8" />
+      ))}
+    </>
+  ),
+
+  flor: (
+    <>
+      {[...Array(6)].map((_, i) => (
+        <ellipse
+          key={i}
+          transform={`rotate(${i * 60} 50 44)`}
+          cx="50" cy="24" rx="11" ry="16"
+          fill={ROSA.meio}
+          stroke={ROSA.escuro}
+          strokeWidth="1.4"
+        />
+      ))}
+      <circle cx="50" cy="44" r="11" fill="url(#fg-rosto)" />
+      <ellipse cx="46" cy="40" rx="4.5" ry="2.6" fill="url(#fg-brilho)" />
+      <path d="M 50 55 L 50 88" stroke="#5f8f3a" strokeWidth="4" strokeLinecap="round" />
+      <path d="M 50 72 Q 66 64 70 76 Q 56 82 50 72 Z" fill="#5f8f3a" />
+    </>
+  ),
+
+  gatinho: (
+    <>
+      <path d="M 26 34 L 24 14 L 42 26 Z" fill={AMARELO.meio} stroke={AMARELO.escuro} strokeWidth="1.6" />
+      <path d="M 74 34 L 76 14 L 58 26 Z" fill={AMARELO.meio} stroke={AMARELO.escuro} strokeWidth="1.6" />
+      <path d="M 29 30 L 28 20 L 38 27 Z" fill={ROSA.claro} />
+      <path d="M 71 30 L 72 20 L 62 27 Z" fill={ROSA.claro} />
+      <Rosto r={28} cy={54} />
+      <OlhoAberto x={40} y={50} />
+      <OlhoAberto x={60} y={50} />
+      <path d="M 46 60 L 54 60 L 50 65 Z" fill={ROSA.escuro} />
+      <path d="M 44 68 Q 50 64 50 65 Q 50 64 56 68" stroke={TRACO} strokeWidth="2.4" fill="none" strokeLinecap="round" />
+      {[[-1, 62], [-1, 68], [1, 62], [1, 68]].map(([lado, y], i) => (
+        <path
+          key={i}
+          d={`M ${50 + lado * 24} ${y} L ${50 + lado * 40} ${y - 3}`}
+          stroke={TRACO}
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+      ))}
+    </>
+  ),
+
+  cafe: (
+    <>
+      <path d="M 24 42 H 68 V 68 A 12 12 0 0 1 56 80 H 36 A 12 12 0 0 1 24 68 Z" fill="#fffaf3" stroke={TRACO} strokeWidth="2.4" strokeLinejoin="round" />
+      <path d="M 68 48 A 11 11 0 0 1 68 70" fill="none" stroke={TRACO} strokeWidth="4" strokeLinecap="round" />
+      <path d="M 27 45 H 65 V 54 H 27 Z" fill="#7a4a2b" />
+      <ellipse cx="46" cy="45" rx="19" ry="4" fill="#8b5a34" />
+      {/* o vapor: e o que faz ler "cafe quente" em vez de "copo" */}
+      {[36, 46, 56].map((x, i) => (
+        <path
+          key={i}
+          d={`M ${x} 34 q 5 -6 0 -12 q -5 -6 0 -10`}
+          stroke="#c9d6e4"
+          strokeWidth="2.6"
+          fill="none"
+          strokeLinecap="round"
+          opacity={0.85 - i * 0.12}
+        />
+      ))}
+    </>
+  ),
+
+  bolo: (
+    <>
+      <path d="M 22 54 H 78 V 78 A 6 6 0 0 1 72 84 H 28 A 6 6 0 0 1 22 78 Z" fill="#f6d5a8" stroke={TRACO} strokeWidth="2.2" strokeLinejoin="round" />
+      <path d="M 22 54 Q 32 46 42 54 Q 52 46 62 54 Q 72 46 78 54 L 78 64 H 22 Z" fill={ROSA.meio} />
+      <path d="M 48 30 H 52 V 52 H 48 Z" fill="#fffaf3" stroke={TRACO} strokeWidth="1.6" />
+      <path d="M 50 30 q -5 -7 0 -12 q 5 5 0 12 Z" fill={AMARELO.meio} />
+      {[[34, 68], [50, 72], [66, 68]].map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r="3" fill={ROSA.escuro} />
+      ))}
+    </>
+  ),
+
+  presente: (
+    <>
+      <path d="M 20 44 H 80 V 84 H 20 Z" fill={ROSA.meio} stroke={TRACO} strokeWidth="2.2" strokeLinejoin="round" />
+      <path d="M 18 34 H 82 V 46 H 18 Z" fill={ROSA.claro} stroke={TRACO} strokeWidth="2.2" strokeLinejoin="round" />
+      <path d="M 44 34 H 56 V 84 H 44 Z" fill={AMARELO.meio} />
+      <path d="M 50 34 Q 32 34 34 22 Q 46 20 50 34 Z" fill={AMARELO.meio} stroke={AMARELO.escuro} strokeWidth="1.4" />
+      <path d="M 50 34 Q 68 34 66 22 Q 54 20 50 34 Z" fill={AMARELO.meio} stroke={AMARELO.escuro} strokeWidth="1.4" />
+      <circle cx="50" cy="30" r="4" fill={AMARELO.escuro} />
     </>
   ),
 }

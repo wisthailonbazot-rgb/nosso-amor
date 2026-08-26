@@ -905,12 +905,29 @@ export function poseEm(acao, plano, tMs, vel = 1) {
  * ver que são duas patas diferentes. É o mesmo princípio de sempre — o que está
  * longe sai primeiro —, só que agora aplicado a grupos, e não a peça por peça.
  */
-function desenharCamada(p, pecas) {
+//
+// `t` e a ESPESSURA do contorno, em pixels do canvas. Ela nao pode ser fixa em
+// 1: quando o bichinho passou a ser desenhado em resolucao maior (a tela dele
+// hoje pinta ate 3x mais pixels que a caixa de referencia), um traco de 1 px
+// vira um fio de cabelo do lado de um corpo tres vezes maior — o desenho perde
+// justamente o contorno grosso que da a cara de desenho. Ela tambem nao pode
+// ser fracionaria: meio pixel de traco e franja cinza na diagonal.
+/** Linha com espessura: `p.line` so faz 1 px, e 1 px some numa arte 3x maior. */
+function grossa(p, x1, y1, x2, y2, t = 1, cor = OUT) {
+  const d = Math.max(1, Math.round(t))
+  for (let i = 0; i < d; i++) {
+    p.line(x1, y1 + i, x2, y2 + i, cor)
+    if (d > 1) p.line(x1 + i, y1, x2 + i, y2, cor)
+  }
+}
+
+function desenharCamada(p, pecas, t = 1) {
+  const d = Math.max(1, Math.round(t))
   for (const { pts } of pecas) {
-    p.fillPoly(pts.map(([x, y]) => [x - 1, y]), OUT)
-    p.fillPoly(pts.map(([x, y]) => [x + 1, y]), OUT)
-    p.fillPoly(pts.map(([x, y]) => [x, y - 1]), OUT)
-    p.fillPoly(pts.map(([x, y]) => [x, y + 1]), OUT)
+    p.fillPoly(pts.map(([x, y]) => [x - d, y]), OUT)
+    p.fillPoly(pts.map(([x, y]) => [x + d, y]), OUT)
+    p.fillPoly(pts.map(([x, y]) => [x, y - d]), OUT)
+    p.fillPoly(pts.map(([x, y]) => [x, y + d]), OUT)
   }
   for (const { pts, fill } of pecas) p.fillPoly(pts, fill)
 }
@@ -936,6 +953,16 @@ export function desenharRig(p, plano, q, cores, extra = {}) {
   const pal = paletaDe(cores)
   const { principal, escuro, claro, longe } = pal
   const bipede = plano.tipo === 'bipede'
+  // A escala do plano, para as medidas que NAO saem dele.
+  //
+  // O corpo inteiro ja e proporcional (`planoDe` multiplica cada osso), mas o
+  // rosto era escrito em numeros crus — nariz 2.4 x 1.7, bigode de 9 px, boca
+  // de 6. Enquanto a caixa foi sempre 128x108 isso funcionou. Ao desenhar o
+  // bichinho em resolucao maior, o corpo cresce e o rosto NAO: sobra um bicho
+  // grande com um narizinho de alfinete no meio da cara. Por isso tudo o que e
+  // rosto passa por `e`.
+  const e = plano.escala
+  const traco = e
 
   // ----------------------------------------------------------- âncoras
   const pernaA = plano.pernaA
@@ -1217,10 +1244,10 @@ export function desenharRig(p, plano, q, cores, extra = {}) {
   asa(frente, pal.asa, true)
 
   // ------------------------------------------------------- pinta tudo
-  desenharCamada(p, fundo)
-  desenharCamada(p, orelhas)
-  desenharCamada(p, corpo)
-  desenharCamada(p, frente)
+  desenharCamada(p, fundo, traco)
+  desenharCamada(p, orelhas, traco)
+  desenharCamada(p, corpo, traco)
+  desenharCamada(p, frente, traco)
 
   // ------------------------------------------------------- volume e marcas
   // Sem contorno: são sombra e luz DENTRO da silhueta que acabou de ser fechada.
@@ -1255,7 +1282,7 @@ export function desenharRig(p, plano, q, cores, extra = {}) {
       const [bx, by] = naCabeca(lado * 0.5, -0.74)
       const alt = plano.cabecaA * 0.74 * plano.orelhaF
       const pt = [bx + Math.sin(oa) * alt * lado * 0.4 - lado * 1.5, by - Math.cos(oa) * alt]
-      p.fillPoly([[bx - 1.6, by + 2], [pt[0], pt[1] + 4], [bx + 2, by + 1.6]], '#e8879b')
+      p.fillPoly([[bx - 1.6 * e, by + 2 * e], [pt[0], pt[1] + 4 * e], [bx + 2 * e, by + 1.6 * e]], '#e8879b')
     }
   } else if (plano.orelha === 'longa') {
     for (const lado of [-1, 1]) {
@@ -1264,25 +1291,25 @@ export function desenharRig(p, plano, q, cores, extra = {}) {
       const incl = oa + lado * 0.16
       const ex = bx + Math.sin(incl) * comp
       const ey = by - Math.cos(incl) * comp
-      p.fillPoly(capsula(bx + (ex - bx) * 0.35, by + (ey - by) * 0.35, ex, ey, 1.4, 1.1), '#e8879b')
+      p.fillPoly(capsula(bx + (ex - bx) * 0.35, by + (ey - by) * 0.35, ex, ey, 1.4 * e, 1.1 * e), '#e8879b')
     }
   }
 
   // ------------------------------------------------------- rosto
   const [oxE, oyE] = naCabeca(0.1, -0.2)
   const [oxD, oyD] = naCabeca(0.58, -0.18)
-  const r = Math.max(1.2, 2.3 * plano.olho * lerp(0.9, 1, plano.g))
+  const r = Math.max(1.2 * e, 2.3 * plano.olho * lerp(0.9, 1, plano.g))
   const olho = (x, y) => {
     if (extra.doente) {
-      p.line(x - r, y - r, x + r, y + r, OUT)
-      p.line(x + r, y - r, x - r, y + r, OUT)
+      grossa(p, x - r, y - r, x + r, y + r, traco)
+      grossa(p, x + r, y - r, x - r, y + r, traco)
       return
     }
-    if (q.olhos < 0.25) { p.rect(x - r, y, r * 2, 1.4, OUT); return }
+    if (q.olhos < 0.25) { p.rect(x - r, y, r * 2, 1.4 * e, OUT); return }
     if (q.olhos < 0.75) { p.rect(x - r, y - r * 0.4, r * 2, r * 1.1, OUT); return }
-    p.fillPoly(elipse(x, y, r + 0.9, r + 1.1, 0, 10), '#ffffff')
-    p.fillPoly(elipse(x, y + 0.3, r * 0.78, r * 0.95, 0, 10), OUT)
-    p.rect(x - r * 0.5, y - r * 0.7, 1.6, 1.6, '#ffffff')   // brilho: o olhar acende
+    p.fillPoly(elipse(x, y, r + 0.9 * e, r + 1.1 * e, 0, 10), '#ffffff')
+    p.fillPoly(elipse(x, y + 0.3 * e, r * 0.78, r * 0.95, 0, 10), OUT)
+    p.rect(x - r * 0.5, y - r * 0.7, 1.6 * e, 1.6 * e, '#ffffff')   // brilho: o olhar acende
   }
   olho(oxE, oyE)
   olho(oxD, oyD)
@@ -1290,34 +1317,34 @@ export function desenharRig(p, plano, q, cores, extra = {}) {
   // focinheira: o narizinho fecha a leitura de mamífero
   if (!plano.bico) {
     const [nx, ny] = naCabeca(0.78, 0.24)
-    p.fillPoly(elipse(nx, ny, 2.4, 1.7, 0, 10), OUT)
-    p.px(nx - 1, ny - 1, mix(principal, '#fffaf2', 0.5))
+    p.fillPoly(elipse(nx, ny, 2.4 * e, 1.7 * e, 0, 10), OUT)
+    p.rect(nx - 1 * e, ny - 1 * e, Math.max(1, e), Math.max(1, e), mix(principal, '#fffaf2', 0.5))
   }
 
   const [bmx, bmy] = naCabeca(0.62, 0.62)
   if (q.boca === 'aberta') {
-    p.fillPoly(elipse(bmx, bmy + 1, 3.1, 2.5, 0, 10), '#a2495a')
-    p.fillPoly(elipse(bmx + 0.5, bmy + 2, 1.7, 1.1, 0, 8), '#e8879b')
+    p.fillPoly(elipse(bmx, bmy + 1 * e, 3.1 * e, 2.5 * e, 0, 10), '#a2495a')
+    p.fillPoly(elipse(bmx + 0.5 * e, bmy + 2 * e, 1.7 * e, 1.1 * e, 0, 8), '#e8879b')
   } else if (q.boca === 'triste') {
-    p.line(bmx - 3.5, bmy + 1.6, bmx, bmy - 0.4, OUT)
-    p.line(bmx, bmy - 0.4, bmx + 3.5, bmy + 1.6, OUT)
+    grossa(p, bmx - 3.5 * e, bmy + 1.6 * e, bmx, bmy - 0.4 * e, traco)
+    grossa(p, bmx, bmy - 0.4 * e, bmx + 3.5 * e, bmy + 1.6 * e, traco)
   } else if (q.boca === 'reta') {
-    p.rect(bmx - 3, bmy, 6, 1, OUT)
+    p.rect(bmx - 3 * e, bmy, 6 * e, Math.max(1, traco), OUT)
   } else {
-    p.line(bmx - 3.6, bmy - 0.6, bmx - 1, bmy + 1.4, OUT)
-    p.line(bmx - 1, bmy + 1.4, bmx + 1.6, bmy - 1, OUT)
-    p.line(bmx + 1.6, bmy - 1, bmx + 3.8, bmy + 0.4, OUT)
+    grossa(p, bmx - 3.6 * e, bmy - 0.6 * e, bmx - 1 * e, bmy + 1.4 * e, traco)
+    grossa(p, bmx - 1 * e, bmy + 1.4 * e, bmx + 1.6 * e, bmy - 1 * e, traco)
+    grossa(p, bmx + 1.6 * e, bmy - 1 * e, bmx + 3.8 * e, bmy + 0.4 * e, traco)
   }
 
   if (extra.bochechas) {
     const [cxE, cyE] = naCabeca(0.02, 0.42)
     const [cxD, cyD] = naCabeca(0.8, 0.46)
-    p.fillPoly(elipse(cxE, cyE, 2.5, 1.5, 0, 8), '#e8879b')
-    p.fillPoly(elipse(cxD, cyD, 2.3, 1.4, 0, 8), '#e8879b')
+    p.fillPoly(elipse(cxE, cyE, 2.5 * e, 1.5 * e, 0, 8), '#e8879b')
+    p.fillPoly(elipse(cxD, cyD, 2.3 * e, 1.4 * e, 0, 8), '#e8879b')
   }
   if (plano.marca === 'bigode') {
     const [wx, wy] = naCabeca(0.72, 0.36)
-    for (let i = -1; i <= 1; i++) p.line(wx + 2, wy + i * 2, wx + 9, wy + i * 3.2 - 1, mix(principal, '#3b2a33', 0.45))
+    for (let i = -1; i <= 1; i++) grossa(p, wx + 2 * e, wy + i * 2 * e, wx + 9 * e, wy + (i * 3.2 - 1) * e, Math.max(1, traco * 0.7), mix(principal, '#3b2a33', 0.45))
   }
 
   // Âncoras devolvidas pra quem precisa pendurar coisa no bichinho: acessório na

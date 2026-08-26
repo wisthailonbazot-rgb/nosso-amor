@@ -92,6 +92,35 @@ async function contar(ack, ok, modo, erro) {
   }
 }
 
+// Quantas mensagens ja estao acumuladas no aviso que esta na tela.
+//
+// O jeito do WhatsApp e UM aviso por conversa, que se atualiza e diz quantas
+// mensagens tem. Ja tivemos os dois extremos aqui, e os dois estavam errados:
+//
+//   - tag unica "chat" sem contagem: a mensagem nova SUBSTITUIA a anterior e o
+//     dono via uma so, achando que as outras nao chegaram;
+//   - uma tag por mensagem (`chat-123`): nada substituia nada, e a tela de
+//     bloqueio virava uma pilha de avisos separados. Foi o que ele reclamou.
+//
+// O certo e o meio: tag unica E contagem. Quem sabe quantas ja estao na tela e
+// o proprio aparelho — `getNotifications` devolve as que estao aparecendo, e a
+// contagem viaja dentro do `data` da anterior. Contar no servidor nao serviria:
+// ele nao sabe quais avisos a pessoa ja dispensou com o dedo.
+async function agrupar(tag, data) {
+  if (!tag || !self.registration.getNotifications) return { titulo: data.title, corpo: data.body, n: 1 }
+  let n = 1
+  try {
+    const abertas = await self.registration.getNotifications({ tag })
+    for (const aviso of abertas) {
+      n += (aviso.data && aviso.data.contagem) || 1
+    }
+  } catch (e) {
+    /* navegador sem a API: segue como aviso unico */
+  }
+  const titulo = n > 1 ? `${data.title} (${n} mensagens)` : data.title
+  return { titulo, corpo: data.body, n }
+}
+
 self.addEventListener('push', (event) => {
   let data = {}
   try {
@@ -99,20 +128,8 @@ self.addEventListener('push', (event) => {
   } catch (e) {
     data = { title: 'Nosso app', body: event.data ? event.data.text() : '' }
   }
-  const title = data.title || 'Nosso app'
+  data.title = data.title || 'Nosso app'
   const ack = data.ack || ''
-
-  const completa = {
-    body: data.body || '',
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
-    // tag agrupa: cinco mensagens seguidas viram um aviso que se atualiza,
-    // em vez de cinco avisos empilhados na tela de bloqueio
-    tag: data.tag || data.kind || 'geral',
-    renotify: true,
-    data: { url: data.url || '/' },
-  }
-  const simples = { body: data.body || '', icon: '/icon-192.png', data: { url: data.url || '/' } }
 
   // O numerinho vermelho no icone do app.
   //
@@ -129,16 +146,51 @@ self.addEventListener('push', (event) => {
     Promise.resolve(acao).catch(() => {})
   }
 
+  const tag = data.tag || data.kind || 'geral'
+
+  event.waitUntil(
+    agrupar(tag, data).then(({ titulo, corpo, n }) => {
+      const completa = {
+        body: corpo || '',
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        // `tag` unica junta; `renotify` faz o aparelho avisar de novo em vez de
+        // trocar o texto caladamente (sem ele, mensagem nova nao vibra).
+        tag: tag,
+        renotify: true,
+        data: { url: data.url || '/', contagem: n },
+      }
+      const simples = {
+        body: corpo || '',
+        icon: '/icon-192.png',
+        data: { url: data.url || '/', contagem: n },
+      }
+      return self.registration
+        .showNotification(titulo, completa)
+        .then(() => contar(ack, true, 'completa'))
+        .catch((err) =>
+          self.registration
+            .showNotification(titulo, simples)
+            .then(() => contar(ack, true, 'simples', err))
+            .catch((err2) => contar(ack, false, 'nenhuma', err2))
+        )
+    })
+  )
+})
+
+// Entrou no app: limpa a bandeja.
+//
+// A tela manda este recado quando o app volta a ficar visivel. Quem tem que
+// fechar os avisos e o service worker — a pagina nao tem acesso as notificacoes
+// mostradas por ele. Sem isto, o dono abria o app, lia tudo, e os avisos
+// continuavam empilhados na tela de bloqueio.
+self.addEventListener('message', (event) => {
+  if (!event.data || event.data.tipo !== 'limpar-avisos') return
   event.waitUntil(
     self.registration
-      .showNotification(title, completa)
-      .then(() => contar(ack, true, 'completa'))
-      .catch((err) =>
-        self.registration
-          .showNotification(title, simples)
-          .then(() => contar(ack, true, 'simples', err))
-          .catch((err2) => contar(ack, false, 'nenhuma', err2))
-      )
+      .getNotifications()
+      .then((lista) => lista.forEach((aviso) => aviso.close()))
+      .catch(() => {})
   )
 })
 

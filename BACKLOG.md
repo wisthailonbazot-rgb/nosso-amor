@@ -479,3 +479,109 @@ Estado: **537 verificações, 0 falha**. Causas no HANDOFF, seção 9.6.
       senão seria o jeito de escapar do cuidado. Há teste para isso.
 
 Estado: **555 verificações, 0 falha**. Causas no HANDOFF, seção 9.7.
+
+### 26/08/2026 — Avatar, bichinho em alta resolução, dois jogos novos e três defeitos
+
+Pedido do dono, na íntegra: o corpo da personagem feminina ainda não é feminino;
+o boneco masculino parece ter dois braços de cada lado; o bichinho tem poucos
+pixels e dá pra deixar mais desenhado (conferindo se não bugava roupas etc.);
+criar mais jogos — um jogo da memória com cartas de imagem, geradas por uma IA
+gratuita e feitas com capricho — e um jogo de dois, cada um no seu celular,
+pesquisado e bem feito, sem erros e não simples demais; o chat às vezes não
+carrega as mensagens novas ao sair e entrar; as notificações ficam todas
+separadas, juntar igual ao WhatsApp e sumir quando entrar no app; melhorar a
+qualidade das figurinhas; a maioria dos bonecos é careca; e o zoom da casa
+continua bugado, não dá pra arrastar e ver a casa toda.
+
+- **[x]** **"Dois braços de cada lado".** Não era posição de nada: era o traço de
+      uma peça caindo DENTRO da outra. `box()` pintava contorno e preenchimento
+      de cada caixa antes da seguinte, então o contorno da manga caía em cima do
+      primeiro pixel do tronco e virava uma coluna escura de 11 px descendo por
+      dentro da camisa, coladinha no braço. Acontecia em TODA roupa de cima com
+      manga. Medido lado a lado: na ordem antiga sobravam colunas escuras em
+      x=9 e x=22 dentro da camisa; na nova (contorno de tudo, depois
+      preenchimento de tudo), nenhuma. É a mesma lição já registrada no bichinho.
+- **[x]** **Corpo feminino de verdade.** O recorte de 2 px de cintura mudava
+      pouco e só sabia ESTREITAR — sem quadril não há silhueta. Agora cada linha
+      de pixel é reescalada na horizontal em torno do meio do corpo, o que
+      estreita E alarga, e a roupa acompanha sozinha (nenhuma das 48 peças
+      precisou ser redesenhada). Medido: reto = 22 px de largura do ombro ao
+      quadril; curvas = ombro 20, cintura 16, quadril 23.
+- **[x]** **"A maioria dos bonecos é careca".** Todo corte pintava só uma faixa
+      de 6 px no alto da cabeça: o crânio dos lados ficava com a COR DA PELE, e
+      ampliado isso lê como entrada funda. Agora todo corte parte de um "casco"
+      com volume e costeleta. Medido na faixa lateral: 12/48 pixels cobertos
+      antes, 26/48 no curto e 34/48 no médio. Entraram quatro cortes novos na
+      loja (chanel, tranças, black power e raspado — este último careca DE
+      PROPÓSITO, com a sombra do corte, pra careca virar escolha e não defeito).
+- **[x]** **Bichinho com mais pixel.** Na tela dele a arte era sempre 128×108
+      ampliada por CSS: no celular dava 3×, ou seja, cada pixel virava um
+      quadrado de 3 e o desenho continuava com a mesma informação. Agora a tela
+      escolhe, entre as combinações que dão o MESMO tamanho físico, a que tem
+      mais pixel de arte. Medido: 384 px na tela nos dois casos, **8,9× mais
+      pixel desenhado** (1.103 → 9.821). Pra isso funcionar, o contorno e o rosto
+      (nariz, boca, bigode, olho) deixaram de ser medidas fixas e passaram a
+      acompanhar a escala — sem isso sairia um bicho grande com narizinho de
+      alfinete. O cômodo e a corrida continuam na resolução da cena de propósito:
+      lá o bichinho precisa ter a mesma grossura de pixel do sofá. Conferido na
+      bancada: 132 animações, 18 bichinhos, 30 acessórios vestidos e 30 móveis,
+      nenhum vazio.
+- **[x]** **Jogo da memória**, com carta de imagem. O tabuleiro do dia é sorteado
+      pela data, então é **o mesmo nos dois celulares** — é isso que dá sentido à
+      lista de "quem fez em menos tentativas". 14 cartas geradas pelo Pollinations
+      e **escolhidas olhando, uma a uma**: o gerador erra o assunto com
+      frequência (pedindo um coração vermelho devolveu um bichinho nas três
+      tentativas; "uma chave" virou um hamster), e o que não acertou ficou de
+      fora. 58 KB no total. Prêmio de 12 Corações uma vez por dia.
+- **[x]** **Batalha naval, a dois, cada um no seu celular.** Tabuleiro 8×8, frota
+      de 4/3/3/2, quem acerta joga de novo. O que faz ele funcionar não é a tela:
+      **a posição dos navios do outro nunca sai do servidor**, e o tiro é
+      resolvido lá. Mandar o tabuleiro inteiro e esconder no CSS não esconderia
+      nada — bastava abrir o painel do navegador pra ganhar toda partida. Tem
+      caso de teste que varre a resposta inteira atrás das casas do adversário.
+      Conferido nos dois lados ao vivo: a tela dela virou sozinha quando ele
+      posicionou, o tiro dele apareceu sem recarregar, e o tabuleiro dele ficou
+      com zero casas de navio visíveis mesmo depois de ela acertar uma.
+- **[x]** **Chat não carregava as mensagens novas ao voltar pro app.** O
+      WebSocket entrega o que acontece com ele DE PÉ, e o celular derruba a
+      conexão quando o app vai pro segundo plano — o que chega nesse intervalo
+      não passa por evento nenhum. Como a tela do chat continua montada, nada
+      ia buscar. Agora ela re-sincroniza quando o app volta a ficar visível E
+      quando o WebSocket reconecta (perder sinal na rua não esconde o app, então
+      só a visibilidade não bastaria). Conferido: ao voltar, o app faz
+      `GET /api/chat`, a mensagem aparece e não duplica.
+- **[x]** **Notificações juntas, como no WhatsApp, e limpas ao entrar.** Já foi
+      dos dois jeitos errados: tag única sem contagem (a nova SUBSTITUÍA a
+      anterior e só aparecia uma) e uma tag por mensagem (a pilha de avisos
+      separados, que foi esta reclamação). O certo é o meio — tag única E
+      contagem —, e quem conta é o aparelho, porque o servidor não sabe quais a
+      pessoa já dispensou com o dedo. Medido: "Ele — oi", "Ele (2 mensagens) —
+      tudo bem?", "Ele (3 mensagens) — me responde", e aviso de outro assunto
+      não entra na conta. Ao abrir o app, a bandeja é limpa e o numerinho zera.
+- **[x]** **Qualidade das figurinhas.** A causa não era o desenho: metade do
+      pacote era de OUTRO MATERIAL. As 18 da referência já eram redondas com
+      brilho e as outras 20 continuavam em pixel, lado a lado no mesmo seletor.
+      As 20 foram convertidas; as 38 estão na mesma linguagem, e o smoke não
+      deixa a mistura voltar. A bancada `/lab` também passou a mostrar a
+      figurinha COMO O CHAT MOSTRA — ela desenhava todas em pixel, ou seja,
+      conferia justamente a arte que o app não usa mais.
+- **[x]** **Zoom da casa: agora dá pra ver a casa toda.** `.room-holder` era
+      `display:flex; justify-content:center`. Centralizar por flex funciona
+      enquanto o conteúdo cabe; passando disso, o flexbox joga metade da sobra
+      ANTES do início do contêiner, e essa metade é inalcançável porque
+      `scrollLeft` não vai abaixo de zero. Medido com o mesmo conteúdo nos dois
+      CSS: **704 px inalcançáveis à esquerda** no antigo, 0 no novo. Conferido
+      no app: 1× a 4×, nada cortado em nenhum passo, e o arrasto chega às duas
+      pontas.
+
+**Sobre a IA de imagem, honestamente:** o único modelo gratuito disponível
+(`sana`, no Pollinations) desenha bem objeto simples e fofo — e por isso serve
+pras cartas da memória, onde o assunto é "um bolo", "uma pizza". Ele **não**
+serve pras figurinhas: erra assunto simples (um coração virou bicho nas três
+tentativas) e não teria como acertar "saudade", "amor protegido" ou "acabei".
+Além disso ele só devolve JPEG com fundo — figurinha precisa de fundo
+transparente. Por isso a melhora das figurinhas foi feita fechando a mistura de
+materiais, que era o problema real e é exato.
+
+Estado: **609 verificações, 0 falha**; build Vite aprovada; tudo conferido no
+navegador contra o app publicado. Causas no HANDOFF, seção 9.8.

@@ -198,6 +198,10 @@ SHOP_ITEMS = [
     _avatar("hair_franja", "Franja", "hair", "franja", 110),
     _avatar("hair_rabo", "Rabo de cavalo", "hair", "rabo", 130),
     _avatar("hair_moicano", "Moicano", "hair", "moicano", 180),
+    _avatar("hair_chanel", "Chanel", "hair", "chanel", 140),
+    _avatar("hair_trancas", "Tranças", "hair", "trancas", 170),
+    _avatar("hair_afro", "Black power", "hair", "afro", 190),
+    _avatar("hair_raspado", "Raspado", "hair", "raspado", 90, "Careca de propósito, com a sombra do corte"),
     # --- avatar: roupa de cima
     _avatar("top_moletom", "Moletom", "top", "moletom", 150),
     _avatar("top_vestido", "Vestido", "top", "vestido", 220, "Peça única: dispensa a de baixo"),

@@ -37,7 +37,7 @@ convite, sem pareamento, sem cobrança.
 | Toques de saudade, datas importantes, mural de momentos | pronto |
 | Motor de pixel isométrico + casa editável | pronto; vários cômodos, terreno e rua frontal |
 | Bichinho | pronto; cuidados, casa e um jogo |
-| Minigames | Pega a bolinha pronto; demais adiados |
+| Minigames | Bolinha, corrida, **memória** e **batalha naval a dois** prontos |
 | Mapa do bairro | não começou; terreno da casa e rua frontal já prontos |
 
 ---
@@ -118,7 +118,8 @@ Depois commitar e empurrar em `.deploy-repo/`, e disparar o build (o token está
 `../env-coolify.txt`, fora deste projeto):
 
 ```bash
-cd "D:/beckup/arquivo env" && TOKEN=$(grep "^COOLIFY_TOKEN=" env-coolify.txt | sed 's/^COOLIFY_TOKEN= *//' | tr -d '') && curl -s -X POST -H "Authorization: Bearer $TOKEN" "https://painel.barbeariabazot.com/api/v1/deploy?uuid=q13k8ab4ps5elmhoio0mov3t&force=true"
+cd "D:/beckup/arquivo env" && TOKEN=$(grep "^COOLIFY_TOKEN=" env-coolify.txt | sed 's/^COOLIFY_TOKEN= *//' | tr -d '
+') && curl -s -X POST -H "Authorization: Bearer $TOKEN" "https://painel.barbeariabazot.com/api/v1/deploy?uuid=q13k8ab4ps5elmhoio0mov3t&force=true"
 ```
 
 **Como saber se subiu mesmo:** o nome do arquivo do bundle é um resumo do
@@ -169,6 +170,7 @@ app-casal/
 │   ├── test_economy.py           ← carteira, check-in, tarefas, loja, avatar
 │   ├── test_cycle.py             ← o cálculo do ciclo contra a literatura
 │   ├── test_couple.py            ← chat, arquivos que vêm de fora, toques, datas
+│   ├── test_games.py             ← memória e naval, INCLUSIVE o teste de vazamento
 │   └── app/
 │       ├── main.py               ← rotas, WebSocket, mídia, servidor do app
 │       ├── config.py             ← TODA variável de ambiente entra por aqui
@@ -196,10 +198,12 @@ app-casal/
 │           ├── avatar.py         ← guarda-roupa, com validação de posse
 │           ├── cycle.py          ← ciclo, calendário e privacidade
 │           ├── chat.py           ← mensagens, figurinha, foto, áudio
-│           └── couple.py         ← toques, datas, mural
+│           ├── couple.py         ← toques, datas, mural
+│           └── games.py          ← memória (sozinho) e batalha naval (a dois)
 │
 └── web/
     ├── public/                   ← manifest, service worker, ícones, fontes locais
+    │   └── cartas/               ← as 14 cartas da memória (a ÚNICA arte em arquivo)
     └── src/
         ├── api.js                ← toda chamada HTTP passa aqui
         ├── store.js              ← sessão + WebSocket + presença (Zustand)
@@ -1024,3 +1028,214 @@ vários, ninguém vai abrir um por um para descobrir qual está com fome.
 o queixo nas seis espécies e nas cinco poses da aba Vestidos; três bichinhos na casa,
 troca pelo retrato funcionando e a casa acompanhando o ativo; os cabeçalhos de cache
 saem certos (`no-cache` no HTML, `immutable` nos assets). **555 verificações, 0 falha.**
+
+### 9.8 Avatar, resolução do bichinho, dois jogos novos e três defeitos (26/08/2026)
+
+Rodada grande. Três defeitos com causa em comum — **uma medida que atropela a
+outra** — e duas features novas, sendo a primeira que é de dois jogadores.
+
+**1. "Dois braços de cada lado" era um traço caindo dentro de outra peça.**
+`box()` pintava contorno E preenchimento de uma caixa antes de ir pra próxima.
+Com a manga (arte x 6..8) e o tronco (x 9..22) encostados, a manga era desenhada
+depois e o contorno dela caía em x=9 — o primeiro pixel do tronco. Sobrava uma
+coluna escura de 11 px descendo por dentro da camisa, colada no braço, e
+ampliada na tela isso lê como um segundo braço. Não era erro de posição de
+nenhuma das duas peças, e acontecia em **toda** roupa de cima com manga.
+
+`peca()` faz os dois passes (contorno de tudo, depois preenchimento de tudo) e o
+preenchimento do tronco cobre o traço da manga. Sobra traço só na silhueta
+externa. Com a emenda removida, o braço sumia dentro do tronco (mesma cor), então
+entrou o `vinco`: 1 px numa sombra da própria cor da roupa. É exatamente a lição
+de 9.4 (defeito 2), que estava escrita pro bichinho e não tinha sido aplicada aqui.
+
+> Medido lado a lado, com o mesmo desenho nas duas ordens: na antiga sobravam
+> colunas escuras em x=9 e x=22 **dentro** da camisa; na nova, nenhuma.
+
+**2. A silhueta feminina: só dava pra estreitar, e sem quadril não há silhueta.**
+A primeira tentativa (9.7) recortava a cintura com `clearRect`. Funcionava, mas
+mudava pouco — e não tinha como ir mais longe, porque apagar só ESTREITA:
+alargar exigiria pintar fora do tronco sem saber que roupa está por baixo.
+
+O que resolve os dois de uma vez sem redesenhar nada é **reescalar cada linha de
+pixel na horizontal**, em torno do meio do corpo. Abaixo de 1 estreita (ombro,
+cintura), acima de 1 alarga (quadril) — e o que está sendo esticado são os
+pixels JÁ PINTADOS, então pele, tecido e contorno acompanham sozinhos. As 48
+peças continuam valendo sem uma segunda versão, inclusive as que não existem
+ainda. Largura de destino arredondada pra inteiro e `imageSmoothingEnabled:
+false`: a borda continua dura.
+
+> Medido: `reto` = 22 px do ombro ao quadril, reto de cima a baixo.
+> `curvas` = ombro 20, cintura 16, quadril 23.
+
+**3. "A maioria dos bonecos é careca" — faltava volume em todos, não um corte.**
+Cada corte pintava uma faixa de 6 px no alto da cabeça (arte y 3..8) mais dois
+tracinhos nas têmporas. O crânio dos lados — x 8..10 e 21..23, de y 9 a y 20 —
+ficava com a **cor da pele**. Ampliado, isso lê como entrada funda dos dois lados.
+Agora todo corte parte de `casco()`, com volume no topo e costeleta pelo lado.
+
+> Medido na faixa lateral do crânio: 12/48 pixels cobertos antes; 26/48 no
+> `curto`, 34/48 no `medio`.
+
+Quatro cortes novos na loja: chanel, tranças, black power e **raspado** — este
+com a sombra do corte na pele, pra careca ser uma escolha e não a aparência de
+quem está sem arte. E o `moicano` deixou de mostrar pele nos lados raspados
+(virou o cabelo curto numa sombra da cor), pelo mesmo motivo.
+
+**4. O bichinho ganhou 8,9x mais pixel sem mudar de tamanho.**
+Na tela dele a arte era sempre 128x108, ampliada por CSS num fator inteiro. Isso
+protege a borda dura, mas trava a QUANTIDADE de pixel: no celular o palco cabe
+3x, e 3x de uma arte de 128 é a mesma arte de 128 com cada pixel virando um
+quadrado de 3. O corpo fica grande e a informação é a mesma.
+
+A saída não foi abandonar o fator inteiro, e sim escolher — **entre as
+combinações que dão o mesmo tamanho físico** — a que tem mais pixel de arte.
+128x3 (zoom 3) e 384x1 (res 3, zoom 1) ocupam os mesmos 384 px; a segunda tem
+nove vezes mais pixel. O motor já sabia fazer isso: `planoDe` recebe uma escala e
+desenha DIRETO no tamanho final (foi o que consertou o bichinho borrado do cômodo
+e da corrida, em 9.5). Ninguém tinha pedido pra ele desenhar **maior** que a
+caixa de referência.
+
+Duas coisas precisaram acompanhar, e são a resposta ao "verifica se não vai bugar":
+
+- **o contorno**. `desenharCamada` usava deslocamento fixo de 1 px. Num corpo
+  três vezes maior, 1 px vira fio de cabelo e o desenho perde justamente o traço
+  grosso que dá cara de desenho. Agora a espessura acompanha a escala, sempre
+  arredondada pra inteiro (meio pixel de traço é franja na diagonal);
+- **o rosto**. Nariz (2,4 x 1,7), boca (6), bigode (9 px), brilho do olho: tudo
+  era número cru. O corpo cresceria e o rosto não — sairia um bicho grande com
+  narizinho de alfinete. Tudo o que é rosto passou a multiplicar por
+  `plano.escala`.
+
+> **O cômodo e a corrida continuam na resolução da cena, de propósito.** Lá o
+> bichinho precisa ter a mesma grossura de pixel do sofá; em alta resolução ele
+> pareceria colado por cima da cena. Na tela dele ele está sozinho no palco e não
+> tem com quem destoar. Medido: 384 px na tela nos dois casos, 1.103 para 9.821
+> pixels desenhados. Bancada: 132 animações, 18 bichinhos, 30 acessórios
+> vestidos e 30 móveis, nenhum vazio.
+
+**5. O chat não trazia o que chegou enquanto o app estava fechado.**
+O WebSocket entrega o que acontece **com ele de pé**, e o celular derruba a
+conexão assim que o app vai pro segundo plano. O que o outro manda nesse
+intervalo chega no banco e fica lá: não passa por evento nenhum. E como a tela do
+chat continua MONTADA (o React não a remonta ao voltar), o `carregar()` da
+montagem também não rodava de novo. Ninguém ia buscar.
+
+Agora ela re-sincroniza em dois gatilhos, e os dois são necessários: o app voltar
+a ficar visível, e o **WebSocket reconectar** — perder sinal na rua derruba a
+conexão sem esconder o app, então só a visibilidade não cobriria. A busca JUNTA
+em vez de substituir, senão quem já rolou pra trás perderia o histórico
+carregado.
+
+> Ao medir isto no navegador vale saber: com a pane do navegador escondida,
+> `document.visibilityState` é **hidden**, e o `visibilitychange` do store sai
+> logo na primeira linha. Sem forçar `visible`, a medição dá falso negativo.
+
+**6. Notificação: já foi dos dois jeitos errados.**
+Tag única sem contagem agrupa — e agrupar, no celular, quer dizer que a nova
+SUBSTITUI a anterior; o dono via uma só. Uma tag por mensagem (`chat-123`, o
+conserto anterior) não substitui nada e virou a pilha de avisos separados, que foi
+esta reclamação. O certo é o meio: **tag única E contagem**, como no WhatsApp.
+
+A contagem não vem do servidor: ele não sabe quais avisos a pessoa já dispensou
+com o dedo. Ela é somada no service worker, lendo `getNotifications()` e o
+`contagem` que viaja no `data` da anterior. E ao ENTRAR no app a bandeja é limpa
+— pela página e por um recado ao service worker, porque a página não alcança as
+notificações mostradas por ele.
+
+> Medido com uma bandeja falsa: "Ele — oi", "Ele (2 mensagens) — tudo bem?",
+> "Ele (3 mensagens) — me responde"; aviso de outro assunto não entra na conta.
+
+**7. O zoom da casa: 704 px que nenhum arrasto alcançava.**
+`.room-holder` era `display:flex; justify-content:center`. Centralizar por flex
+funciona enquanto o conteúdo CABE; passando disso, o flexbox distribui a sobra
+dos dois lados — e a metade que fica **antes** do início do contêiner é
+inalcançável, porque `scrollLeft` não vai abaixo de zero. Com bloco +
+`margin: 0 auto` no canvas o comportamento volta a ser o certo: sobrando espaço
+centraliza, faltando a margem automática vira zero e tudo fica dentro da rolagem.
+
+> Medido com o mesmo conteúdo nos dois CSS: **704 px inalcançáveis à esquerda**
+> no antigo, 0 no novo. No app, de 1x a 4x, nada cortado em nenhum passo.
+
+Isto é a **quarta** vez nesta série que uma medida atropela a outra (antes: a
+altura da pista, a resolução da arte, e o contêiner que crescia com o conteúdo em
+9.7, defeito 2). Vale como regra ao lado daquela: **quem centraliza conteúdo que
+pode passar do quadro não pode centralizar por flexbox.**
+
+### 9.9 Os dois jogos novos (26/08/2026)
+
+`backend/app/routers/games.py` + `test_games.py`. Os dois usam a tabela
+`minigame_matches`, que já tinha `state` em JSON, `turn_user_id` e os dois
+jogadores — criar tabela por jogo espalharia a mesma coisa em dois lugares.
+
+**Memória.** Tabuleiro 4x4, sorteado a partir da DATA (não de um `random` sem
+semente), então é **o mesmo nos dois celulares** — é isso que dá sentido a "fiz
+em 11 tentativas". 14 cartas de imagem, as únicas imagens de arquivo do app
+inteiro: aqui a carta É a arte, não tem estado, pose nem cor variável.
+
+> **Sobre gerar por IA.** O único modelo gratuito (`sana`, no Pollinations)
+> desenha bem objeto simples e fofo, e erra o assunto com frequência: pedindo "um
+> coração vermelho brilhante" devolveu um bichinho nas TRÊS sementes, e "uma
+> chave dourada" virou um hamster nas três. Por isso foram geradas 3 opções por
+> assunto e **escolhidas olhando, uma a uma**; o que não acertou ficou de fora,
+> junto com o que saiu em foto no meio de um baralho de desenho (o café) e o que
+> veio com mão de gente na imagem. Tentar corrigir com um prompt mais literal
+> ("flat 2d cartoon, not a photo") piorou — saiu escuro e abstrato. Sobraram 14
+> assuntos, 58 KB no total, e o smoke confere que toda carta da lista tem arquivo
+> no disco: carta sem arquivo não dá erro, aparece um quadrado branco, e dois
+> quadrados brancos são um par indistinguível.
+
+**Batalha naval, a dois.** 8x8 (o clássico 10x10 daria 30 px por casa num celular
+de 375 e o dedo erraria a vizinha), frota 4/3/3/2, quem acerta joga de novo.
+
+> **O ponto que decide o jogo:** a posição dos navios do outro **nunca sai do
+> servidor**, e o tiro é resolvido lá. Mandar o tabuleiro inteiro e esconder no
+> CSS não esconderia nada — bastava abrir o painel do navegador pra ganhar toda
+> partida, e num app de duas pessoas isso não é hipótese distante. `_vista()`
+> monta uma resposta diferente pra cada lado: o seu tabuleiro inteiro, e o do
+> outro só nas casas onde você já atirou. Há caso de teste que converte a
+> resposta inteira em texto e procura as casas do adversário lá dentro.
+>
+> Pelo mesmo motivo o **evento de tempo real não carrega o estado**: ele diz só
+> "mexeu, vem buscar", e cada app busca a SUA vista. Um evento com o estado
+> dentro vazaria um lado pro outro.
+
+A frota é validada no servidor (dentro do tabuleiro, sem encavalar, tamanhos
+certos) mesmo com a tela validando também: a tela é do jogador, e sem isso
+bastava mandar quatro navios de 2 empilhados num canto. O prêmio é por DIA, não
+por vitória, travado por `dedupe_key` — senão bastava ganhar em série pra
+imprimir Coração.
+
+Conferido nos dois lados ao vivo: a tela dela virou sozinha quando ele
+posicionou; o tiro dele apareceu sem recarregar; ela acertou pelo dedo e o
+tabuleiro dele continuou com **zero** casas de navio visíveis, inclusive na
+resposta da API.
+
+### 9.10 Figurinhas: o problema era a mistura, não o desenho (26/08/2026)
+
+As 18 da referência do dono já eram redondas com brilho (SVG); as outras 20
+continuavam em pixel, e as duas linguagens apareciam **lado a lado no mesmo
+seletor**. Era isso a "qualidade das figurinhas" — não que as de pixel fossem
+malfeitas, e sim que metade do pacote era de outro material. As 20 foram
+convertidas; as 38 estão na mesma linguagem, e o smoke não deixa a mistura voltar.
+
+Dois aprendizados desta parte:
+
+1. **A bancada conferia a arte que o app não usa.** A aba de figurinhas do `/lab`
+   desenhava todas em pixel, chamando `drawSticker` direto — mas o `Sticker` do
+   app prefere a versão redonda. Ou seja, a única arte conferida era justamente a
+   que o chat não mostra mais. Agora a bancada usa o mesmo `Sticker` do chat.
+2. **Nome de componente errado em JSX não é desenho faltando: é o app em branco.**
+   Uma das figurinhas novas chamava `<Zzz>` e o auxiliar se chama `Zezinho`. Como
+   as figurinhas são montadas na abertura do módulo, o `ReferenceError` derrubava
+   o app INTEIRO. Foi o console da bancada que denunciou. Entrou uma conferência
+   no smoke: todo componente usado dentro de `STICKERS_HD` tem que estar definido
+   no arquivo.
+
+Entraram também três pontes novas no smoke, todas do mesmo tipo das que já
+existiam: toda peça de avatar vendida tem desenho, todo estilo desenhado tem nome
+no editor, e toda carta da memória tem imagem no disco.
+
+**Estado: 609 verificações, 0 falha.** Build Vite aprovada. **Falta publicar em
+produção** — ver "Publicar em produção" na seção 2.
+
+**Próximo passo:** continua sendo a seção 8.1 — mapa navegável do bairro.

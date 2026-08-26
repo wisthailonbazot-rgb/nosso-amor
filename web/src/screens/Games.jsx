@@ -4,6 +4,8 @@ import { api } from '../api'
 import Icon from '../components/Icon'
 import PetCanvas from '../render/PetCanvas'
 import PetRunner from '../render/PetRunner'
+import GameMemoria from './GameMemoria'
+import GameNaval from './GameNaval'
 
 /**
  * Os jogos do bichinho.
@@ -28,6 +30,7 @@ const SPOTS = [
 
 export default function Games() {
   const [pet, setPet] = useState(null)
+  const [carregouPet, setCarregouPet] = useState(false)
   const [status, setStatus] = useState(null)
   const [sending, setSending] = useState(false)
   const [jogo, setJogo] = useState('corrida')
@@ -47,7 +50,10 @@ export default function Games() {
   const caught = useRef(false)
 
   useEffect(() => {
-    api.get('/api/pet').then((x) => setPet(x.pet)).catch((e) => setStatus({ kind: 'error', text: e.message }))
+    api.get('/api/pet')
+      .then((x) => setPet(x.pet))
+      .catch(() => setPet(null))
+      .finally(() => setCarregouPet(true))
   }, [])
   useEffect(() => { const id = setInterval(() => setClock(Date.now()), 4000); return () => clearInterval(id) }, [])
   useEffect(() => {
@@ -150,21 +156,26 @@ export default function Games() {
     setSending(false)
   }
 
-  if (!pet) return <div className="full-center"><div className="spinner" /></div>
-  if (!pet.chosen) {
-    return <div className="card center"><Icon name="paw" size={44} /><h1>Primeiro escolham o bichinho</h1></div>
-  }
+  // A guarda do bichinho vale so pros jogos DELE. Memoria e batalha naval nao
+  // dependem de bichinho nenhum, e barrar os dois atras dessa tela deixava a aba
+  // "Jogos" inteira inutil pra quem ainda nao adotou.
+  const precisaDoPet = jogo === 'corrida' || jogo === 'bolinha'
+  const semPet = !pet || !pet.chosen
+  if (!carregouPet) return <div className="full-center"><div className="spinner" /></div>
 
   const [left, top] = SPOTS[target]
-  const cooldown = pet.toy_ready?.game_bolinha
+  const cooldown = pet?.toy_ready?.game_bolinha
   const resting = cooldown && new Date(cooldown).getTime() > clock
-  const abas = [['corrida', 'Corrida'], ['bolinha', 'Bolinha']]
+  // Os dois primeiros sao do bichinho e precisam dele; os dois ultimos, nao.
+  const abas = [
+    ['corrida', 'Corrida'], ['bolinha', 'Bolinha'],
+    ['memoria', 'Memória'], ['naval', 'A dois'],
+  ]
+  const titulos = { corrida: 'Corrida', bolinha: 'Bolinha', memoria: 'Memória', naval: 'Batalha naval' }
 
-  const corrida = (
-    <PetRunner pet={pet} aoTerminar={terminouCorrida} telaCheia={cheia} />
-  )
+  const corrida = pet && <PetRunner pet={pet} aoTerminar={terminouCorrida} telaCheia={cheia} />
 
-  const bolinha = (
+  const bolinha = pet && (
     <>
       <div className={`pet-game card ${cheia ? 'cheia' : ''}`}>
         <div className="game-hud">
@@ -193,18 +204,67 @@ export default function Games() {
     </>
   )
 
+  /** O conteudo da aba escolhida. Só os jogos do bichinho exigem bichinho. */
+  function conteudo() {
+    if (precisaDoPet && semPet) {
+      return (
+        <div className="card center">
+          <Icon name="paw" size={44} />
+          <h1>Primeiro escolham o bichinho</h1>
+          <p className="muted small">
+            A corrida e a bolinha são brincadeiras com ele. A memória e a batalha
+            naval não precisam — estão nas outras abas.
+          </p>
+        </div>
+      )
+    }
+    if (jogo === 'corrida') {
+      return (
+        <>
+          {!cheia && (
+            <p className="muted small">
+              Ele corre sozinho — você escolhe a hora. Arraste pra cima pra pular,
+              pra baixo pra abaixar. Pedra e tronco se pulam; galho e abelha, só
+              abaixando.
+            </p>
+          )}
+          {corrida}
+        </>
+      )
+    }
+    if (jogo === 'bolinha') {
+      return (
+        <>
+          {!cheia && (
+            <p className="muted small">
+              Acerte antes que ela fuja. Três erros encerram a rodada; cada acerto
+              acelera o desafio.
+            </p>
+          )}
+          {bolinha}
+        </>
+      )
+    }
+    if (jogo === 'memoria') return <GameMemoria telaCheia={cheia} />
+    return <GameNaval />
+  }
+
   return (
     <div ref={casco} className={cheia ? 'jogo-cheio' : undefined}>
       <div className="row between">
         {cheia ? (
-          <strong className="jogo-cheio-titulo">{jogo === 'corrida' ? 'Corrida' : 'Bolinha'} · {pet.name}</strong>
+          <strong className="jogo-cheio-titulo">{titulos[jogo]}</strong>
         ) : (
-          <h1 className="screen-title">Brincar com {pet.name}</h1>
+          <h1 className="screen-title">{titulos[jogo]}</h1>
         )}
-        <button className="btn btn-sm btn-ghost" onClick={alternarCheia}>
-          <Icon name={cheia ? 'check' : 'game'} size={15} />
-          {cheia ? 'Sair' : 'Tela cheia'}
-        </button>
+        {/* A batalha naval nao entra em tela cheia: ela tem DOIS tabuleiros que
+            precisam rolar, e a sobreposicao trava a rolagem da pagina. */}
+        {jogo !== 'naval' && (
+          <button className="btn btn-sm btn-ghost" onClick={alternarCheia}>
+            <Icon name={cheia ? 'check' : 'game'} size={15} />
+            {cheia ? 'Sair' : 'Tela cheia'}
+          </button>
+        )}
       </div>
 
       {!cheia && (
@@ -222,29 +282,7 @@ export default function Games() {
       )}
 
       {status && <p className={`notice ${status.kind}`}>{status.text}</p>}
-
-      {jogo === 'corrida' ? (
-        <>
-          {!cheia && (
-            <p className="muted small">
-              Ele corre sozinho — você escolhe a hora. Arraste pra cima pra pular,
-              pra baixo pra abaixar. Pedra e tronco se pulam; galho e abelha, só
-              abaixando.
-            </p>
-          )}
-          {corrida}
-        </>
-      ) : (
-        <>
-          {!cheia && (
-            <p className="muted small">
-              Acerte antes que ela fuja. Três erros encerram a rodada; cada acerto
-              acelera o desafio.
-            </p>
-          )}
-          {bolinha}
-        </>
-      )}
+      {conteudo()}
     </div>
   )
 }

@@ -10,7 +10,8 @@ import { STYLE_LISTS } from '../render/avatar'
 // Nome bonito pra cada estilo. O servidor manda o código; quem traduz é a tela.
 const LABEL = {
   curto: 'Curto', medio: 'Médio', longo: 'Longo', cacheado: 'Cacheado', coque: 'Coque',
-  franja: 'Franja', rabo: 'Rabo', moicano: 'Moicano',
+  franja: 'Franja', rabo: 'Rabo', moicano: 'Moicano', chanel: 'Chanel',
+  trancas: 'Tranças', afro: 'Black power', raspado: 'Raspado',
   camiseta: 'Camiseta', regata: 'Regata', moletom: 'Moletom', vestido: 'Vestido',
   xadrez: 'Xadrez', jaqueta: 'Jaqueta', social: 'Social',
   jeans: 'Jeans', short: 'Short', saia: 'Saia',

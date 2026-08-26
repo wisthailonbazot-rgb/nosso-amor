@@ -626,8 +626,19 @@ label.field > span {
 
 .room-holder {
   width: 100%;
-  display: flex;
-  justify-content: center;
+  /* NÃO é flex, e o motivo é o defeito que sobrou do zoom.
+
+     Era `display:flex; justify-content:center`. Centralizar por flex funciona
+     enquanto o conteúdo CABE; quando ele passa do quadro, o flexbox distribui a
+     sobra dos DOIS lados — e a metade que fica antes do início do contêiner
+     é inalcançável, porque `scrollLeft` não vai abaixo de zero. Aproximando a
+     casa, a parte de cima e a esquerda do cômodo simplesmente não chegavam por
+     arrasto nenhum: era esse o "não consigo arrastar e ver ela toda".
+
+     Com bloco + `margin: auto` no canvas o comportamento é o antigo e correto:
+     sobrando espaço, ele centraliza; faltando, a margem automática vira zero e
+     TUDO fica do lado de dentro da rolagem. */
+  display: block;
   /* Os DOIS eixos rolam. Antes o vertical era `hidden`, e num cômodo mais alto
      que o quadro a parte de baixo simplesmente sumia — era o "está cortando o
      cômodo". A escala é inteira de propósito (meio pixel vira franja), então a
@@ -654,6 +665,8 @@ label.field > span {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   display: block;
+  /* Centraliza SÓ quando sobra espaço (ver o comentário em `.room-holder`). */
+  margin: 0 auto;
   touch-action: none;
 }
 
@@ -1933,4 +1946,119 @@ button:disabled,
   border: 1.5px solid var(--ink);
   border-radius: 50%;
   background: #e8556f;
+}
+
+/* ------------------------------------------------------------ jogo da memória
+   A carta vira de verdade (rotação em 3D). O truque é `backface-visibility`:
+   as duas faces ocupam o MESMO lugar, e a de trás fica escondida enquanto a
+   carta está de frente. Sem isso, as duas apareceriam sobrepostas no meio do
+   giro e a carta pareceria transparente. */
+.memo-hud { position: static; margin: 10px 0; }
+.memo-grade {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 7px;
+  /* Quatro colunas num celular de 375 px dão ~82 px por carta — o suficiente
+     pro dedo não errar a vizinha. O teto existe pro tabuleiro não virar quatro
+     cartazes num tablet. */
+  max-width: 420px;
+  margin: 0 auto;
+}
+.memo-carta {
+  position: relative;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  background: none;
+  transform-style: preserve-3d;
+  transition: transform 0.32s ease;
+  cursor: pointer;
+}
+.memo-carta.virada, .memo-carta.casada { transform: rotateY(180deg); }
+.memo-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 2px solid var(--ink);
+  border-radius: 12px 9px 13px 10px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  box-shadow: 0 3px 0 var(--ink);
+}
+.memo-costas {
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.35) 0 6px, transparent 6px 12px),
+    var(--rose);
+  color: #fff;
+}
+.memo-frente {
+  transform: rotateY(180deg);
+  background: var(--cream);
+}
+.memo-frente img { width: 100%; height: 100%; object-fit: cover; }
+/* Par resolvido: sai do caminho sem sumir, senão o tabuleiro dança e a pessoa
+   perde a referência de onde estavam as outras. */
+.memo-carta.casada { opacity: 0.45; }
+.memo-carta.casada .memo-face { box-shadow: none; }
+
+.memo-placar { list-style: none; padding: 0; margin: 6px 0 0; }
+.memo-placar li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1.5px dashed rgba(74,59,55,.22);
+}
+.memo-placar li:last-child { border-bottom: 0; }
+.memo-pos { font: 800 15px 'Baloo 2', sans-serif; color: var(--rose); min-width: 22px; }
+.memo-placar .muted { margin-left: auto; font-size: 12px; }
+
+/* ------------------------------------------------------------ batalha naval */
+.naval { display: flex; flex-direction: column; gap: 12px; }
+.naval-vez {
+  padding: 9px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 12px 9px 13px 10px;
+  background: var(--paper);
+  font: 700 14px 'Baloo 2', sans-serif;
+  text-align: center;
+}
+.naval-vez.minha { background: var(--rose); color: #fff; }
+.naval-tab { }
+.naval-titulo { font: 700 12px 'Baloo 2', sans-serif; color: var(--muted); margin-bottom: 5px; }
+.naval-grade {
+  display: grid;
+  grid-template-columns: repeat(var(--lado), 1fr);
+  gap: 3px;
+  padding: 5px;
+  border: 2px solid var(--ink);
+  border-radius: 12px 9px 13px 10px;
+  background: #bfe0ef;
+  max-width: 360px;
+}
+.naval-casa {
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid rgba(51,32,58,.28);
+  border-radius: 4px;
+  background: rgba(255,255,255,.45);
+}
+/* O navio só aparece no SEU tabuleiro — no do outro esta classe nunca é
+   aplicada, porque a posição dele não chega aqui (ver `routers/games.py`). */
+.naval-casa.navio { background: #7d8ca3; border-color: var(--ink); }
+.naval-casa.agua { background: #5a93b8; box-shadow: inset 0 0 0 3px rgba(255,255,255,.5); }
+.naval-casa.acerto { background: #e8879b; border-color: var(--ink); }
+.naval-casa.afundado { background: #a2495a; }
+.naval-tab.ativo .naval-grade { box-shadow: 0 0 0 3px var(--rose); }
+
+/* O rotulo da peca na bancada. Existe porque a aba de figurinhas deixou de usar
+   `Tile` (que ja trazia legenda) pra mostrar a figurinha COMO O CHAT MOSTRA. */
+.lab-tile-label {
+  font: 700 10px 'Baloo 2', sans-serif;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.2;
 }

@@ -82,14 +82,18 @@ def _notify(db: Session, sender: User, preview: str, message_id: int | None = No
         body=preview,
         url="/chat",
         kind="chat",
-        # Uma etiqueta POR MENSAGEM.
+        # Uma etiqueta SÓ pra conversa inteira — como no WhatsApp.
         #
-        # Antes era "chat" pra todas, o que agrupa — e agrupar, no celular,
-        # quer dizer que a mensagem nova SUBSTITUI a anterior. Mandando três
-        # seguidas, o dono via uma só e achava que as outras não chegaram.
-        # Agora cada uma aparece; o iPhone já empilha elas sozinho embaixo do
-        # nome do app, que é o comportamento que as pessoas esperam.
-        tag=f"chat-{message_id}" if message_id else "chat",
+        # Já foi das duas formas, e as duas estavam erradas: com tag única e
+        # sem contagem, a mensagem nova SUBSTITUÍA a anterior e o dono via uma
+        # só; com uma tag por mensagem (`chat-123`), a tela de bloqueio virava
+        # uma pilha de avisos separados, que foi a reclamação seguinte.
+        #
+        # A contagem que resolve o meio-termo NÃO vem daqui: quem sabe quantos
+        # avisos estão de fato na tela é o aparelho (o servidor não sabe quais
+        # a pessoa já dispensou com o dedo). Ela é somada no service worker,
+        # em `agrupar()` — ver `web/public/sw.js`.
+        tag="chat",
         badge=nao_lidas(db, partner.id),
     )
 

@@ -335,33 +335,59 @@ function bolha(cx, cy, d) {
 // ------------------------------------------------------------------ componente
 export default function PetCanvas({ pet, onPoke }) {
   const ref = useRef(null)
-  const [zoom, setZoom] = useState(2)
+  // `res` = quantas vezes a caixa de referencia (128x108) o desenho tem de
+  // resolucao; `zoom` = a ampliacao INTEIRA que o CSS aplica em cima.
+  const [{ res, zoom }, setVista] = useState({ res: 1, zoom: 2 })
 
-  // A arte continua sendo 128x108 e a AMPLIAÇÃO é inteira, feita pelo CSS.
+  // Mais pixel no bichinho, sem perder o tamanho na tela.
   //
-  // A outra saída seria desenhar numa resolução maior (256x216) pra encher o
-  // espaço. Não: isso dobraria a quantidade de pixel do desenho e ele deixaria
-  // de parecer pixel art — viraria um desenho pequeno e liso. Ampliar em fator
-  // INTEIRO mantém cada pixel um quadradinho nítido, que é a direção de arte
-  // travada do projeto. Fator quebrado (1,5x) daria franja nas diagonais.
+  // O que existia era: arte sempre em 128x108, ampliada por CSS num fator
+  // inteiro. Isso protege a borda dura (fator quebrado da franja na diagonal),
+  // mas trava a QUANTIDADE de pixel: no celular o palco cabe 3x, e 3x de uma
+  // arte de 128 e a mesma arte de 128 com cada pixel virando um quadrado de 3.
+  // O corpo fica grande e continua com o mesmo tanto de informacao — foi o
+  // "ainda tem poucos pixels, da pra deixar mais desenhado".
+  //
+  // A saida nao e abandonar o fator inteiro: e escolher, entre as combinacoes
+  // que dao o MESMO tamanho fisico, a que tem mais pixel de arte. 128x3 (zoom 3)
+  // e 384x1 (res 3, zoom 1) ocupam exatamente os mesmos 384 px na tela; a
+  // segunda tem 9 vezes mais pixel de desenho. O motor ja sabia fazer isso —
+  // `planoDe` recebe uma escala e desenha DIRETO no tamanho final (foi o que
+  // consertou o bichinho borrado do comodo e da corrida) —, so ninguem tinha
+  // pedido pra ele desenhar MAIOR do que a caixa de referencia.
+  //
+  // O cenario isometrico continua em 1x de propriedade: la o bichinho tem que
+  // ter a mesma grossura de pixel do sofa, senao ele parece colado por cima da
+  // cena. Aqui ele esta sozinho no palco, e nao tem com quem destoar.
   useLayoutEffect(() => {
     const canvas = ref.current
     const pai = canvas?.parentElement
     if (!pai) return
     const medir = () => {
-      // A largura pode passar um pouco do palco (o palco corta o que sobra), e
-      // isso é de propósito: o bichinho ocupa o MEIO da caixa de 128x108, então
-      // o que estoura nas laterais é só ar. Sem essa folga a conta perdia por
-      // três pixels — o palco dá 265 e 2x pede 256 mais a margem — e o bichinho
-      // caía pra 1x, exatamente o "muito pequeno" que era pra ser corrigido.
       // 1,25 de folga: o bichinho ocupa mais ou menos o miolo da caixa de 128
-      // (o desenho mais largo, o dragão, vai de 8 a 108), então o que estoura nas
-      // laterais é ar — e o palco corta com `overflow: hidden`. Com 1,1 a conta
-      // perdia o 3x por dez pixels numa tela de 375, e o bichinho ficava um terço
-      // menor do que cabia.
-      const cabeL = Math.floor((pai.clientWidth * 1.25) / 128)
-      const cabeA = Math.floor((pai.clientHeight - 8) / 108)
-      setZoom(Math.max(1, Math.min(4, Math.min(cabeL, cabeA) || 1)))
+      // (o desenho mais largo, o dragao, vai de 8 a 108), entao o que estoura nas
+      // laterais e ar — e o palco corta com `overflow: hidden`. Com 1,1 a conta
+      // perdia o 3x por dez pixels numa tela de 375.
+      const larg = pai.clientWidth * 1.25
+      const alt = pai.clientHeight - 8
+      let melhor = { res: 1, zoom: 1, fisico: 128 }
+      // Resolucoes inteiras: 128*res tem que ser inteiro, senao a ampliacao
+      // por CSS voltaria a cair em meio pixel.
+      for (const r of [3, 2, 1]) {
+        const z = Math.max(1, Math.min(4, Math.min(
+          Math.floor(larg / (128 * r)),
+          Math.floor(alt / (108 * r)),
+        ) || 0))
+        if (!z) continue
+        const fisico = 128 * r * z
+        if (fisico > larg) continue
+        // Empate no tamanho fisico: ganha quem tem MAIS pixel de arte, que e o
+        // ponto todo desta conta.
+        if (fisico > melhor.fisico || (fisico === melhor.fisico && r > melhor.res)) {
+          melhor = { res: r, zoom: z, fisico }
+        }
+      }
+      setVista({ res: melhor.res, zoom: melhor.zoom })
     }
     medir()
     const obs = new ResizeObserver(medir)
@@ -378,12 +404,12 @@ export default function PetCanvas({ pet, onPoke }) {
     let alive = true
     const canvas = ref.current
     const painter = new Painter(canvas)
-    painter.resize(128, 108)
+    painter.resize(128 * res, 108 * res)
     const paint = (t) => {
       painter.clear()
       const r = reacao.current
       const atual = r.ate > t ? { ...pet, action: r.acao } : pet
-      drawPet(painter, atual, t)
+      drawPet(painter, atual, t, res)
     }
     const loop = (t) => {
       if (!alive) return
@@ -401,7 +427,9 @@ export default function PetCanvas({ pet, onPoke }) {
     paint(performance.now())
     frame = requestAnimationFrame(loop)
     return () => { alive = false; cancelAnimationFrame(frame) }
-  }, [pet])
+    // `res` entra aqui: sem ele o canvas continuaria no tamanho antigo depois de
+    // a medida mudar, e o desenho sairia recortado.
+  }, [pet, res])
 
   /**
    * Toque no bichinho.
@@ -432,7 +460,7 @@ export default function PetCanvas({ pet, onPoke }) {
     <canvas
       ref={ref}
       className="pet-canvas"
-      style={{ width: 128 * zoom, height: 108 * zoom }}
+      style={{ width: 128 * res * zoom, height: 108 * res * zoom }}
       onPointerDown={tocar}
       aria-label={`${pet.species_name || 'bichinho'} ${pet.mood || ''}`}
     />
