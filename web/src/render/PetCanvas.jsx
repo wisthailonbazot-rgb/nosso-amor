@@ -586,7 +586,28 @@ export default function PetCanvas({ pet, onPoke, arrastando = false }) {
       desenharFrente(painter, { t, periodo })
       // ...e a lambida vem por ULTIMO, porque ela acontece NO vidro, na frente
       // de tudo — inclusive da grama.
-      if (pos.lambida > 0) desenharLambida(painter, { forca: pos.lambida, t })
+      //
+      // A ANCORA DA BOCA e o conserto do "ao lamber a camera fica bem estranho":
+      // antes a lingua nascia no rodape da tela, no meio, viesse o bicho de onde
+      // viesse — e ele lambe parado no lugar em que chegou, que e um ponto
+      // sorteado. Aqui a boca sai das mesmas medidas que ja enquadram o bicho:
+      // `alturaU` e a altura dele em unidades de plano, entao 0,74 dela acima do
+      // chao e a altura do focinho, e o deslocamento lateral acompanha o lado
+      // pra onde ele esta virado. Vale pra qualquer especie e qualquer tamanho,
+      // que e o motivo de sair da medida e nao de um numero fixo.
+      if (pos.lambida > 0) {
+        const alturaPx = alturaU * enq.escala
+        desenharLambida(painter, {
+          forca: pos.lambida,
+          t,
+          boca: {
+            x: enq.cx + pos.virado * larguraU * enq.escala * 0.16,
+            y: enq.chao - alturaPx * 0.74,
+          },
+          alcance: alturaPx * 0.34,
+          virado: pos.virado,
+        })
+      }
     }
     const loop = (t) => {
       if (!alive) return

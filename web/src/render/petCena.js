@@ -411,67 +411,149 @@ export function desenharFrente(p, { t = 0, periodo = 'dia' } = {}) {
  * É o gesto que o dono citou do Kinectimals: o filhote chega no vidro e passa a
  * língua nele, do seu lado. Ela é desenhada por ÚLTIMO, na frente de tudo —
  * inclusive da grama da frente —, porque acontece na superfície da tela, e não
- * dentro da cena. Desenhada junto com o bichinho, a grama passaria por cima e
- * o efeito ficaria "atrás do mundo", que não quer dizer nada.
+ * dentro da cena.
  *
- * Duas partes: a LÍNGUA (que aparece grande, perto) e o RASTRO ÚMIDO que ela
- * deixa e que vai secando. É o rastro que vende a ideia de vidro — sem ele
- * parece só uma língua desenhada.
+ * ------------------------------------------------------ por que foi refeita
+ *
+ * O dono viu e disse que "ao lamber a câmera fica bem estranho". Dois defeitos,
+ * e os dois eram de LUGAR — o desenho não sabia onde o bichinho estava:
+ *
+ * 1. **A língua nascia no rodapé da tela, no meio.** `base = h * 0,96`, `cx =
+ *    w * 0,5`, sempre, viesse o bicho de onde viesse. Como ele lambe parado no
+ *    lugar em que chegou (e ele chega num ponto sorteado entre 42% e 58% da
+ *    largura), a língua saía DO CHÃO, ao lado dele, e subia por fora do corpo.
+ *    Não lia como "ele está lambendo": lia como uma coisa rosa crescendo do
+ *    rodapé. Agora ela sai da BOCA — a tela passa a âncora, do mesmo jeito que
+ *    já faz pro objeto do item e pro triângulo de aviso.
+ *
+ * 2. **O rastro não era rastro.** Eram três elipses brancas fixas no meio da
+ *    tela, pulsando o tempo todo enquanto a lambida durasse — inclusive ANTES
+ *    da primeira passada da língua, o que é um borrão aparecendo do nada. Um
+ *    rastro é o contrário disso: ele fica ONDE a língua encostou e vai secando
+ *    sozinho. Aqui cada batida da língua deixa a marca dela, e as marcas somem
+ *    em ordem de idade — a mais velha primeiro. Não é guardado estado nenhum: as
+ *    batidas são periódicas, então dá pra saber a hora e o lugar das últimas
+ *    quatro só olhando o relógio.
+ *
+ * Recebe:
+ *   `forca`   — 0 a 1, o quanto a lambida está acontecendo;
+ *   `t`       — o relógio da animação;
+ *   `boca`    — { x, y } na tela, de onde a língua sai (o focinho);
+ *   `alcance` — o tamanho da língua, em pixels de tela. Sai do tamanho do bicho
+ *               na hora, senão um filhote lamberia com a língua de um adulto.
+ *   `virado`  — pra que lado ele está olhando; a língua acompanha.
  */
-export function desenharLambida(p, { forca = 0, t = 0 } = {}) {
+
+// Uma batida de língua a cada tanto de milissegundos, e quanto tempo a marca
+// molhada leva pra secar. Secar mais devagar que a batida é o que faz várias
+// marcas conviverem na tela — é isso que parece vidro lambido.
+const LAMBIDA_MS = 620
+const SECA_MS = 1900
+
+export function desenharLambida(p, { forca = 0, t = 0, boca = null, alcance = 0, virado = 1 } = {}) {
   const ctx = p.ctx
   const w = p.w
   const h = p.h
   const f = Math.max(0, Math.min(1, forca))
-  // A língua sai e volta várias vezes enquanto ele lambe.
-  const ciclo = (Math.sin(t * 0.006) + 1) / 2
-  const saida = f * ciclo
+  if (f < 0.02) return
 
-  // rastro molhado: faixas claras que ficam depois da passada
+  // Sem âncora, cai no meio-baixo da tela. Não deveria acontecer (a tela sempre
+  // manda), mas um desenho que soma `undefined` some inteiro e em silêncio.
+  const bx = boca && Number.isFinite(boca.x) ? boca.x : w * 0.5
+  const by = boca && Number.isFinite(boca.y) ? boca.y : h * 0.72
+  const comprimento = alcance > 4 ? alcance : h * 0.22
+
+  // Onde a n-ésima batida encostou no vidro. Espalhado de um jeito repetível
+  // (não sorteado): sorteando, a marca mudaria de lugar a cada quadro e o
+  // rastro tremeria inteiro.
+  const alvoDa = (n) => {
+    const giro = Math.sin(n * 2.399) // irracional o bastante pra não repetir cedo
+    const sobe = 0.55 + 0.3 * Math.abs(Math.cos(n * 1.7))
+    return {
+      x: bx + virado * comprimento * (0.35 + 0.3 * giro),
+      y: by - comprimento * sobe,
+    }
+  }
+
+  // ------------------------------------------------------------- o rastro
+  //
+  // As quatro últimas batidas, da mais velha pra mais nova, pra a mais nova
+  // ficar por cima. Cada uma some sozinha conforme envelhece.
+  const batidaAtual = Math.floor(t / LAMBIDA_MS)
   ctx.save()
-  ctx.globalAlpha = 0.10 + f * 0.16
   ctx.fillStyle = '#ffffff'
-  for (let i = 0; i < 3; i++) {
-    const y = h * (0.52 + i * 0.12) + Math.sin(t * 0.001 + i) * 3
-    const larg = w * (0.28 + i * 0.12) * f
+  for (let k = 3; k >= 0; k--) {
+    const n = batidaAtual - k
+    if (n < 0) continue
+    const idade = t - n * LAMBIDA_MS
+    if (idade < 0 || idade > SECA_MS) continue
+    const seco = idade / SECA_MS
+    const alvo = alvoDa(n)
+    const raio = comprimento * (0.26 + seco * 0.1)
+    ctx.globalAlpha = (1 - seco) * 0.22 * f
+    // Achatada, e inclinada no sentido da passada: uma marca redonda parece
+    // gota, e gota escorre — o que se quer é a marca de uma língua raspando.
     ctx.beginPath()
-    ctx.ellipse(w * 0.5, y, larg, h * 0.045, 0, 0, TAU)
+    ctx.ellipse(alvo.x, alvo.y, raio, raio * 0.42, -0.35 * virado, 0, TAU)
+    ctx.fill()
+    // O contorno mais claro é a borda da água ainda molhada; ele some antes do
+    // miolo, que é o que dá a sensação de secar da beirada pro meio.
+    ctx.globalAlpha = (1 - seco) * (1 - seco) * 0.28 * f
+    ctx.beginPath()
+    ctx.ellipse(alvo.x, alvo.y, raio * 0.62, raio * 0.24, -0.35 * virado, 0, TAU)
     ctx.fill()
   }
   ctx.restore()
 
-  if (saida < 0.05) return
-
-  // a língua
-  // A língua sai de BAIXO e é pequena.
+  // -------------------------------------------------------------- a língua
   //
-  // Grande e alta ela virava um morro rosa no peito do bichinho, e não uma
-  // língua: a leitura de "está lambendo o vidro" vem de ela aparecer NA BORDA
-  // da tela, do seu lado, e não de ocupar o meio do bicho.
-  const cx = w * 0.5
-  const base = h * 0.96
-  const comp = h * 0.20 * saida
-  const larg = w * 0.10 * (0.7 + saida * 0.5)
+  // Ela sai e volta dentro de cada batida: fora nos primeiros 45% do ciclo,
+  // recolhida no resto. Antes era um seno contínuo, e a língua vivia meio
+  // esticada o tempo todo — língua meio esticada parada é a cara de "bug".
+  const fase = (t % LAMBIDA_MS) / LAMBIDA_MS
+  if (fase > 0.45) return
+  const saida = Math.sin((fase / 0.45) * Math.PI) * f
+  if (saida < 0.04) return
+
+  const alvo = alvoDa(batidaAtual)
+  const px = bx + (alvo.x - bx) * saida
+  const py = by + (alvo.y - by) * saida
+  const larg = comprimento * 0.19 * (0.75 + saida * 0.35)
+
+  // A língua é desenhada como uma faixa da boca até a ponta, e não como um
+  // triângulo em pé: ela tem que parecer sair de dentro dele, na diagonal.
+  const ang = Math.atan2(py - by, px - bx)
+  const nx = Math.cos(ang + Math.PI / 2) * larg
+  const ny = Math.sin(ang + Math.PI / 2) * larg
+
   ctx.save()
   ctx.fillStyle = '#e8607e'
   ctx.beginPath()
-  ctx.moveTo(cx - larg, base)
-  ctx.quadraticCurveTo(cx - larg * 1.05, base - comp, cx, base - comp)
-  ctx.quadraticCurveTo(cx + larg * 1.05, base - comp, cx + larg, base)
+  ctx.moveTo(bx - nx, by - ny)
+  ctx.quadraticCurveTo(px - nx * 1.1, py - ny * 1.1, px, py)
+  ctx.quadraticCurveTo(px + nx * 1.1, py + ny * 1.1, bx + nx, by + ny)
   ctx.closePath()
   ctx.fill()
   // o vinco do meio, que é o que faz ler como língua e não como pétala
   ctx.strokeStyle = '#c9435f'
   ctx.lineWidth = Math.max(1, h / 108)
   ctx.beginPath()
-  ctx.moveTo(cx, base)
-  ctx.lineTo(cx, base - comp * 0.75)
+  ctx.moveTo(bx, by)
+  ctx.lineTo(bx + (px - bx) * 0.78, by + (py - by) * 0.78)
   ctx.stroke()
-  // brilho de saliva
+  // brilho de saliva, perto da ponta
   ctx.globalAlpha = 0.5
   ctx.fillStyle = '#ffb6c8'
   ctx.beginPath()
-  ctx.ellipse(cx - larg * 0.3, base - comp * 0.55, larg * 0.22, comp * 0.16, -0.3, 0, TAU)
+  ctx.ellipse(
+    bx + (px - bx) * 0.6 - nx * 0.3,
+    by + (py - by) * 0.6 - ny * 0.3,
+    larg * 0.32,
+    larg * 0.18,
+    ang,
+    0,
+    TAU
+  )
   ctx.fill()
   ctx.restore()
 }

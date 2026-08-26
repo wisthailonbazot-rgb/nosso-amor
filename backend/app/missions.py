@@ -8,16 +8,21 @@ from .clock import today, utcnow
 from .models import DailyMission
 
 
+# As recompensas dobraram em 26/08. As cinco missoes do dia sao a MAIOR fonte
+# de renda do app — e valiam ~100 Coracoes somadas, quando um sofa custa 300.
+# Elas sao tambem a fonte certa pra pesar mais do que as outras: pedem coisas
+# que so acontecem se as duas pessoas usarem o app naquele dia, entao nao ha
+# como moer sozinho. Ver a conta inteira em `settings_store.py`.
 POOL = (
-    ("conversa", "chat_send", "Conversa em dia", "Mandem mensagens um para o outro", 4, 18),
-    ("carinho", "love_tap", "Lembrei de você", "Mandem cutucadas carinhosas", 2, 16),
-    ("comida_pet", "pet_feed", "Barriguinha cheia", "Alimentem o bichinho", 1, 20),
-    ("brincar_pet", "pet_play", "Hora de brincar", "Brinquem com o bichinho", 1, 22),
-    ("limpar_pet", "pet_clean", "Casa cheirosa", "Limpem uma sujeira do bichinho", 1, 24),
-    ("comprar", "shop_buy", "Um mimo pra nós", "Comprem algo na loja", 1, 18),
-    ("decorar", "house_save", "Nosso cantinho", "Salvem uma mudança na casa", 1, 20),
-    ("presenca", "checkin", "Presentes juntos", "Os dois façam check-in", 2, 26),
-    ("jogar_pet", "pet_game", "Dupla de aventureiros", "Terminem uma aventura da bolinha", 1, 22),
+    ("conversa", "chat_send", "Conversa em dia", "Mandem mensagens um para o outro", 4, 36),
+    ("carinho", "love_tap", "Lembrei de você", "Mandem cutucadas carinhosas", 2, 32),
+    ("comida_pet", "pet_feed", "Barriguinha cheia", "Alimentem o bichinho", 1, 40),
+    ("brincar_pet", "pet_play", "Hora de brincar", "Brinquem com o bichinho", 1, 44),
+    ("limpar_pet", "pet_clean", "Casa cheirosa", "Limpem uma sujeira do bichinho", 1, 48),
+    ("comprar", "shop_buy", "Um mimo pra nós", "Comprem algo na loja", 1, 36),
+    ("decorar", "house_save", "Nosso cantinho", "Salvem uma mudança na casa", 1, 40),
+    ("presenca", "checkin", "Presentes juntos", "Os dois façam check-in", 2, 52),
+    ("jogar_pet", "pet_game", "Dupla de aventureiros", "Terminem uma aventura da bolinha", 1, 44),
 )
 
 

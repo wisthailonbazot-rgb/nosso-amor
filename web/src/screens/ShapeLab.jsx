@@ -23,6 +23,8 @@ import { STICKERS_HD } from '../render/stickersHD'
 import { drawPet } from '../render/PetCanvas'
 import { CODIGOS_ESPECIE, NOMES_CLIPES, clipeDe, planoDe } from '../render/petRig'
 import { VOZES, nomeDaVoz, vocalizar } from '../petVoz'
+import { criarPalco, enquadrar } from '../render/petPalco'
+import { desenharLambida } from '../render/petCena'
 
 // As seis espécies, os três estágios e os humores que MUDAM o desenho.
 // Estão aqui porque o bichinho é desenhado por espécie: um `if` esquecido numa
@@ -178,11 +180,68 @@ function AbaVozes() {
         // quanto tempo houve som de verdade
         let dur = 0
         for (let i = 0; i < d.length; i++) if (Math.abs(d[i]) > 0.002) dur = i
+
+        // ------------------------------------------------- MOVIMENTO e CORPO
+        //
+        // Estas duas medidas nasceram do defeito que o dono ouviu: as vozes
+        // passavam por aqui aprovadas e mesmo assim "não pareciam nem um pouco"
+        // com os bichos. Volume e agudez não podiam pegar isso — as duas olham
+        // o som inteiro de uma vez, e o que estava errado era o som não MUDAR
+        // enquanto acontece. Um bipe e um miado têm a mesma agudez média.
+        //
+        //   `movimento` — a altura varia quanto ao longo do som? Mede a agudez
+        //     em fatias de 20 ms e devolve a razão entre a maior e a menor. Som
+        //     de altura fixa dá 1,0; um miado, um latido ou um piado sobem e
+        //     descem e dão bem mais. Abaixo de 1,25 a aba REPROVA: aquilo é uma
+        //     nota, não uma vocalização, e era exatamente o que estava aqui;
+        //
+        //   `corpo` — que fração do som fica perto do pico de energia. Baixo quer
+        //     dizer que a energia se concentra num ápice (o miado, cuja altura
+        //     varre por cima do formante no meio e estoura ali; o latido, que
+        //     corta); alto quer dizer som parelho do começo ao fim. Não reprova:
+        //     os dois extremos são legítimos. O número existe pra conferir que
+        //     os seis NÃO têm todos a mesma forma no tempo — que era o caso
+        //     antes, quando um envelope só servia pra todo mundo, e é metade do
+        //     motivo de eles soarem parentes.
+        const jan = Math.round(44100 * 0.02)
+        const alturas = []
+        const forcas = []
+        for (let i = 0; i + jan < d.length; i += jan) {
+          let c = 0
+          let ult = 0
+          let n = 0
+          let energia = 0
+          for (let k = i; k < i + jan; k++) {
+            energia += d[k] * d[k]
+            if (Math.abs(d[k]) < 1e-4) continue
+            n++
+            const sinal = d[k] > 0 ? 1 : -1
+            if (ult && sinal !== ult) c++
+            ult = sinal
+          }
+          const forca = Math.sqrt(energia / jan)
+          // Só janelas com som de verdade: o silêncio entre sílabas tem altura
+          // indefinida e entraria como "movimento" que não existe.
+          if (forca > rms * 0.35 && n > jan * 0.2) {
+            alturas.push((c / n) * 44100 / 2)
+            forcas.push(forca)
+          }
+        }
+        const movimento = alturas.length > 1
+          ? +(Math.max(...alturas) / Math.max(1, Math.min(...alturas))).toFixed(2)
+          : 1
+        const pico = forcas.length ? Math.max(...forcas) : 0
+        const corpo = forcas.length
+          ? +(forcas.filter((f) => f > pico * 0.55).length / forcas.length).toFixed(2)
+          : 0
+
         saida.push({
           especie,
           nome: nomeDaVoz(especie),
           rms: +(rms * 1000).toFixed(2),
           agudez,
+          movimento,
+          corpo,
           duracao: +(dur / 44100).toFixed(2),
         })
       }
@@ -200,6 +259,8 @@ function AbaVozes() {
   if (medidas === 'sem-suporte') return <p className="notice warn">Este navegador não renderiza áudio offline.</p>
 
   const mudas = medidas.filter((m) => m.rms <= 0.01)
+  // Ver o comentário da medição: som de altura parada é bipe, não bicho.
+  const paradas = medidas.filter((m) => m.movimento < 1.25)
   // Duas vozes com agudez muito parecida soam iguais na prática.
   const parecidas = []
   for (let i = 0; i < medidas.length; i++) {
@@ -220,6 +281,12 @@ function AbaVozes() {
       {mudas.length > 0 && (
         <p className="notice error">Sem som nenhum: {mudas.map((m) => m.especie).join(', ')}</p>
       )}
+      {paradas.length > 0 && (
+        <p className="notice error">
+          Altura parada (soaria como bipe, não como bicho):{' '}
+          {paradas.map((m) => `${m.especie} (${m.movimento}×)`).join(' · ')}
+        </p>
+      )}
       {parecidas.length > 0 && (
         <p className="notice error">
           Vozes quase idênticas (soariam iguais): {parecidas.join(' · ')}
@@ -231,10 +298,220 @@ function AbaVozes() {
             <strong>{m.especie}</strong>
             <span className="lab-tile-label">
               {m.nome} · {m.duracao}s<br />
-              volume {m.rms} · agudez {m.agudez} Hz
+              volume {m.rms} · agudez {m.agudez} Hz<br />
+              movimento {m.movimento}× · corpo {m.corpo}
             </span>
           </button>
         ))}
+      </div>
+    </>
+  )
+}
+
+/**
+ * O PASSEIO do bichinho: ele anda pelo cenário sem dar salto.
+ *
+ * Esta aba nasceu de um defeito que o dono descreveu como "o movimento do
+ * animal pra frente e pra trás está completamente bugado", e que nenhuma aba
+ * daqui podia pegar: as outras conferem DESENHO — se a peça sai, se a proporção
+ * acompanha a escala —, e este era um defeito de MOVIMENTO. Peça nenhuma estava
+ * errada; o que estava errado era o tamanho dela mudar aos trancos.
+ *
+ * A causa está escrita por extenso no `petPalco.js`: existiam duas variáveis
+ * (`z` e `perto`) descrevendo a mesma coisa — a distância até a câmera — e as
+ * duas entravam na conta do tamanho. `perto` era ligado por ESTADO, não por
+ * posição, então trocar de estado fazia o bicho pular de 1× pra 1,5× parado no
+ * lugar, e sair da lambida o fazia despencar sem ter andado.
+ *
+ * O que se mede aqui é exatamente isso: o palco é simulado a 60 quadros por
+ * segundo, sem desenhar nada (ele é só contas), e se olha o **maior salto de um
+ * quadro pro seguinte**. Bicho andando muda de tamanho devagar; o defeito
+ * antigo dava um degrau que aparece na medição na hora. O limite é 1,5% por
+ * quadro — a 60 quadros por segundo, isso ainda permite crescer 2,4× em um
+ * segundo, que é mais rápido do que ele corre.
+ *
+ * Duas medidas vêm junto e não reprovam, porque servem pra ler o comportamento:
+ * até onde ele chega (tem que encostar no vidro e tem que ir lá pro fundo) e
+ * quanto tempo passa andando, pra a ilha não virar um bicho parado.
+ */
+function AbaPasseio() {
+  const [r, setR] = useState(null)
+  const [lambida, setLambida] = useState(null)
+
+  /**
+   * A LÍNGUA SAI DA BOCA, e não do rodapé da tela.
+   *
+   * O dono disse que "ao lamber a câmera fica bem estranho". Estava: a língua
+   * nascia em `w * 0,5, h * 0,96` — o meio do rodapé —, fixo, viesse o bicho de
+   * onde viesse. Como ele lambe parado no ponto em que chegou, ela subia por
+   * fora do corpo dele e lia como uma coisa rosa crescendo do chão.
+   *
+   * A conferência é a mais direta possível: pinta a lambida com uma âncora de
+   * boca CONHECIDA, acha o centro dos pixels que ela pintou, e mede a distância
+   * até a âncora. Se o desenho voltar a ignorar a boca, essa distância explode —
+   * é o mesmo raciocínio das outras abas, que pintam a peça e contam pixels.
+   */
+  useEffect(() => {
+    const w = 256
+    const h = 216
+    const boca = { x: w * 0.32, y: h * 0.44 }
+    const alcance = h * 0.3
+    // Vários instantes ao longo de uma batida: a língua sai e volta, e um
+    // instante só poderia cair justamente no meio em que ela está recolhida.
+    let melhor = null
+    let comLingua = 0
+    for (let k = 0; k < 12; k++) {
+      const t = k * 55
+      const canvas = document.createElement('canvas')
+      const painter = new Painter(canvas)
+      painter.resize(w, h)
+      painter.clear()
+      desenharLambida(painter, { forca: 1, t, boca, alcance, virado: 1 })
+      const data = painter.ctx.getImageData(0, 0, w, h).data
+      let n = 0
+      let sx = 0
+      let sy = 0
+      let rosa = 0
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] < 40) continue
+        const px = (i / 4) % w
+        const py = Math.floor(i / 4 / w)
+        n++
+        sx += px
+        sy += py
+        // a língua é rosa forte; o rastro é branco quase transparente
+        if (data[i] > 180 && data[i + 1] < 140 && data[i + 3] > 120) rosa++
+      }
+      if (!n) continue
+      if (rosa > 30) comLingua++
+      const cx = sx / n
+      const cy = sy / n
+      const dist = Math.hypot(cx - boca.x, cy - boca.y)
+      if (!melhor || dist < melhor.dist) melhor = { dist, cx: +cx.toFixed(0), cy: +cy.toFixed(0), n }
+    }
+    setLambida({
+      ...(melhor || { dist: 9999, cx: 0, cy: 0, n: 0 }),
+      comLingua,
+      boca,
+      // O rastro tem que ficar DENTRO do alcance da língua. Mais longe que isso
+      // e ele não é rastro daquela lambida — é borrão em outro lugar da tela.
+      limite: alcance * 1.1,
+    })
+  }, [])
+
+  useEffect(() => {
+    // Três minutos de vida do bicho, a 60 quadros por segundo. Dá pra sortear
+    // muitos estados — inclusive os de chegar no vidro e voltar, que eram
+    // justamente onde o degrau acontecia.
+    const QUADROS = 60 * 180
+    const w = 360
+    const h = 300
+    const palco = criarPalco({})
+    let t = 0
+    let anterior = null
+    let saltoEscala = 0
+    let saltoChao = 0
+    let quandoSaltou = 0
+    let zMin = 1
+    let zMax = 0
+    let andando = 0
+    let lambeu = 0
+    for (let i = 0; i < QUADROS; i++) {
+      t += 1000 / 60
+      const pos = palco.passo(t, 1000 / 60)
+      const enq = enquadrar(pos, { w, h, escalaBase: 40 })
+      if (anterior) {
+        const de = Math.abs(enq.escala - anterior.escala) / anterior.escala
+        const dc = Math.abs(enq.chao - anterior.chao) / h
+        if (de > saltoEscala) {
+          saltoEscala = de
+          quandoSaltou = t
+        }
+        if (dc > saltoChao) saltoChao = dc
+      }
+      anterior = enq
+      zMin = Math.min(zMin, pos.z)
+      zMax = Math.max(zMax, pos.z)
+      if (pos.acao === 'andar' || pos.acao === 'correr') andando++
+      if (pos.lambida > 0.5) lambeu++
+    }
+    setR({
+      saltoEscala: +(saltoEscala * 100).toFixed(3),
+      saltoChao: +(saltoChao * 100).toFixed(3),
+      quandoSaltou: +(quandoSaltou / 1000).toFixed(1),
+      zMin: +zMin.toFixed(2),
+      zMax: +zMax.toFixed(2),
+      andando: Math.round((andando / QUADROS) * 100),
+      lambeu: +(lambeu / 60).toFixed(1),
+    })
+  }, [])
+
+  if (!r) return <p className="muted small">Simulando o passeio…</p>
+
+  // O limite de 1,5% por quadro: ver o comentário grande acima.
+  const LIMITE = 1.5
+  const passou = r.saltoEscala <= LIMITE
+  return (
+    <>
+      <p className="muted small">
+        Três minutos de palco simulados sem desenhar nada. O que importa é o
+        maior salto de um quadro pro seguinte: bicho que anda cresce devagar,
+        bicho com defeito dá degrau.
+      </p>
+      {passou ? (
+        <p className="notice ok">
+          Sem degrau: o maior salto de tamanho entre dois quadros foi{' '}
+          <strong>{r.saltoEscala}%</strong> (o limite é {LIMITE}%).
+        </p>
+      ) : (
+        <p className="notice error">
+          Degrau no tamanho: <strong>{r.saltoEscala}%</strong> num quadro só, aos{' '}
+          {r.quandoSaltou}s. Acima de {LIMITE}% isso se vê como um pulo, não como
+          uma aproximação.
+        </p>
+      )}
+      {lambida && (
+        lambida.dist <= lambida.limite && lambida.comLingua > 0 ? (
+          <p className="notice ok">
+            A lambida sai da boca: o desenho ficou a{' '}
+            <strong>{Math.round(lambida.dist)} px</strong> da âncora (o limite é{' '}
+            {Math.round(lambida.limite)} px), e a língua apareceu em{' '}
+            {lambida.comLingua} de 12 instantes.
+          </p>
+        ) : (
+          <p className="notice error">
+            A lambida ignorou a boca: o desenho saiu a {Math.round(lambida.dist)} px
+            da âncora (limite {Math.round(lambida.limite)} px), língua vista em{' '}
+            {lambida.comLingua} de 12 instantes. É o defeito da língua nascendo no
+            rodapé da tela.
+          </p>
+        )
+      )}
+      <div className="lab-grid">
+        <div className="lab-tile">
+          <strong>{r.saltoEscala}%</strong>
+          <span className="lab-tile-label">maior salto de tamanho num quadro</span>
+        </div>
+        <div className="lab-tile">
+          <strong>{r.saltoChao}%</strong>
+          <span className="lab-tile-label">maior salto do chão num quadro</span>
+        </div>
+        <div className="lab-tile">
+          <strong>
+            {r.zMin} – {r.zMax}
+          </strong>
+          <span className="lab-tile-label">
+            profundidade visitada (perto de 1 é encostar no vidro)
+          </span>
+        </div>
+        <div className="lab-tile">
+          <strong>{r.andando}%</strong>
+          <span className="lab-tile-label">do tempo andando ou correndo</span>
+        </div>
+        <div className="lab-tile">
+          <strong>{r.lambeu}s</strong>
+          <span className="lab-tile-label">lambendo o vidro, em 3 min</span>
+        </div>
       </div>
     </>
   )
@@ -306,6 +583,7 @@ export default function ShapeLab() {
     { key: 'vestidos', name: `Vestidos (${LAB_SPECIES.length * LAB_ACESSORIOS.length})` },
     { key: 'escala', name: `Escala grande (${LAB_SPECIES.length})` },
     { key: 'vozes', name: `Vozes (${Object.keys(VOZES).length})` },
+    { key: 'passeio', name: 'Passeio' },
     { key: 'itens', name: `Itens (${PET_ICON_CODES.length})` },
     { key: 'figurinhas', name: `Figurinhas (${STICKER_CODES.length})` },
     { key: 'cores', name: 'Acabamentos' },
@@ -688,6 +966,7 @@ export default function ShapeLab() {
       )}
 
       {aba === 'vozes' && <AbaVozes />}
+      {aba === 'passeio' && <AbaPasseio />}
 
       {aba === 'itens' && (
         <div className="lab-grid">

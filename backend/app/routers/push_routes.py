@@ -73,6 +73,73 @@ def subscribe(
     return {"ok": True, "id": existing.id, "push_enabled": PUSH_ENABLED}
 
 
+class ResubscribeIn(BaseModel):
+    old_endpoint: str = Field(default="", max_length=900)
+    endpoint: str = Field(min_length=10, max_length=900)
+    p256dh: str = Field(min_length=10, max_length=300)
+    auth: str = Field(min_length=4, max_length=300)
+
+
+@router.post("/resubscribe")
+def resubscribe(payload: ResubscribeIn, db: Session = Depends(get_db)) -> dict:
+    """O aparelho trocou de endereco de push sozinho, e esta avisando.
+
+    **Sem token de sessao, e nao da pra ser diferente.** Quem chama e o
+    `pushsubscriptionchange` do service worker, que roda com o app FECHADO — nao
+    ha pagina, nao ha `localStorage` e portanto nao ha token na mao. Se esta
+    rota exigisse login, ela nunca poderia ser chamada, que e exatamente a
+    situacao que ela existe pra consertar.
+
+    Quem prova a identidade e o `old_endpoint`: e uma URL longa e aleatoria que
+    o servico de push (Apple/Google) gerou pra AQUELE aparelho, e so aquele
+    aparelho a conhece. Apresentar o endereco antigo registrado e a prova de que
+    quem esta falando e o dono dele. Sem `old_endpoint` conhecido nao ha o que
+    fazer, e a rota recusa em vez de adivinhar um dono — adivinhar mandaria os
+    avisos do casal pro aparelho errado.
+
+    O dono nao muda aqui; so o endereco. E propositalmente idempotente: chamar
+    duas vezes com o mesmo par nao cria uma segunda linha.
+    """
+    velho = (
+        db.query(PushSubscription)
+        .filter(PushSubscription.endpoint == payload.old_endpoint)
+        .first()
+        if payload.old_endpoint
+        else None
+    )
+    if velho is None:
+        logging.getLogger("push").warning(
+            "resubscribe sem endereco antigo conhecido — recusado"
+        )
+        return {"ok": False, "reason": "aparelho desconhecido"}
+
+    ja = (
+        db.query(PushSubscription)
+        .filter(PushSubscription.endpoint == payload.endpoint)
+        .first()
+    )
+    if ja is not None and ja.id != velho.id:
+        # O endereco novo ja existia (a tela reassinou antes do service worker
+        # avisar). Fica com essa linha e apaga a velha, senao o mesmo aparelho
+        # apareceria duas vezes e todo aviso sairia em dose dupla.
+        ja.user_id = velho.user_id
+        ja.p256dh = payload.p256dh
+        ja.auth = payload.auth
+        ja.failures = 0
+        db.delete(velho)
+        db.commit()
+        return {"ok": True, "id": ja.id}
+
+    velho.endpoint = payload.endpoint
+    velho.p256dh = payload.p256dh
+    velho.auth = payload.auth
+    velho.failures = 0
+    velho.last_ok_at = utcnow()
+    db.commit()
+    logging.getLogger("push").warning("resubscribe ok user=%s", velho.user_id)
+    return {"ok": True, "id": velho.id}
+
+
 @router.post("/unsubscribe")
 def unsubscribe(
     payload: dict, user: User = Depends(current_user), db: Session = Depends(get_db)

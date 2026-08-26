@@ -1576,3 +1576,217 @@ navegador: os três bichinhos na sala, o passeio com profundidade, a chamada e a
 lambida no vidro, as seis vozes medidas e o dispensar ponta a ponta.
 
 **Próximo passo:** continua sendo a seção 8.1 — mapa navegável do bairro.
+
+### 9.13 As vozes, o áudio do Android, o iPhone mudo, o passeio e as moedas (26/08/2026)
+
+Rodada pedida logo depois da 9.12, com sete coisas: as vozes não parecem com os
+bichos, o Android não envia áudio pelo app do site, as notificações do iPhone
+não funcionam direito, o movimento pra frente e pra trás está "completamente
+bugado", a lambida na câmera ficou estranha, ganhar moeda está dificílimo — e,
+no meio da rodada, que a **batalha naval não carrega as jogadas na hora**.
+
+Cinco das sete tinham a mesma forma por baixo: **duas coisas descrevendo o
+mesmo fato, ou nenhuma coisa conferindo o fato.**
+
+**1. As vozes: as peças estavam certas e paradas.**
+
+O arquivo já tinha fonte harmônica, ruído e formantes — o desenho do `soundgen`
+— e mesmo assim os seis soavam parentes. O que faltava não era peça, era
+MOVIMENTO. Quatro defeitos, todos do mesmo tipo:
+
+- **o envelope não tinha corpo**: subia num ataque e caía até o fim, igual pra
+  todo mundo. Isso é um bipe. Um miado se segura no ar meio segundo; um latido
+  estoura e corta. Com a mesma forma no tempo pros seis, eles soavam da mesma
+  família por baixo da frequência. Agora cada espécie tem o ADSR dela;
+- **só o F1 se mexia**. O que faz o ouvido reconhecer um miado é F1 e F2 andando
+  em direções OPOSTAS — a boca abre e ao mesmo tempo arredonda, que é o
+  "mi-a-ow". Com o F2 cravado, todo som varria sempre pela mesma vogal, e vogal
+  única soa sintetizada;
+- **o jitter estava no papel errado**: era sorteado 40 vezes ao longo da sílaba,
+  o que dá um tremor a ~70 Hz. Isso não é jitter, é modulação de frequência, e o
+  ouvido lê isso como "eletrônico". Voz viva tem duas coisas separadas: vibrato
+  lento e regular (5–8 Hz) e jitter fino e irregular. Agora são dois;
+- **faltava rugosidade**. Rosnado e grunhido não são nota grave com ruído: são a
+  fonte PULSANDO dezenas de vezes por segundo. É modulação de amplitude, e ela
+  não existia em lugar nenhum — por isso o dragão era um zumbido de
+  transformador e a capivara um apito abafado.
+
+> **A bancada não podia ter pego isso, e agora pode.** Volume e agudez olham o
+> som inteiro de uma vez: um bipe e um miado têm a mesma agudez média. A aba
+> Vozes ganhou **movimento** (a agudez medida em fatias de 20 ms, e a razão
+> entre a maior e a menor) e **corpo** (onde a energia se concentra no tempo).
+> Movimento abaixo de 1,25× REPROVA — abaixo disso é uma nota, não uma
+> vocalização. Hoje: 1,55× a 2,32×.
+>
+> E ela reprovou uma coisa na primeira medição desta correção: gato e cachorro
+> tinham ficado a **4%** de distância de agudez. O gato tinha descido pra faixa
+> real do miado e o cachorro estava sendo puxado pra cima por um ruído de banda
+> larga — que é chiado de "s", não o "wuf" abafado de peito. Hoje: dragão 252,
+> capivara 348, cachorro 567, gato 738, coelho 1696, pássaro 3121 Hz.
+
+**2. O movimento pra frente e pra trás: duas variáveis para um fato só.**
+
+O palco tinha `z` (a profundidade) **e** `perto` (o quanto está no vidro), e as
+duas entravam na conta do tamanho ao mesmo tempo. Duas fontes da verdade pro
+mesmo fato sempre acabam discordando, e aqui a discordância era visível:
+
+- `perto` era ligado por ESTADO, não por posição. Ao entrar em "chegando" ele
+  passava a valer o `z` da hora — que já era 0,55. O bicho **pulava de 1× pra
+  1,5× parado no lugar**, antes do primeiro passo. Era o "pra frente" bugado;
+- ao sair da lambida, `perto` caía de 1 pra 0 de uma vez com o bicho ainda
+  colado no vidro: ele **despencava de tamanho sem ter andado**. Era o "pra
+  trás";
+- e a suavização de 420 ms transformava os dois saltos num zoom rápido, que é
+  pior que o salto: parece a câmera pulando, não o bicho andando.
+
+**O conserto é apagar `perto`.** A distância até a câmera é `z`, e só. Ele chega
+perto porque ANDOU até lá. Não existe mais como os dois discordarem.
+
+Dois defeitos de unidade vinham junto: `x` e `z` andavam na mesma velocidade,
+normalizados pela hipotenusa como se fossem o mesmo espaço (atravessar de lado é
+um passeio; atravessar a profundidade é ir do horizonte até o seu nariz), e o
+destino trocava de uma vez, o que virava a direção em bico. Agora cada eixo tem
+a sua velocidade e existe inércia.
+
+> **A bancada ganhou a aba Passeio.** Ela simula três minutos de palco sem
+> desenhar nada e mede o **maior salto de um quadro pro seguinte**. Bicho que
+> anda cresce devagar; o defeito dava degrau. Medido: o palco **antigo** dá
+> **3,31%** num quadro só (reprova); o novo, **0,414%** — com o limite em 1,5%.
+> A prova de que a medida não está sempre verde é essa: ela reprova o código
+> velho.
+
+**3. A lambida: a língua nascia no rodapé.**
+
+`base = h * 0,96`, `cx = w * 0,5`, fixo — o meio do rodapé da tela, viesse ele
+de onde viesse. E ele lambe parado no ponto em que chegou, que é sorteado. A
+língua subia por fora do corpo e lia como uma coisa rosa crescendo do chão. E o
+"rastro" eram três elipses brancas no meio da tela, pulsando o tempo todo,
+inclusive ANTES da primeira passada.
+
+Agora a língua sai da BOCA (a tela passa a âncora, do mesmo jeito que já faz pro
+objeto do item), na diagonal, e cada batida deixa a marca DELA, que seca sozinha
+da beirada pro meio. Sem guardar estado: as batidas são periódicas, então dá pra
+saber onde e quando foram as últimas quatro só olhando o relógio.
+
+> Conferido na mesma aba Passeio, pelo método das outras abas — pinta e conta
+> pixels: com uma âncora conhecida, o desenho ficou a **30 px** dela (o limite é
+> 71), e a língua apareceu em 5 dos 12 instantes medidos.
+
+**4. O áudio do Android: três falhas caladas.**
+
+- **`recorder.start()` sem fatia de tempo.** Sem argumento, os dados só saem no
+  fim, num `dataavailable` único — e no WebView do Android esse evento sai VAZIO
+  com alguma frequência. O `Blob` ia com 0 byte, o servidor recusava e a
+  mensagem se perdia. Com `start(250)` sempre há o que mandar;
+- **o formato escolhido no escuro.** Agora a lista é percorrida com
+  `isTypeSupported` na ordem do que o servidor sabe ler, e a extensão do arquivo
+  sai do que foi gravado de verdade (ia `recado.webm` cravado, mesmo num mp4);
+- **`onstop` como único ponto de chegada.** A ordem entre `dataavailable` e
+  `stop` muda de navegador pra navegador. Agora resolve quem chegar por último,
+  com prazo máximo pra nunca ficar pendurado.
+
+E a regra que vale pras três: **nada mais falha em silêncio**. `parar()` devolve
+`{ ok, reason }` com o motivo em português, os erros de microfone estão
+separados (permissão negada, sem microfone, ocupado, sem HTTPS), e o botão de
+gravar não some mais quando `mediaDevices` não existe — sumir não explicava
+nada. É a mesma lição da tela de diagnóstico do push.
+
+**5. O iPhone: faltava `Urgency`, e faltava escutar a assinatura mudar.**
+
+Duas causas independentes, e as duas explicam "às vezes chega, às vezes não":
+
+- **o envio ia sem `Urgency`**, e o padrão do protocolo é `normal` — que o APNs
+  trata como "entrego quando for conveniente". Com o aparelho em baixo consumo,
+  a tela apagada ou o app fechado, a Apple SEGURA e entrega em lote. Do lado do
+  servidor tudo parecia certo, porque ela aceita (202) e decide o horário
+  depois. Agora vai `Urgency: high`, e `Topic` junto (com o aparelho sem sinal,
+  os avisos empilhados no serviço se substituem em vez de despencarem todos);
+- **não havia `pushsubscriptionchange`.** A assinatura não é eterna: o iOS a
+  renova sozinho, e com o app fechado. Sem ninguém escutando, o endereço novo
+  nunca chegava ao servidor — que seguia mandando pro velho, levava 410, apagava
+  o registro, e o aparelho ficava mudo **pra sempre**, sem erro em lugar nenhum.
+  O único jeito de voltar era ligar de novo na mão, no Perfil.
+
+O service worker agora avisa (`POST /api/push/resubscribe`), **e a tela
+reconfere o endereço a cada abertura do app**. Os dois são necessários e por
+motivos diferentes: o evento só dispara se o navegador estiver rodando na hora
+da troca, e o iPhone troca com o app fechado — nesse caso o evento se perde e
+quem conserta é a reconferência do boot.
+
+> A rota não pede token, e não pode pedir: quem chama é o service worker, que
+> roda sem página, sem `localStorage` e sem sessão. Se exigisse login, ela nunca
+> poderia ser chamada na única situação em que existe pra ser usada. Quem prova
+> a identidade é o endereço ANTIGO — uma URL longa e aleatória que só aquele
+> aparelho conhece. **Sem ele, recusa**: adivinhar um dono mandaria as mensagens
+> do casal pro celular errado. Os três casos estão no teste de fumaça.
+
+**6. As moedas: a conta do dia não fechava.**
+
+Medida com os valores antigos, uma pessoa tirava ~90 Corações por dia jogando
+tudo o que dá pra jogar. E só a comida do bichinho comia ~60 deles: a fome caía
+3 pontos por hora (72 por dia) e a ração dava 30 por 25 moedas. Sobravam uns 30
+— um sofá de 300 levava **dez dias**. O jogo virou trabalho.
+
+O conserto não é "aumentar um número", é mexer nos DOIS lados da conta. Só
+aumentar a renda deixaria a manutenção comendo a mesma fatia, que era o defeito:
+
+| | antes | agora |
+|---|---|---|
+| check-in (base + bônus por dia de sequência) | 15 + 2 | **25 + 3** |
+| jogo com o bichinho (por partida, pelo placar) | 2 a 10 | **6 a 22** |
+| memória / naval (primeira do dia) | 12 / 15 | **25 / 30** |
+| as seguintes | 3 | **8** |
+| as 5 missões do dia, somadas | ~100 | **~200** |
+| **carinho** | nada | **12, por janela de 4 h** |
+| fome que cai por hora | 3,0 | **2,0** |
+| ração | 25 moedas por 30 de fome | **20 por 40** |
+
+**O carinho passou a pagar**, e essa é a mudança de fundo. Até aqui o bichinho
+só TIRAVA dinheiro do casal — comida, brinquedo, acessório, licença de espécie —
+e nenhuma das coisas que se faz com ele de graça devolvia nada. Cuidar era
+despesa e só o minigame era renda. O carinho já tinha descanso de 4 horas, então
+ele é o lugar certo: a torneira já está fechada por um limite que existe por
+outro motivo, e não precisou de regra nova. A chave de duplicidade é a JANELA, e
+não o instante — dois toques no mesmo segundo pagariam duas vezes, que é a mesma
+lição do `match_id` dos minijogos.
+
+**7. A batalha naval "lenta": o ping era um monólogo.**
+
+Pedido no meio da rodada: "estamos jogando batalha naval, não tá carregando
+direto as jogadas, tá lento pra jogar".
+
+O app mandava um `ping` a cada 25 segundos e **nunca conferia se voltava alguma
+coisa**. O servidor sempre respondeu `pong` — só que ninguém do lado de cá
+olhava. E conexão de celular não morre de um jeito limpo: trocar de Wi-Fi pra
+4G, um proxy que desiste, o sistema congelando a aba deixam o socket **meio
+aberto**. Nesse estado o `readyState` fica `OPEN` pra sempre, `onclose` nunca
+dispara, e o app fica se achando conectado — com o indicador verde e tudo.
+
+O efeito era exatamente o descrito: a jogada do outro não chegava por evento
+nenhum e só aparecia quando algo forçasse uma busca (trocar de tela, minimizar e
+voltar). Parecia lentidão do jogo; era uma conexão morta que ninguém tinha como
+perceber. Agora todo sinal que chega marca a hora, e dois pings de silêncio
+fecham o socket na marra — o `onclose` que já existia cuida da reconexão. A
+queda deixa de ser eterna e passa a durar ~1 minuto.
+
+Duas coisas vieram junto:
+
+- **a revisão da partida viaja pra tela.** Toda jogada tem duas respostas
+  viajando ao mesmo tempo (a do POST do tiro e a do GET que o evento dispara); se
+  voltam fora de ordem, a mais velha sobrescrevia a mais nova e o tabuleiro
+  piscava pra trás. A tela agora só aplica vista com revisão MAIOR;
+- **uma rede de segurança só na vez do outro.** O conserto de verdade é o
+  heartbeat, mas numa partida em que a pessoa está esperando a vez, dez segundos
+  parados são o jogo travado. Enquanto a partida está em andamento **e** a vez é
+  do outro, a tela busca a cada 5 segundos. Na sua vez ela para: aí quem manda a
+  informação é o seu próprio toque.
+
+**Estado: 640 verificações, 0 falha.** Build Vite aprovada. Conferido no
+navegador: as seis vozes medidas e separadas, o passeio sem degrau (com o código
+antigo reprovando na mesma régua) e a lambida saindo da boca.
+
+**Ainda em aberto:** confirmar no aparelho — o áudio no Android e as
+notificações no iPhone são correções que só o celular de vocês fecha, e as duas
+agora dizem na tela o que deu errado se ainda der.
+
+**Próximo passo:** continua sendo a seção 8.1 — mapa navegável do bairro.

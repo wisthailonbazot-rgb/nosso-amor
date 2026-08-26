@@ -53,9 +53,17 @@ router = APIRouter(prefix="/api/games", tags=["games"])
 # depois da primeira: continua sempre valendo alguma coisa (que era o pedido),
 # sem virar torneira aberta. Quem separa a primeira das outras é o índice único
 # de `dedupe_key` no banco, não um `if`.
-PREMIO_MEMORIA = 12
-PREMIO_NAVAL = 15
-PREMIO_REPETIDO = 3
+#
+# Os tres subiram em 26/08 (12/15/3 -> 25/30/8). O motivo esta em
+# `settings_store.py`: a renda do dia inteiro nao pagava um movel. Aqui o
+# reajuste tem uma razao a mais — o valor do CONSOLO era 3 Coracoes, e 3
+# Coracoes por uma partida inteira de batalha naval nao e recompensa, e troco.
+# O que faz alguem repetir uma partida e ela valer alguma coisa; a diferenca
+# pra primeira do dia continua existindo (8 contra 30), que e o que impede a
+# torneira aberta.
+PREMIO_MEMORIA = 25
+PREMIO_NAVAL = 30
+PREMIO_REPETIDO = 8
 
 
 # ==================================================================== memória
@@ -307,6 +315,13 @@ def _vista(partida: MinigameMatch, user: User, db: Session) -> dict:
     parceiro = partner_of(db, user)
     return {
         "id": partida.id,
+        # A REVISAO VIAJA PRA TELA (26/08). Cada jogada incrementa este contador,
+        # e o app usa ele pra nunca aplicar uma vista mais VELHA do que a que ja
+        # tem. Sem isso ha corrida: o tiro responde com a vista nova e, no mesmo
+        # instante, o evento de tempo real faz o app buscar de novo — se as duas
+        # respostas voltarem fora de ordem, a tela retrocede e o tabuleiro pisca.
+        # Com o numero, a resposta atrasada e simplesmente ignorada.
+        "revision": partida.revision,
         "status": partida.status,
         "lado": meu,
         "lado_pronto": bool(minha_frota),

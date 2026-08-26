@@ -8,47 +8,183 @@ import { clockTime, relativeDay, toDayString } from '../lib/dates'
 
 const EMOJIS = ['❤️', '😂', '🥺', '😍', '😘', '👍', '🔥', '😅', '🤔', '😭', '🙈', '✨']
 
-/** Grava áudio pelo microfone. Devolve o arquivo e a duração. */
+/**
+ * Grava audio pelo microfone.
+ *
+ * ---------------------------------------------------- o audio que nao ia
+ *
+ * No Android, pelo app instalado do site, gravar parecia funcionar e nada
+ * chegava na conversa. Tres coisas concorriam pra isso, e as tres falhavam
+ * CALADAS — que e o motivo de o defeito ter durado:
+ *
+ * 1. **`recorder.start()` sem fatia de tempo.** Sem argumento, o navegador so
+ *    entrega os dados no fim, num `dataavailable` unico — e no WebView do
+ *    Android esse evento final sai VAZIO com alguma frequencia (gravacao curta,
+ *    troca de foco, o proprio `stop()` chegando antes de o codificador ter
+ *    fechado o primeiro bloco). O `Blob` saia com 0 byte, o servidor recusava
+ *    com "arquivo vazio" e a mensagem de erro se perdia. Com `start(250)` os
+ *    pedacos vao chegando durante a gravacao e sempre ha o que mandar.
+ *
+ * 2. **O formato escolhido no escuro.** `new MediaRecorder(stream)` deixa o
+ *    navegador decidir, e o padrao nem sempre e um formato que o servidor
+ *    reconhece pelos primeiros bytes. Agora a lista de formatos e percorrida com
+ *    `isTypeSupported` na ordem do que o backend sabe ler, e a EXTENSAO do
+ *    arquivo sai do formato que saiu de verdade — antes ia `recado.webm`
+ *    cravado, mesmo quando o aparelho gravou mp4.
+ *
+ * 3. **`onstop` como unico ponto de chegada.** A ordem entre `dataavailable` e
+ *    `stop` nao e a mesma em todos os navegadores; onde o `stop` vem primeiro, a
+ *    Promise resolvia com os pedacos ainda incompletos. Agora quem resolve e o
+ *    que chegar por ultimo, e ha um prazo maximo pra nunca ficar pendurado.
+ *
+ * E a regra que vale pras tres: **esta funcao nunca devolve `null` calado**.
+ * Ela devolve `{ ok:false, reason }` com o motivo em portugues, e a tela mostra.
+ * Foi assim que se resolveu o push do iPhone, e pelo mesmo motivo — sem o
+ * motivo na tela, "nao funciona" e um chute entre cinco suspeitos.
+ */
+
+// Na ordem de preferencia, e todos reconhecidos pelo `media_store.py` do
+// servidor (que confere pelos primeiros bytes, nao pelo nome).
+const FORMATOS = [
+  ['audio/webm;codecs=opus', 'webm'],
+  ['audio/webm', 'webm'],
+  ['audio/ogg;codecs=opus', 'ogg'],
+  ['audio/ogg', 'ogg'],
+  ['audio/mp4;codecs=mp4a.40.2', 'm4a'],
+  ['audio/mp4', 'm4a'],
+]
+
+function escolherFormato() {
+  if (typeof MediaRecorder === 'undefined') return null
+  for (const [tipo, ext] of FORMATOS) {
+    try {
+      if (MediaRecorder.isTypeSupported?.(tipo)) return { tipo, ext }
+    } catch {
+      /* navegador sem isTypeSupported: cai no padrao logo abaixo */
+    }
+  }
+  // Sem nenhum reconhecido, deixa o navegador escolher. E melhor tentar do que
+  // desistir: o Safari antigo nao responde `isTypeSupported` e grava mp4 bem.
+  return { tipo: '', ext: 'm4a' }
+}
+
+/** Por que o microfone recusou, em portugues. */
+function motivoDoMicrofone(err) {
+  const nome = err?.name || ''
+  if (!window.isSecureContext) {
+    return 'O app precisa estar em HTTPS pra usar o microfone. Abra pelo endereço com cadeado.'
+  }
+  if (nome === 'NotAllowedError' || nome === 'SecurityError') {
+    return 'A permissão do microfone está negada. Libere nos ajustes do aparelho para este app.'
+  }
+  if (nome === 'NotFoundError' || nome === 'DevicesNotFoundError') {
+    return 'Não encontrei microfone neste aparelho.'
+  }
+  if (nome === 'NotReadableError' || nome === 'TrackStartError') {
+    return 'O microfone está ocupado por outro app. Feche a ligação ou o gravador e tente de novo.'
+  }
+  return `Não consegui acessar o microfone (${nome || 'motivo desconhecido'}).`
+}
+
 function useRecorder() {
   const [gravando, setGravando] = useState(false)
   const [segundos, setSegundos] = useState(0)
-  const ref = useRef({ recorder: null, chunks: [], inicio: 0, timer: null })
+  const ref = useRef({ recorder: null, chunks: [], inicio: 0, timer: null, ext: 'webm' })
 
   async function iniciar() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      // O Safari não grava webm; deixar o navegador escolher evita arquivo que o
-      // servidor recusaria. O backend reconhece webm, ogg e m4a pelos bytes.
-      const recorder = new MediaRecorder(stream)
-      ref.current.chunks = []
-      recorder.ondataavailable = (e) => e.data.size && ref.current.chunks.push(e.data)
-      recorder.start()
-      ref.current.recorder = recorder
-      ref.current.inicio = Date.now()
-      ref.current.timer = setInterval(
-        () => setSegundos(Math.floor((Date.now() - ref.current.inicio) / 1000)),
-        250
-      )
-      setSegundos(0)
-      setGravando(true)
-      return { ok: true }
-    } catch (err) {
-      return { ok: false, reason: 'Não consegui acessar o microfone. Libere a permissão.' }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      // Isto acontece de verdade: fora de HTTPS o `mediaDevices` nem existe, e
+      // antes o botao de gravar simplesmente sumia da barra sem explicacao.
+      return {
+        ok: false,
+        reason: window.isSecureContext
+          ? 'Este navegador não grava áudio.'
+          : 'Sem HTTPS o navegador não deixa gravar áudio. Abra o app pelo endereço com cadeado.',
+      }
     }
+    const formato = escolherFormato()
+    if (!formato) return { ok: false, reason: 'Este navegador não grava áudio.' }
+
+    let stream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    } catch (err) {
+      return { ok: false, reason: motivoDoMicrofone(err) }
+    }
+
+    let recorder
+    try {
+      recorder = formato.tipo
+        ? new MediaRecorder(stream, { mimeType: formato.tipo })
+        : new MediaRecorder(stream)
+    } catch (err) {
+      stream.getTracks().forEach((t) => t.stop())
+      return { ok: false, reason: `Este aparelho recusou a gravação (${err?.name || 'erro'}).` }
+    }
+
+    ref.current.chunks = []
+    ref.current.ext = formato.ext
+    recorder.ondataavailable = (e) => e.data?.size && ref.current.chunks.push(e.data)
+    // A FATIA DE TEMPO E O CONSERTO PRINCIPAL — ver o comentario grande acima.
+    recorder.start(250)
+    ref.current.recorder = recorder
+    ref.current.inicio = Date.now()
+    ref.current.timer = setInterval(
+      () => setSegundos(Math.floor((Date.now() - ref.current.inicio) / 1000)),
+      250
+    )
+    setSegundos(0)
+    setGravando(true)
+    return { ok: true, reason: '' }
   }
 
   function parar() {
     return new Promise((resolve) => {
-      const { recorder, timer, inicio } = ref.current
+      const { recorder, timer, inicio, ext } = ref.current
       clearInterval(timer)
       setGravando(false)
-      if (!recorder || recorder.state === 'inactive') return resolve(null)
-      recorder.onstop = () => {
-        recorder.stream.getTracks().forEach((t) => t.stop())
-        const blob = new Blob(ref.current.chunks, { type: recorder.mimeType || 'audio/webm' })
-        resolve({ blob, duration: Date.now() - inicio })
+      if (!recorder || recorder.state === 'inactive') {
+        return resolve({ ok: false, reason: 'A gravação não chegou a começar.' })
       }
-      recorder.stop()
+
+      let resolvido = false
+      const fechar = () => {
+        if (resolvido) return
+        resolvido = true
+        clearTimeout(prazo)
+        try {
+          recorder.stream.getTracks().forEach((t) => t.stop())
+        } catch {
+          /* ja parado */
+        }
+        const tipo = recorder.mimeType || 'audio/webm'
+        const blob = new Blob(ref.current.chunks, { type: tipo })
+        ref.current.chunks = []
+        if (!blob.size) {
+          // Continua possivel (microfone mudo, gravacao de meio segundo), mas
+          // agora tem nome: antes isso virava um 400 do servidor sem contexto.
+          return resolve({
+            ok: false,
+            reason: 'A gravação saiu vazia. Tente segurar mais um pouco.',
+          })
+        }
+        resolve({ ok: true, blob, ext, duration: Date.now() - inicio })
+      }
+
+      // Quem resolve e o ULTIMO a chegar: a ordem entre `dataavailable` e
+      // `stop` muda de navegador pra navegador.
+      recorder.onstop = fechar
+      recorder.ondataavailable = (e) => {
+        if (e.data?.size) ref.current.chunks.push(e.data)
+        if (recorder.state === 'inactive') fechar()
+      }
+      // E um prazo, pra nunca ficar pendurado esperando um evento que nao veio.
+      const prazo = setTimeout(fechar, 1500)
+      try {
+        recorder.stop()
+      } catch {
+        fechar()
+      }
     })
   }
 
@@ -58,12 +194,25 @@ function useRecorder() {
     setGravando(false)
     if (recorder && recorder.state !== 'inactive') {
       recorder.onstop = () => recorder.stream.getTracks().forEach((t) => t.stop())
-      recorder.stop()
+      try {
+        recorder.stop()
+      } catch {
+        /* ja parado */
+      }
     }
     ref.current.chunks = []
   }
 
-  return { gravando, segundos, iniciar, parar, cancelar, suportado: !!navigator.mediaDevices }
+  // O botao aparece sempre que ha `MediaRecorder`, mesmo sem `mediaDevices`:
+  // escondido, ele nao explicava nada. Agora ele aparece e o toque diz o motivo.
+  return {
+    gravando,
+    segundos,
+    iniciar,
+    parar,
+    cancelar,
+    suportado: typeof MediaRecorder !== 'undefined',
+  }
 }
 
 function Audio({ src, duration }) {
@@ -398,15 +547,30 @@ export default function Chat() {
 
   async function pararEEnviarAudio() {
     const resultado = await gravador.parar()
-    if (!resultado || resultado.duration < 700) return // toque sem querer
+    // Nada aqui volta a falhar em silencio. Antes, `parar()` devolvendo nada e
+    // a gravacao curta demais saiam pelo mesmo `return` mudo — e do lado de ca
+    // "gravei e nao apareceu" era indistinguivel de "o app nem tentou".
+    if (!resultado?.ok) {
+      setErro(resultado?.reason || 'Não consegui terminar a gravação.')
+      return
+    }
+    if (resultado.duration < 700) {
+      setErro('Áudio curto demais. Segure o botão de gravar um pouco mais.')
+      return
+    }
     const form = new FormData()
-    form.append('file', resultado.blob, 'recado.webm')
+    // A extensao acompanha o que foi gravado de verdade. (O servidor decide o
+    // tipo pelos primeiros bytes, mas mandar `recado.webm` num mp4 e mentira
+    // gratuita, e mentira gratuita e o que despista a proxima investigacao.)
+    form.append('file', resultado.blob, `recado.${resultado.ext}`)
     form.append('duration_ms', String(resultado.duration))
+    setEnviando(true)
     try {
       await api.post('/api/chat/audio', form)
     } catch (e) {
       setErro(e.message)
     }
+    setEnviando(false)
   }
 
   // divisórias de dia, como no WhatsApp

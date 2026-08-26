@@ -43,6 +43,18 @@ log = logging.getLogger("push")
 MAX_FAILURES = 10
 
 
+# Um topico e um rotulo curto que o servico de push usa pra SUBSTITUIR um aviso
+# ainda nao entregue por outro do mesmo assunto. Sem ele, dez mensagens de chat
+# mandadas com o celular sem sinal chegam todas as dez de uma vez quando o sinal
+# volta. O protocolo exige base64url e no maximo 32 caracteres.
+_TOPICO_OK = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
+
+
+def _topico(kind: str) -> str:
+    limpo = "".join(c for c in (kind or "geral") if c in _TOPICO_OK)
+    return (limpo or "geral")[:32]
+
+
 def _send_one(sub: PushSubscription, payload: dict, ttl: int = 43200) -> tuple[bool, bool]:
     """Devolve (entregue, deve_apagar)."""
     try:
@@ -55,6 +67,25 @@ def _send_one(sub: PushSubscription, payload: dict, ttl: int = 43200) -> tuple[b
             vapid_private_key=VAPID_PRIVATE_KEY,
             vapid_claims={"sub": VAPID_SUBJECT},
             ttl=ttl,
+            # ---------------------------------------------- por que estes dois
+            #
+            # `Urgency` FALTAVA, e esta era a causa mais provavel do "as vezes
+            # chega, as vezes nao, as vezes chega meia hora depois" no iPhone.
+            # Sem o cabecalho, o padrao do protocolo e `normal` — e a Apple, no
+            # APNs, trata `normal` como "pode entregar quando for conveniente":
+            # com o aparelho em Modo de Baixo Consumo, com a tela apagada ha um
+            # tempo, ou com o app da Tela de Inicio fechado, ela SEGURA o aviso
+            # e entrega em lote depois. Do lado do servidor tudo parecia certo,
+            # porque a Apple ACEITA a mensagem (202) e so decide o horario
+            # depois. Mensagem de casal e coisa pra tocar agora: `high`.
+            #
+            # `Topic` resolve o outro lado da mesma moeda. Com o aparelho sem
+            # sinal, os avisos nao entregues se empilham no servico de push e
+            # despencam todos juntos quando o sinal volta. Com topico, o novo
+            # SUBSTITUI o antigo do mesmo assunto ainda na fila — que e a mesma
+            # decisao ja tomada no service worker com `tag`, so que um passo
+            # antes, do lado de fora do aparelho.
+            headers={"Urgency": "high", "Topic": _topico(payload.get("tag"))},
         )
         return True, False
     except WebPushException as exc:

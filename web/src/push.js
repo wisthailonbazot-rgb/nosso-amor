@@ -180,6 +180,57 @@ export async function enablePush(vapidPublicKey) {
   return { ok: true, reason: '' }
 }
 
+/**
+ * Reconfere a assinatura deste aparelho a cada abertura do app.
+ *
+ * Chamada no boot, depois do `/api/me`. E o par da correcao que esta no
+ * `sw.js`: la o service worker avisa quando o SISTEMA troca o endereco de push;
+ * aqui a tela reconfere quando o aparelho volta a ser usado.
+ *
+ * Os dois sao necessarios, e por motivos diferentes. O
+ * `pushsubscriptionchange` so dispara se o navegador estiver rodando na hora da
+ * troca — o iPhone renova assinatura com o app fechado e, quando isso acontece,
+ * o evento simplesmente se perde. Dai o servidor fica com um endereco morto e
+ * nao ha ninguem pra contar. Este reenvio conserta esse caso, e custa uma
+ * requisicao por abertura.
+ *
+ * `subscribe` no servidor e idempotente (o endpoint e a chave), entao mandar de
+ * novo o mesmo endereco nao cria linha nova nem duplica aviso.
+ *
+ * Nao pede permissao e nao assina nada: se a pessoa nunca ligou, nao ha o que
+ * sincronizar e a funcao sai calada. Pedir permissao fora de um toque e recusado
+ * pelo iOS de qualquer jeito — e ja esta anotado la em cima.
+ */
+export async function sincronizarPush(vapidPublicKey) {
+  if (!supported() || permission() !== 'granted') return { ok: false, reason: 'nao ligado' }
+  try {
+    const registration =
+      (await navigator.serviceWorker.getRegistration()) || (await navigator.serviceWorker.ready)
+    if (!registration) return { ok: false, reason: 'sem service worker' }
+
+    // A chave do servidor vai pro service worker: e o plano B dele pra
+    // reassinar quando o navegador nao manda a assinatura antiga junto do
+    // evento. Sem chave, `subscribe()` la dentro nao tem como ser chamado.
+    if (vapidPublicKey) {
+      const alvo = navigator.serviceWorker.controller || registration.active
+      alvo?.postMessage({ tipo: 'guardar-chave', chave: vapidPublicKey })
+    }
+
+    const subscription = await registration.pushManager.getSubscription()
+    if (!subscription) return { ok: false, reason: 'sem assinatura' }
+    const raw = subscription.toJSON()
+    await api.post('/api/push/subscribe', {
+      endpoint: raw.endpoint,
+      p256dh: raw.keys.p256dh,
+      auth: raw.keys.auth,
+      label: deviceLabel(),
+    })
+    return { ok: true, reason: '' }
+  } catch (err) {
+    return { ok: false, reason: String(err?.message || err) }
+  }
+}
+
 export async function disablePush() {
   if (!('serviceWorker' in navigator)) return
   const registration = await navigator.serviceWorker.getRegistration()

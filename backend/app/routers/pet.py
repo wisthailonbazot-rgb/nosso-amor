@@ -566,8 +566,19 @@ def play(payload: ItemIn, user: User = Depends(current_user), db: Session = Depe
 # em vez de por uma regra invisível de calendário.
 #
 # O valor acompanha o desempenho, então jogar bem vale mais do que jogar muito.
-PREMIO_MINIMO = 2
-PREMIO_MAXIMO = 10
+#
+# Subiram em 26/08 (2/10 -> 6/22). Com o teto em 10, as ~7 partidas que cabem
+# em 100 de energia rendiam no maximo 70 Coracoes por dia jogando MUITO BEM, e
+# na pratica uns 40 — menos do que uma cadeira de 90. Jogar com o bichinho e a
+# coisa que mais se faz no app e era a que menos pagava. O piso subiu junto
+# porque 2 Coracoes por uma partida ruim faz a partida ruim parecer um castigo.
+PREMIO_MINIMO = 6
+PREMIO_MAXIMO = 22
+
+# O que um carinho rende, e o tamanho da janela em segundos (o mesmo descanso
+# de 4 horas que ja existia, so que em segundos, pra virar chave de duplicidade).
+PREMIO_CARINHO = 12
+PET_COOLDOWN_SEG = pet_care.PET_COOLDOWN_MIN * 60
 
 
 @router.post("/game")
@@ -662,7 +673,34 @@ def cuddle(user: User = Depends(current_user), db: Session = Depends(get_db)) ->
     result = pet_care.touch(db, pet, {"happiness": 4}, "pet", now)
     pet.last_petted_at = now
     _log(db, pet, user, "pet", "", result["applied"])
-    return _respond(db, pet, result)
+
+    # CUIDAR PAGA. Ate 26/08 o bichinho so tirava dinheiro do casal: comida,
+    # brinquedo, acessorio, licenca de especie — e nenhuma das coisas que se
+    # faz com ele de graca devolvia nada. Dava a impressao (correta) de que
+    # cuidar era despesa e so o minigame era renda.
+    #
+    # O carinho ja tem descanso de 4 horas, entao ele e o lugar certo pra isso:
+    # a torneira ja esta fechada por um limite que existe por outro motivo, e
+    # nao precisa de regra nova. Sao no maximo 6 janelas por dia, e quem esta
+    # com o bichinho doente ou imundo nao chega perto disso.
+    #
+    # A chave e a JANELA, nao o instante: dois toques no mesmo segundo
+    # (`_cuddle_ready` ainda deixa o segundo passar se o primeiro nao commitou)
+    # cairiam na mesma chave e pagariam uma vez so. Datar pelo relogio exato
+    # pagaria duas — e a licao do `match_id` dos minijogos.
+    janela = int(now.timestamp() // (PET_COOLDOWN_SEG or 1))
+    premio = economy.try_earn(
+        db,
+        user.id,
+        PREMIO_CARINHO,
+        "pet",
+        reference="cuddle",
+        note=f"Carinho no {pet.name}",
+        dedupe_key=f"cuddle:{user.id}:{pet.id}:{janela}",
+    )
+    if premio:
+        publish("wallet", {"balance": economy.balance(db, user.id)}, to_user=user.id)
+    return _respond(db, pet, {**result, "coins": PREMIO_CARINHO if premio else 0})
 
 
 @router.post("/accessory")

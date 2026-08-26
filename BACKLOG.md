@@ -712,3 +712,67 @@ deixar só o Salem.
 
 Estado: **623 verificações, 0 falha**; build Vite aprovada; conferido no
 navegador. Causas no HANDOFF, seção 9.12.
+
+### 26/08/2026 — Vozes, áudio no Android, iPhone mudo, o passeio, a lambida e as moedas
+
+Pedido do dono: as vozes dos animais não se parecem nem um pouco com eles, tá
+bem estranho; no Android via site/app não envia áudio; no iPhone as notificações
+não estão funcionando corretamente; o movimento do animal pra frente e pra trás
+tá completamente bugado; ao lamber a câmera tá bem estranho; o sistema pra ganhar
+moedas tá bem difícil, não ganha quase nada de jeito nenhum. E no meio da
+rodada: estamos jogando batalha naval e não tá carregando direto as jogadas, tá
+lento pra jogar.
+
+- **[x]** **As vozes.** As peças estavam certas e PARADAS. Envelope igual pra
+      todo mundo (que é a forma de um bipe), só o primeiro formante se mexendo
+      (sem o cruzamento F1/F2 não existe miado), jitter rápido demais — que o
+      ouvido lê como eletrônico — e nenhuma rugosidade, que é justamente o que
+      faz um rosnado ser rosnado. Agora cada espécie tem a forma no tempo dela,
+      a boca se move nos dois formantes, o tremor virou vibrato + jitter
+      separados, e existe modulação de amplitude pros graves.
+      - A bancada não podia pegar isso (volume e agudez olham o som inteiro de
+        uma vez: um bipe e um miado têm a mesma agudez média). Ela ganhou
+        **movimento** e **corpo**, e movimento abaixo de 1,25× reprova — e já
+        reprovou uma coisa nesta rodada: gato e cachorro a 4% de distância.
+- **[x]** **O movimento pra frente e pra trás.** Havia DUAS variáveis pra um
+      fato só — `z` e `perto`, as duas mexendo no tamanho. `perto` era ligado
+      por estado e não por posição, então ele pulava de 1× pra 1,5× parado no
+      lugar e despencava ao sair da lambida sem ter andado. Apagado: a distância
+      até a câmera é `z` e mais nada. Medido na aba **Passeio** nova: o código
+      antigo dá 3,31% de salto num quadro (reprova), o novo dá 0,414%.
+- **[x]** **A lambida.** A língua nascia no meio do rodapé da tela, fixo, e ele
+      lambe parado no ponto em que chegou — subia por fora do corpo. Agora sai
+      da boca, e cada batida deixa a marca dela, que seca sozinha.
+- **[x]** **O áudio no Android.** Três falhas caladas: gravação sem fatia de
+      tempo (o WebView entrega o bloco final vazio, e ia um arquivo de 0 byte),
+      formato escolhido no escuro, e a Promise resolvendo no evento errado. E
+      agora **nada falha em silêncio**: o motivo aparece na tela em português.
+      - [ ] **Confirmar no seu Android** — se ainda não for, a tela vai dizer
+            qual das cinco coisas travou.
+- **[x]** **As notificações do iPhone.** Duas causas: o envio ia sem
+      `Urgency: high`, e o padrão do protocolo faz a Apple SEGURAR o aviso pra
+      entregar quando for conveniente; e não havia `pushsubscriptionchange` — o
+      iOS renova a assinatura sozinho com o app fechado, o endereço novo nunca
+      chegava, e o aparelho ficava mudo pra sempre. Agora o service worker avisa
+      e a tela reconfere o endereço a cada abertura.
+      - [ ] **Confirmar no iPhone dela** — esta é a mesma pendência de 23/08,
+            agora com duas causas reais corrigidas por trás.
+- **[x]** **As moedas.** A conta não fechava: ~90 Corações por dia jogando tudo,
+      e só a comida do bichinho comia ~60. Um sofá de 300 levava dez dias. Os
+      dois lados da conta mudaram — a renda subiu (check-in, os três jogos, as
+      missões) e o custo de manutenção desceu (a fome cai 2,0/h em vez de 3,0, e
+      a comida rende mais por moeda). E **o carinho passou a pagar**: até aqui o
+      bichinho só tirava dinheiro, e nenhuma das coisas que se faz com ele de
+      graça devolvia nada.
+- **[x]** **A batalha naval "lenta".** O `ping` do tempo real era um monólogo: o
+      app mandava a cada 25s e nunca conferia se voltava. Conexão de celular
+      morre meio aberta (troca de Wi-Fi, proxy que desiste) e nesse estado o
+      app fica se achando conectado pra sempre, com o indicador verde — a jogada
+      do outro não chegava por evento nenhum e só aparecia ao trocar de tela.
+      Agora todo sinal marca a hora e dois pings de silêncio derrubam o socket
+      pra reconectar. Junto: a revisão da partida viaja pra tela (resposta
+      atrasada não faz mais o tabuleiro voltar atrás) e, só enquanto a vez é do
+      outro, a tela confere a cada 5 segundos.
+
+Estado: **640 verificações, 0 falha**; build Vite aprovada; conferido no
+navegador. Causas no HANDOFF, seção 9.13.

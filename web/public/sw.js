@@ -8,7 +8,7 @@
 // "nunca cachear" pra /api. Um app de casal com chat nao pode servir mensagem
 // velha do cache achando que e a atual.
 
-const CACHE = 'casal-v4'
+const CACHE = 'casal-v5'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', (event) => {
@@ -192,6 +192,88 @@ self.addEventListener('message', (event) => {
       .then((lista) => lista.forEach((aviso) => aviso.close()))
       .catch(() => {})
   )
+})
+
+// ----------------------------------------------- a assinatura que se renova
+//
+// ESTE HANDLER FALTAVA, e ele e a segunda causa do "as vezes o iPhone para de
+// avisar e nunca mais volta".
+//
+// A assinatura de push nao e eterna: o proprio sistema a invalida e cria outra
+// sozinho (o iOS faz isso com frequencia — ao limpar dados do Safari, ao ficar
+// muito tempo sem o app ser aberto, ao atualizar o sistema). Quando isso
+// acontece, o navegador dispara `pushsubscriptionchange` — e se ninguem
+// escutar, o endpoint novo NUNCA chega ao servidor. Dai em diante o servidor
+// manda pro endereco velho, leva 410, apaga o registro, e o aparelho fica sem
+// push pra sempre. Do lado de fora parece "a notificacao parou", sem erro
+// nenhum, e o unico jeito de voltar era ir no Perfil e ligar de novo na mao.
+//
+// Aqui a gente reassina com a MESMA chave do servidor e conta o endereco novo.
+// A chave vem em `event.oldSubscription` quando o navegador manda (o Safari
+// manda); quando nao vem, o `applicationServerKey` guardado no cache serve de
+// plano B — sem ele nao da pra reassinar, porque `subscribe()` exige a chave.
+const CHAVE_CACHE = '/__vapid__'
+
+async function guardarChave(chave) {
+  try {
+    const c = await caches.open(CACHE)
+    await c.put(CHAVE_CACHE, new Response(chave))
+  } catch (e) {
+    /* sem cache: o plano B fica indisponivel, o principal continua valendo */
+  }
+}
+
+async function chaveGuardada() {
+  try {
+    const c = await caches.open(CACHE)
+    const r = await c.match(CHAVE_CACHE)
+    return r ? await r.text() : null
+  } catch (e) {
+    return null
+  }
+}
+
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    (async () => {
+      const velha = event.oldSubscription
+      let chave = velha && velha.options && velha.options.applicationServerKey
+      if (!chave) chave = await chaveGuardada()
+      if (!chave) return
+      let nova = event.newSubscription
+      if (!nova) {
+        try {
+          nova = await self.registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: chave,
+          })
+        } catch (e) {
+          return
+        }
+      }
+      const dados = nova.toJSON()
+      try {
+        await fetch('/api/push/resubscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            old_endpoint: velha ? velha.endpoint : '',
+            endpoint: dados.endpoint,
+            p256dh: dados.keys.p256dh,
+            auth: dados.keys.auth,
+          }),
+        })
+      } catch (e) {
+        /* sem rede agora; a tela reconfere o endereco no proximo boot */
+      }
+    })()
+  )
+})
+
+// A tela manda a chave do servidor pra ca no boot, pro plano B acima existir.
+self.addEventListener('message', (event) => {
+  if (!event.data || event.data.tipo !== 'guardar-chave' || !event.data.chave) return
+  event.waitUntil(guardarChave(event.data.chave))
 })
 
 self.addEventListener('notificationclick', (event) => {

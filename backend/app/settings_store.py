@@ -17,16 +17,34 @@ DEFAULTS: dict[str, dict] = {
     #   nada     = o modulo some pro parceiro
     "cycle_privacy": {"share": "resumo"},
     # Economia: quanto rende cada coisa.
+    #
+    # Os numeros subiram em 26/08 porque a conta do dia nao fechava. Medida com
+    # os valores antigos, uma pessoa tirava ~90 Coracoes por dia jogando tudo o
+    # que da pra jogar — e so a comida do bichinho comia ~60 deles (a fome caia
+    # 3 pontos por hora, 72 por dia, e a racao dava 30 por 25 moedas). Sobravam
+    # uns 30: um sofa de 300 levava dez dias. O jogo virou trabalho.
+    #
+    # O conserto nao e "aumentar um numero": e mexer nos DOIS lados da conta —
+    # a renda subiu e o custo de manutencao desceu (ver `pet_decay` logo abaixo
+    # e os precos de comida em `catalog.py`). Aumentar so a renda deixaria a
+    # manutencao comendo a mesma fatia, que era o defeito.
     "economy": {
-        "checkin_base": 15,
-        "checkin_streak_bonus": 2,
+        "checkin_base": 25,
+        "checkin_streak_bonus": 3,
         "checkin_streak_cap": 30,
         "minigame_win": 25,
         "minigame_draw": 10,
         "minigame_loss": 5,
     },
     # Decaimento do pet, em pontos por hora.
-    "pet_decay": {"hunger": 3.0, "happiness": 2.0, "energy": 2.5, "hygiene": 1.5},
+    #
+    # A fome caiu de 3,0 para 2,0. Nao e "deixar o bichinho mais facil": 3,0 por
+    # hora significa 72 pontos por DIA, e a unica forma de repor 72 pontos era
+    # comprando comida — ou seja, a fome era um imposto diario sobre a renda,
+    # nao um cuidado. Com 2,0 ele continua ficando com fome se for esquecido
+    # (48 pontos por dia; largado dois dias, chega a zero e adoece), so que dá
+    # pra cuidar dele E juntar dinheiro pra casa no mesmo dia.
+    "pet_decay": {"hunger": 2.0, "happiness": 2.0, "energy": 2.5, "hygiene": 1.5},
 }
 
 

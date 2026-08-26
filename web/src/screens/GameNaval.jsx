@@ -96,16 +96,42 @@ export default function GameNaval() {
   const [erro, setErro] = useState('')
   const ocupado = useRef(false)
 
+  // A revisão da última vista aplicada. Fica FORA do estado do React de
+  // propósito: ela é consultada dentro de respostas que chegam a qualquer
+  // momento, e um valor capturado por closure estaria velho na hora de decidir.
+  const revisao = useRef(-1)
+
+  /**
+   * Aplica uma vista, mas nunca uma mais VELHA do que a que já está na tela.
+   *
+   * Toda jogada tem duas respostas viajando ao mesmo tempo: a do próprio POST e
+   * a do GET que o evento de tempo real dispara. Se elas voltam fora de ordem —
+   * o que numa rede de celular acontece —, a mais velha sobrescrevia a mais
+   * nova e o tabuleiro voltava atrás por um instante. O contador do servidor
+   * resolve isso sem inventar regra: quem tem revisão maior manda.
+   */
+  const aplicar = useCallback((nova) => {
+    if (!nova) {
+      revisao.current = -1
+      setPartida(null)
+      return
+    }
+    const r = typeof nova.revision === 'number' ? nova.revision : revisao.current + 1
+    if (r < revisao.current) return
+    revisao.current = r
+    setPartida(nova)
+  }, [])
+
   const buscar = useCallback(async () => {
     try {
       const r = await api.get('/api/games/naval')
-      setPartida(r.partida)
+      aplicar(r.partida)
     } catch (e) {
       setErro(e.message)
     } finally {
       setCarregando(false)
     }
-  }, [])
+  }, [aplicar])
 
   useEffect(() => {
     buscar()
@@ -118,6 +144,34 @@ export default function GameNaval() {
     return () => { off(); offVolta() }
   }, [buscar])
 
+  // ------------------------------------------------ a rede de segurança
+  //
+  // O conserto de verdade da lentidão está no `store.js` (o ping que agora
+  // espera resposta, e por isso percebe a conexão morta). Isto aqui é o cinto
+  // de segurança pra este jogo em específico, e ele existe por uma diferença
+  // real: no chat, uma mensagem que atrasa dez segundos é chata; numa partida
+  // em que a pessoa está esperando a vez, dez segundos parados são o jogo
+  // travado, e ninguém sabe se é a vez de quem.
+  //
+  // Roda SÓ enquanto a partida está em andamento e a vez é do outro — que é
+  // exatamente o momento em que não há nada a fazer além de esperar. Na sua vez
+  // ele para: aí quem manda a informação é o seu próprio toque, e um GET no
+  // meio disso só concorreria com ele. Fora da partida também não roda.
+  //
+  // São duas pessoas num app privado: um pedido a cada 5 segundos durante a vez
+  // do outro não é carga nenhuma, e o `aplicar` acima garante que uma resposta
+  // atrasada não desfaz nada.
+  // "in_progress" e o status que a rota poe quando as duas frotas estao no
+  // tabuleiro; antes disso ("waiting") o evento de tempo real ja resolve, e
+  // depois ("finished") nao ha mais o que esperar.
+  const esperandoOOutro =
+    partida?.status === 'in_progress' && !partida.sua_vez && !partida.vencedor_id
+  useEffect(() => {
+    if (!esperandoOOutro) return
+    const timer = setInterval(buscar, 5000)
+    return () => clearInterval(timer)
+  }, [esperandoOOutro, buscar])
+
   const lado = partida?.lado_do_tamanho || 8
   const modelo = partida?.frota_modelo || [4, 3, 3, 2]
 
@@ -125,7 +179,7 @@ export default function GameNaval() {
     setErro(''); setCarregando(true)
     try {
       const r = await api.post('/api/games/naval/nova')
-      setPartida(r.partida)
+      aplicar(r.partida)
     } catch (e) { setErro(e.message) }
     setCarregando(false)
   }
@@ -142,7 +196,7 @@ export default function GameNaval() {
     setErro('')
     try {
       const r = await api.post(`/api/games/naval/${partida.id}/frota`, { navios: rascunho })
-      setPartida(r.partida)
+      aplicar(r.partida)
       setRascunho(null)
       window.casalSound?.('success')
     } catch (e) { setErro(e.message) }
@@ -157,7 +211,7 @@ export default function GameNaval() {
     setErro('')
     try {
       const r = await api.post(`/api/games/naval/${partida.id}/tiro`, { linha, coluna })
-      setPartida(r.partida)
+      aplicar(r.partida)
       window.casalSound?.(r.acertou ? 'success' : 'nav')
       setAviso(
         r.venceu
@@ -177,7 +231,7 @@ export default function GameNaval() {
   async function desistir() {
     try {
       const r = await api.post(`/api/games/naval/${partida.id}/desistir`)
-      setPartida(r.partida)
+      aplicar(r.partida)
     } catch (e) { setErro(e.message) }
   }
 

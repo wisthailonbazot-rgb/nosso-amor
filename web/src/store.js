@@ -6,12 +6,17 @@
 
 import { create } from 'zustand'
 import { api, getToken, setToken, wsUrl } from './api'
-import { limparAvisos } from './push'
+import { limparAvisos, sincronizarPush } from './push'
 
 let socket = null
 let retry = 0
 let reconnectTimer = null
 let pingTimer = null
+// Quando chegou a última palavra do servidor, e por quanto tempo o silêncio é
+// aceitável. 65 s dá dois pings de folga: menos que isso derrubaria conexão boa
+// num engasgo de rede, e a reconexão custa mais do que esperar mais um ping.
+let ultimoSinal = 0
+const SILENCIO_LIMITE = 65000
 // Se a conexao ja subiu alguma vez nesta sessao. Serve pra separar a PRIMEIRA
 // conexao (a tela ja carregou o historico sozinha) de uma RECONEXAO (houve um
 // buraco, e o que chegou nele precisa ser buscado).
@@ -100,6 +105,11 @@ export const useStore = create((set, get) => ({
       pushEnabled: me.push_enabled,
       vapidKey: me.vapid_public_key,
     })
+    // Reconfere o endereco de push deste aparelho. Ver `sincronizarPush`: o
+    // iPhone troca a assinatura sozinho com o app fechado, e sem isto o
+    // servidor continuava mandando pro endereco morto — a notificacao parava
+    // de chegar sem nenhum erro em lugar nenhum.
+    sincronizarPush(me.vapid_public_key)
     return me
   },
 
@@ -172,13 +182,49 @@ export const useStore = create((set, get) => ({
         emit('resumed', null)
       }
       clearInterval(pingTimer)
-      // ping periodico: proxy costuma matar conexao parada em 60s
+      ultimoSinal = Date.now()
+      // ------------------------------------------------ o ping que ESPERA resposta
+      //
+      // Isto era um monólogo, e foi a causa do "a batalha naval não carrega as
+      // jogadas na hora, tá lento pra jogar" (26/08).
+      //
+      // O app mandava um `ping` a cada 25 segundos e NUNCA conferia se voltou
+      // alguma coisa — o servidor sempre respondeu `pong`, só que ninguém do
+      // lado de cá olhava. E uma conexão de celular não morre de um jeito
+      // limpo: trocar de Wi-Fi pra 4G, passar por um proxy que desiste, ou o
+      // sistema congelar a aba deixam o socket MEIO ABERTO. Nesse estado o
+      // `readyState` continua `OPEN` pra sempre, `onclose` nunca dispara, e o
+      // app fica se achando conectado — com o indicador verde e tudo.
+      //
+      // O efeito era exatamente o que ele descreveu: a jogada do outro não
+      // chegava por evento nenhum, e só aparecia quando alguma coisa forçasse
+      // uma busca (trocar de tela, minimizar e voltar). Parecia lentidão do
+      // jogo; era uma conexão morta que ninguém tinha como perceber.
+      //
+      // Agora todo sinal que chega — inclusive o `pong` — marca a hora. Se
+      // passarem dois pings sem UMA palavra do servidor, o socket é fechado na
+      // marra, e o `onclose` que já existe cuida de reconectar com a espera
+      // crescente. A queda deixa de ser eterna e passa a durar ~1 minuto.
       pingTimer = setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) ws.send('ping')
+        if (ws.readyState !== WebSocket.OPEN) return
+        if (Date.now() - ultimoSinal > SILENCIO_LIMITE) {
+          // Morto. Fechar é o que devolve o controle pro `onclose`.
+          try {
+            ws.close()
+          } catch {
+            /* ja fechou */
+          }
+          return
+        }
+        ws.send('ping')
       }, 25000)
     }
 
     ws.onmessage = (raw) => {
+      // QUALQUER coisa que chega prova que a conexão está viva — inclusive o
+      // `pong`, que não tem outro efeito além deste. Ver o comentário do
+      // heartbeat, logo acima.
+      ultimoSinal = Date.now()
       let message
       try {
         message = JSON.parse(raw.data)

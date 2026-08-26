@@ -230,11 +230,17 @@ SHOP_ITEMS = [
     # --- pet: espécies adotáveis
     *[_pet_species(s["code"], s["name"], 350) for s in PET_SPECIES],
     # --- pet: comida (consumivel)
-    _pet("petisco", "Petisco", "comida", 10, {"hunger": 12}, "Um agrado rápido", True),
-    _pet("racao", "Ração", "comida", 25, {"hunger": 30}, "O básico bem feito", True),
-    _pet("bolo", "Bolo de aniversário", "comida", 60, {"hunger": 35, "happiness": 15}, "", True),
-    _pet("sushi", "Sushi", "comida", 90, {"hunger": 45, "happiness": 20}, "Chique demais", True),
-    _pet("banho_kit", "Kit de banho", "comida", 30, {"hygiene": 40}, "Shampoo e toalha", True),
+    # Comida rende MAIS por moeda desde 26/08. A conta que estourava era esta:
+    # a fome caia 72 pontos por dia e a racao dava 30 por 25 Coracoes, entao
+    # so manter o bichinho de barriga cheia custava ~60 por dia de uma renda de
+    # ~90. O consumivel deixou de ser cuidado e virou imposto. Aqui o preco
+    # desceu e o efeito subiu; do outro lado, a fome passou a cair 2,0 por hora
+    # (`settings_store.py`). Sao os dois lados da mesma conta.
+    _pet("petisco", "Petisco", "comida", 8, {"hunger": 15}, "Um agrado rápido", True),
+    _pet("racao", "Ração", "comida", 20, {"hunger": 40}, "O básico bem feito", True),
+    _pet("bolo", "Bolo de aniversário", "comida", 45, {"hunger": 45, "happiness": 15}, "", True),
+    _pet("sushi", "Sushi", "comida", 70, {"hunger": 55, "happiness": 25}, "Chique demais", True),
+    _pet("banho_kit", "Kit de banho", "comida", 24, {"hygiene": 50}, "Shampoo e toalha", True),
     # --- pet: brinquedo (nao some, tem descanso entre usos)
     _pet("bolinha", "Bolinha", "brinquedo", 40, {"happiness": 15, "energy": -8, "cooldown_min": 30}),
     _pet("ossinho", "Ossinho", "brinquedo", 50, {"happiness": 18, "energy": -6, "cooldown_min": 40}),
