@@ -41,11 +41,21 @@ from ..security import current_user, partner_of
 router = APIRouter(prefix="/api/games", tags=["games"])
 
 
-# Corações por dia, por jogo, por pessoa — a mesma torneira fechada dos jogos do
-# bichinho, e pelo mesmo motivo: prêmio por partida transforma minigame em
-# caça-níquel. Quem garante é o índice único de `dedupe_key`, não um `if`.
+# TODA partida paga. A primeira do dia paga o cheio; as seguintes, o consolo.
+#
+# Antes era uma vez por dia e ponto: a partir da segunda partida o jogo não
+# valia mais nada em moeda, e o dono reclamou disso com razão — jogo que não
+# rende ninguém volta a jogar.
+#
+# Pagar sempre o valor cheio também não serve: memória e batalha naval não
+# gastam energia de bichinho nenhum, então não existe nada segurando a
+# repetição, e seria imprimir Coração à vontade. O meio-termo é o valor cair
+# depois da primeira: continua sempre valendo alguma coisa (que era o pedido),
+# sem virar torneira aberta. Quem separa a primeira das outras é o índice único
+# de `dedupe_key` no banco, não um `if`.
 PREMIO_MEMORIA = 12
 PREMIO_NAVAL = 15
+PREMIO_REPETIDO = 3
 
 
 # ==================================================================== memória
@@ -168,12 +178,27 @@ def memoria_fim(
         note="Jogo da memória — primeira partida do dia",
         dedupe_key=f"memoria:{user.id}:{dia}",
     )
-    missions.record(db, "pet_game")
     if premio:
-        publish("wallet", {"balance": economy.balance(db, user.id)}, to_user=user.id)
+        moedas = PREMIO_MEMORIA
+    else:
+        # Já pegou a do dia: paga o consolo, com chave por partida (o id da
+        # linha que acabou de ser gravada), pra o toque duplo não pagar duas
+        # vezes pela mesma partida.
+        economy.try_earn(
+            db,
+            user.id,
+            PREMIO_REPETIDO,
+            "minigame",
+            reference="memoria",
+            note="Jogo da memória — mais uma partida",
+            dedupe_key=f"memoria-extra:{user.id}:{registro.id}",
+        )
+        moedas = PREMIO_REPETIDO
+    missions.record(db, "pet_game")
+    publish("wallet", {"balance": economy.balance(db, user.id)}, to_user=user.id)
     db.commit()
     return {
-        "coins": PREMIO_MEMORIA if premio else 0,
+        "coins": moedas,
         "melhores": _melhores_do_dia(db, dia),
     }
 
@@ -475,7 +500,18 @@ def naval_tiro(
         )
         if premio:
             ganhou_coracoes = PREMIO_NAVAL
-            publish("wallet", {"balance": economy.balance(db, user.id)}, to_user=user.id)
+        else:
+            economy.try_earn(
+                db,
+                user.id,
+                PREMIO_REPETIDO,
+                "minigame",
+                reference="naval",
+                note="Batalha naval — mais uma vitória",
+                dedupe_key=f"naval-extra:{user.id}:{partida.id}",
+            )
+            ganhou_coracoes = PREMIO_REPETIDO
+        publish("wallet", {"balance": economy.balance(db, user.id)}, to_user=user.id)
         missions.record(db, "pet_game")
     elif not acertou:
         partida.turn_user_id = partida.player2_id if meu == "p1" else partida.player1_id

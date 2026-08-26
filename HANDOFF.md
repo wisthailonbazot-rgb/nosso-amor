@@ -208,6 +208,8 @@ app-casal/
         ├── api.js                ← toda chamada HTTP passa aqui
         ├── store.js              ← sessão + WebSocket + presença (Zustand)
         ├── push.js               ← ligar notificação + diagnóstico do aparelho
+        ├── petVoz.js             ← a VOZ de cada espécie, sintetizada
+        │                            (harmônico + ruído + formantes)
         ├── lib/dates.js          ← irmão do clock.py, do lado do app
         ├── render/               ← motor de pixel art (nada é arquivo de imagem)
         │   ├── pixel.js          ← rasterização própria (borda dura, sem suavizar)
@@ -218,6 +220,8 @@ app-casal/
         │   ├── avatar.js         ← o boneco: 8 camadas, 48 peças
         │   ├── petCena.js        ← o cenário da ilha atrás do bichinho (céu, mar,
         │   │                        campo, hora do dia), na tela dele
+        │   ├── petPalco.js       ← o que ele FAZ no palco: anda, vira, faz truque
+        │   │                        e vem lamber a câmera (Kinectimals)
         │   ├── petitems.js       ← 13 ícones de item, escritos como texto
         │   └── stickers.js       ← as 24 figurinhas do chat
         ├── components/           ← Icon (SVG desenhado), AvatarView, Sticker,
@@ -1420,5 +1424,155 @@ sem ninguém olhar. Dois cuidados que a própria medição ensinou:
 **Estado: 609 verificações, 0 falha.** Build Vite aprovada. Conferido no navegador
 contra o app publicado: as 6 espécies no tamanho real, o cômodo, e o carinho
 ponta a ponta (corações subindo e o servidor aceitando).
+
+**Próximo passo:** continua sendo a seção 8.1 — mapa navegável do bairro.
+
+### 9.12 Comportamento de Kinectimals, vozes, moedas e a casa cheia (26/08/2026)
+
+Rodada pedida depois de rodar a 9.11: trazer os comportamentos do Kinectimals
+(ele corre pelo cenário, vira de lado, chega perto e lambe a câmera), consertar
+o sushi que não funcionava, fazer o minigame **sempre** pagar (a não ser com o
+bichinho cansado), pesquisar um jeito de dar voz própria a cada espécie, pôr
+**todos** os bichinhos andando e interagindo na casa, e um jeito de tirar o gato
+duplicado do perfil.
+
+**1. O sushi: o carinho por arrasto estava sequestrando o item.**
+
+Regressão minha, da 9.11. O afago é disparado por movimento de dedo com o
+ponteiro pressionado em cima do bichinho — e levar o sushi até ele é exatamente
+isso. Então o caminho até soltar o prato virava uma sequência de carinhos: a
+reação de "feliz" entrava por cima da cena de comer (`acaoDe` dava prioridade a
+`pet.action`), e ainda saía uma chamada de carinho no servidor que ninguém pediu.
+O dono dava sushi e nunca via ele comer.
+
+Dois consertos, e os dois são de PRIORIDADE, não de posição:
+
+- **quem está com a mão ocupada não está fazendo carinho**: `PetCanvas` recebe
+  `arrastando` e o afago sai de cena enquanto houver item na mão;
+- **o item em uso ganha de tudo**, inclusive de `action`. Entre "encostei nele" e
+  "dei comida pra ele", quem manda é a comida.
+
+Junto disso, o cartão do item passou a dizer **por que** não dá pra usar agora —
+`acabou`, `sem fome`, `já limpo`, `descansando`. Antes ele só ficava cinza, e
+cinza não explica nada: são quatro motivos com quatro saídas diferentes. E a
+recusa do servidor por estado do bichinho virou aviso amarelo, não erro vermelho
+(a mesma lição do botão "Interagir" da casa).
+
+**2. Minigame: toda partida paga, e o freio é a energia.**
+
+Era uma vez por dia, por medo de virar caça-níquel. O medo era justo, mas o efeito
+colateral era pior: a partir da segunda partida o jogo não valia nada, e jogo que
+não rende ninguém repete.
+
+O que resolve os dois é o limite não ser o RELÓGIO e sim a **energia do
+bichinho** — cada partida gasta, e sem energia não dá pra jogar. A torneira
+continua fechada (de 100 de energia saem umas sete partidas; há caso de teste
+para isso), mas fecha por um motivo que aparece na barra e que dá pra resolver
+cuidando dele. O descanso de dois minutos por jogo saiu: eram dois freios pro
+mesmo problema e o de relógio não tinha relação nenhuma com o bicho.
+
+> **A chave anti-duplicidade mudou de significado.** Ela não separa mais "hoje"
+> de "amanhã", e sim UMA PARTIDA da seguinte — porque agora essa diferença é
+> dinheiro. Datar pelo relógio não serve: duas partidas curtas cabem no mesmo
+> segundo e uma delas deixaria de pagar sem motivo. O app sorteia um `match_id`
+> quando a partida COMEÇA e manda junto do placar; o toque duplo no fim repete o
+> mesmo id, duas partidas mandam ids diferentes.
+
+Memória e batalha naval também passaram a pagar sempre — mas com valor menor
+depois da primeira do dia. Elas não gastam energia de bichinho nenhum, então não
+há nada segurando a repetição: pagar o cheio toda vez seria imprimir Coração.
+
+**3. Vozes de verdade, uma por espécie.**
+
+O que existia eram dois bipes com a frequência trocada. A pesquisa levou ao mesmo
+desenho do `soundgen` (síntese paramétrica de vocalização), e ele cabe inteiro na
+Web Audio API — `web/src/petVoz.js`:
+
+| Peça | O que faz |
+|---|---|
+| contorno de altura | não é uma nota, é uma CURVA. É ela que separa o miado (sobe e desce) do latido (despenca) e do piado (varre pra cima) |
+| fonte de ruído | o chiado do latido e o rosnado do dragão. Sem ela tudo vira apito |
+| formantes | 2–3 filtros de pico. São eles que fazem a mesma nota soar como bicho diferente |
+| abertura de boca | o primeiro formante varre e volta ao longo do som. Isso É um miado |
+| jitter | tremor aleatório na altura. Voz afinada demais soa eletrônica; muito jitter vira rosnado |
+
+O humor entra como três botões (mais agudo/curto = animado; mais grave/longo =
+pra baixo; mais ruído/menos volume = sem forças), então `feliz`, `triste` e
+`doente` mudam o jeito de falar sem receita nova.
+
+> **A bancada ganhou a aba Vozes, e o som era a única coisa do app sem
+> conferência.** Cada voz é sintetizada num `OfflineAudioContext` (que renderiza
+> sem tocar nada) e vira dois números: volume — se der zero, a voz não está
+> saindo, o equivalente ao "⚠ vazio" das abas de desenho — e **agudez**, que é
+> onde a energia se concentra. Duas espécies com agudez parecida soariam iguais,
+> e a aba reprova. Ela pegou isso na primeira medição: gato (1075 Hz) e coelho
+> (1219 Hz) estavam a 12% um do outro. Hoje: dragão 255, capivara 337, cachorro
+> 520, gato 1105, coelho 1837, pássaro 3338 Hz.
+
+**4. O comportamento do Kinectimals.**
+
+`web/src/render/petPalco.js` — um cérebro de estados com três números: `x` (onde
+está na largura), `z` (a PROFUNDIDADE) e `virado`.
+
+A profundidade é o que faltava. Ela dá o tamanho **e** a altura na tela ao mesmo
+tempo: longe fica pequeno e alto, perto fica grande e embaixo. Mexer só no
+tamanho pareceria um balão inflando; sem nenhuma das duas ele desliza num plano e
+a cena vira teatro de sombras.
+
+O que ele faz: anda, corre, para, **vira de lado** (espelhado em volta do próprio
+centro — dar a ele um segundo conjunto de poses viradas seria refazer o motor), faz
+truque (sentar, rolar, implorar, deitar, coçar, brincar — os mesmos verbos do
+Kinectimals traduzidos pros clipes que já existem) e, de vez em quando, **vem até
+o vidro e lambe**.
+
+> **Tocar LONGE dele é chamar; tocar NELE é mexer com ele.** O mesmo gesto com
+> dois sentidos, separados pela distância — que é como funciona com bicho de
+> verdade. Chamado, ele vem correndo.
+
+A lambida é desenhada por ÚLTIMO, na frente inclusive da grama da frente, porque
+acontece na superfície da tela e não dentro da cena. São duas partes: a língua e
+o **rastro úmido** que ela deixa e vai secando — é o rastro que vende a ideia de
+vidro.
+
+> Medido: chamando do canto, ele veio e cresceu **5,26×** (de 1.623 para 8.531
+> pixels pintados) e a língua apareceu.
+
+Bichinho doente, triste, faminto ou imundo **não passeia** — fica onde está. Um
+bicho doente correndo pela ilha seria a mesma mentira que a legenda da casa já
+contou uma vez. "Incomodado" ficou de fora dessa lista de propósito: esse humor é
+sobre a CASA estar suja, não sobre ele estar mal.
+
+**5. A casa com todos os moradores.**
+
+Ela mostrava um bichinho mesmo com quatro adotados — e eles moram todos lá (a
+sujeira de cada um cai no mesmo chão). Agora `/api/house` manda a lista inteira,
+cada um tem o seu passeio (guardado por id, senão todos recomeçariam do meio da
+sala a cada re-render) e todos entram na MESMA fila de profundidade dos móveis —
+é isso que faz um passar atrás do outro e atrás do sofá. Desenhar os bichos por
+último, que seria o caminho fácil, deixaria todos colados por cima da cena.
+
+**Eles se encontram.** Quem chega a menos de uma célula e meia vira pro outro e
+troca a ação por uma social. Bicho doente, triste ou dormindo não entra na
+brincadeira — continua no estado dele.
+
+O triângulo de ⚠ some no cômodo: lá são vários, e um por cabeça vira placa de
+obra no meio da sala. Ele continua na tela do bichinho, que é onde há um só e
+onde se resolve o problema.
+
+**6. Dispensar um bichinho — o desfazer que faltava.**
+
+Dava pra adotar e nunca pra desfazer. Como cada licença de espécie traz um
+bichinho NOVO, comprar a segunda licença de gato deixa dois gatos na fila pra
+sempre, sem saída — foi o que aconteceu com o dono. `POST /api/pet/{id}/soltar`,
+com duas travas: **não dá pra soltar o último** (sem bichinho a casa perde o
+morador e a tela volta pra adoção), e **soltar o ATIVO passa a vez pro próximo
+antes de apagar**, senão `get_pet` ficaria sem ativo e todas as rotas de cuidado
+passariam a responder sobre um bichinho que não existe mais. A sujeira que ele
+deixou continua lá de propósito: o bicho foi embora, a bagunça não se limpa
+sozinha.
+
+**Estado: 623 verificações, 0 falha.** Build Vite aprovada. Conferido no
+navegador: os três bichinhos na sala, o passeio com profundidade, a chamada e a
+lambida no vidro, as seis vozes medidas e o dispensar ponta a ponta.
 
 **Próximo passo:** continua sendo a seção 8.1 — mapa navegável do bairro.

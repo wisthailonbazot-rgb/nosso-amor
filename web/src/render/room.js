@@ -155,8 +155,19 @@ export function drawScene(p, scene, ui = {}, t = 0) {
   // Funcao e o caso do comodo: a posicao dele muda a cada quadro, e um objeto
   // fixo so mudaria quando o React re-renderizasse — ou seja, ele voltaria a
   // ficar parado, que e exatamente o que a gente esta consertando.
-  const bicho = typeof scene.pet === 'function' ? scene.pet(t || 0) : scene.pet
-  if (bicho) fila.push({ ...bicho, w: 1, d: 1, _pet: true })
+  // UM ou VÁRIOS. `scene.pets` é a casa com todos os bichinhos dentro; `scene.pet`
+  // continua valendo pra quem só tem um pra mostrar.
+  //
+  // Eles entram na MESMA fila de profundidade dos móveis, e é isso que faz um
+  // passar atrás do outro e atrás do sofá. Desenhar os bichos por último (que
+  // seria o caminho fácil) deixaria todos colados por cima da cena.
+  const varios = typeof scene.pets === 'function' ? scene.pets(t || 0) : scene.pets
+  if (Array.isArray(varios)) {
+    for (const b of varios) if (b) fila.push({ ...b, semAviso: true, w: 1, d: 1, _pet: true })
+  } else {
+    const bicho = typeof scene.pet === 'function' ? scene.pet(t || 0) : scene.pet
+    if (bicho) fila.push({ ...bicho, semAviso: true, w: 1, d: 1, _pet: true })
+  }
 
   for (const item of depthSort(fila)) {
     if (item._pet) {

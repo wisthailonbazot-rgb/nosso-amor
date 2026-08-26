@@ -174,7 +174,11 @@ export default function Pet() {
       setPets(estado.pets || [])
     }
     catch (e) {
-      setStatus({ kind: 'error', text: e.message })
+      // Recusa por ESTADO do bichinho (sem fome, já limpo, cansado) não é erro
+      // do app: é o jogo funcionando. Vermelho ali fazia parecer defeito — foi
+      // a mesma lição do botão "Interagir" na casa.
+      const doBicho = e.status === 400 || e.status === 409
+      setStatus({ kind: doBicho ? 'warn' : 'error', text: e.message })
       setEmUso(null)  // deu errado: nao mostra cena de uso que nao aconteceu
     }
     setBusy('')
@@ -191,6 +195,24 @@ export default function Pet() {
    * tranquilo — nao um erro vermelho. Ele reagiu de qualquer jeito; o que
    * estava em descanso era a alegria, nao o afeto.
    */
+  const [soltando, setSoltando] = useState(null)
+
+  /** Dispensa um bichinho. O servidor recusa se for o último. */
+  async function soltarBichinho(alvo) {
+    setBusy('soltar'); setStatus(null)
+    try {
+      const r = await api.post(`/api/pet/${alvo.id}/soltar`)
+      setPet(r.pet)
+      const estado = await api.get('/api/pet')
+      setPets(estado.pets || [])
+      setStatus({ kind: 'ok', text: `${alvo.name} foi dispensado.` })
+    } catch (e) {
+      setStatus({ kind: 'warn', text: e.message })
+    }
+    setSoltando(null)
+    setBusy('')
+  }
+
   const afagoRef = useRef(0)
   async function aoAfagar(acao) {
     if (acao !== 'carinho') return
@@ -232,10 +254,44 @@ export default function Pet() {
     {/* A casa pode ter mais de um bichinho. A fila mostra todos e troca quem
         está na tela — de graça, e sem apagar nada de ninguém. */}
     {pets.length > 1 && (
-      <div className="pet-fila">
-        {pets.map((x) => (
-          <PetChip key={x.id} dados={x} ativo={x.id === pet.id} onTrocar={trocarPara} />
-        ))}
+      <>
+        <div className="pet-fila">
+          {pets.map((x) => (
+            <PetChip key={x.id} dados={x} ativo={x.id === pet.id} onTrocar={trocarPara} />
+          ))}
+        </div>
+        {/* SOLTAR: faltava um jeito de desfazer uma adoção.
+            Cada licença de espécie da loja traz um bichinho NOVO — então comprar
+            a segunda licença de gato deixa dois gatos na fila pra sempre, sem
+            saída. Fica pequeno e com confirmação porque é o único botão do app
+            que apaga alguma coisa de verdade. */}
+        <button
+          className="btn-ghost btn-sm pet-soltar"
+          onClick={() => setSoltando(pet)}
+        >
+          <Icon name="close" size={13} /> Dispensar {pet.name}
+        </button>
+      </>
+    )}
+    {soltando && (
+      <div className="card center">
+        <h3>Dispensar {soltando.name}?</h3>
+        <p className="muted small">
+          Ele sai da casa e o histórico dele vai junto. Não dá pra desfazer —
+          e a licença da espécie não volta. Os outros continuam onde estão.
+        </p>
+        <div className="row" style={{ gap: 8 }}>
+          <button className="btn btn-ghost btn-block" onClick={() => setSoltando(null)}>
+            Deixa quieto
+          </button>
+          <button
+            className="btn btn-primary btn-block"
+            disabled={busy === 'soltar'}
+            onClick={() => soltarBichinho(soltando)}
+          >
+            Dispensar
+          </button>
+        </div>
       </div>
     )}
     {/* A ARENA: o bichinho grande no meio, as opções na lateral.
@@ -245,7 +301,7 @@ export default function Pet() {
         um caminho curto: o item sai da lateral e cai em cima dele. */}
     <div className="pet-arena">
       <div ref={palcoRef} className={`pet-stage card ${pet.sick ? 'sick' : ''} ${arrasto ? (arrasto.sobre ? 'alvo-aceso' : 'alvo') : ''}`}>
-        <PetCanvas pet={{ ...pet, prop: emUso }} onPoke={aoAfagar} />
+        <PetCanvas pet={{ ...pet, prop: emUso }} onPoke={aoAfagar} arrastando={!!arrasto} />
         {/* As barras viraram um HUD de canto.
             Elas ocupavam quatro cartões num grid embaixo do cenário — metade da
             tela pra dizer quatro números. Aqui são quatro tracinhos no canto,
@@ -285,20 +341,39 @@ export default function Pet() {
           </button>
         ))}</div>
         <div className="pet-items">{shown.map((item) => {
-          const can = item.quantity > 0 && (tab !== 'brinquedo' || item.ready)
+          // POR QUE ESTE ITEM NAO PODE SER USADO AGORA — dito no cartao, antes
+          // do toque.
+          //
+          // O botao so ficava cinza, e cinza nao explica nada: o dono tentou dar
+          // sushi, nao aconteceu nada (ou apareceu um erro vermelho depois) e
+          // leu como app quebrado. Sao tres motivos diferentes e cada um tem uma
+          // saida diferente — comprar mais, esperar o brinquedo, ou dar comida
+          // mais tarde —, entao cada um diz o seu.
+          const cheio = item.effect.hunger && pet.stats?.hunger >= 100
+          const limpo = item.effect.hygiene && !item.effect.hunger && pet.stats?.hygiene >= 100
+          const motivo = item.quantity <= 0
+            ? 'acabou'
+            : tab === 'brinquedo' && !item.ready
+              ? 'descansando'
+              : cheio
+                ? 'sem fome'
+                : limpo
+                  ? 'já limpo'
+                  : ''
+          const can = !motivo
           const path = tab === 'comida' && item.effect.hygiene ? 'bathe' : tab === 'comida' ? 'feed' : tab === 'brinquedo' ? 'play' : 'accessory'
           const label = tab === 'acessorio' ? `${item.name} vestido.` : `${pet.name} recebeu ${item.name}.`
           return <button
             key={item.code}
-            className={`pet-item ${arrasto?.code === item.code ? 'na-mao' : ''}`}
+            className={`pet-item ${arrasto?.code === item.code ? 'na-mao' : ''} ${motivo ? 'sem-uso' : ''}`}
             disabled={busy || !can}
-            title={item.name}
+            title={motivo ? `${item.name} — ${motivo}` : item.name}
             onPointerDown={(e) => { if (can) comecarArrasto(e, item, path, label) }}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (can) act(path, { code: item.code }, label) } }}
           >
             <span className="pet-item-art"><ItemPreview item={{ ...item, category: 'pet' }} scale={1.15} /></span>
             <strong>{item.name}</strong>
-            <small>{item.quantity ? `×${item.quantity}` : `${item.price}♥`}</small>
+            <small>{motivo || `×${item.quantity}`}</small>
           </button>
         })}</div>
         <button className="btn btn-ghost pet-cuddle" disabled={busy || !cuddleReady} onClick={() => act('cuddle', undefined, `${pet.name} ganhou um carinho.`)}>

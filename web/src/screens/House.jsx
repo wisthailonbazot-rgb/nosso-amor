@@ -74,6 +74,25 @@ export default function House() {
   // `voar` pra capivara devolveria o bicho boiando sem asa nenhuma.
   const voador = ['passaro', 'dragao'].includes(data?.pet?.species)
 
+  // Quem está NESTE cômodo. O ativo entra sempre (é o que a tela cuida); os
+  // outros entram pelo `room_code` que cada um carrega.
+  //
+  // Antes só o ativo aparecia, e a casa com quatro bichinhos mostrava um. O
+  // dono pediu todos andando e interagindo — e faz sentido: eles moram lá, a
+  // sujeira de todos cai no mesmo chão, e ver a casa vazia com três bichos
+  // adotados é a casa mentindo.
+  const moradores = useMemo(() => {
+    if (!data?.pet || !room) return []
+    const lista = (data.pets || []).filter((p) => p.species)
+    if (!lista.length) return [{ ...data.pet, id: 0 }]
+    // O ATIVO usa o objeto completo (`data.pet`), que traz mess_count e o
+    // resto; os outros usam o resumo. Sem isso o ativo perderia informação que
+    // a tela já tinha.
+    return lista
+      .map((p) => (p.active ? { ...p, ...data.pet, id: p.id } : p))
+      .filter((p) => (p.room_code || 'sala') === room.code)
+  }, [data?.pet, data?.pets, room?.code])
+
   useEffect(() => {
     if (!aqui) { passeio.current = null; return }
     const livre = (c, r) =>
@@ -122,6 +141,81 @@ export default function House() {
     return null // null = deixa o passeio decidir entre andar e parar
   }
 
+  // Um passeio por morador, guardado por id. Recriar a cada quadro faria todos
+  // recomeçarem do meio do cômodo a cada re-render do React.
+  const passeios = useRef(new Map())
+  useEffect(() => {
+    if (!room) return
+    const livre = (c, r) =>
+      c >= 0 && r >= 0 && c < room.w && r < room.h && !bloqueadas.has(`${c}:${r}`)
+    const vivos = new Set()
+    moradores.forEach((bicho, i) => {
+      vivos.add(bicho.id)
+      const guardado = passeios.current.get(bicho.id)
+      const voa = ['passaro', 'dragao'].includes(bicho.species)
+      if (!guardado || guardado.comodo !== room.code) {
+        // Cada um começa num canto diferente, senão os quatro nascem empilhados
+        // no meio da sala e levam alguns segundos pra se separar.
+        const inicio = [
+          Math.min(room.w - 1, 1 + (i * 2) % Math.max(1, room.w - 2)),
+          Math.min(room.h - 1, 1 + (i * 3) % Math.max(1, room.h - 2)),
+        ]
+        const novo = criarPasseio(room.w, room.h, bloqueadas, inicio, draft, voa)
+        novo.comodo = room.code
+        passeios.current.set(bicho.id, novo)
+      } else {
+        guardado.livre = livre
+        guardado.interesses = pontosDeInteresse(draft, livre)
+        guardado.voador = voa
+      }
+    })
+    // quem saiu do cômodo (ou foi dispensado) perde o passeio
+    for (const id of [...passeios.current.keys()]) {
+      if (!vivos.has(id)) passeios.current.delete(id)
+    }
+  }, [moradores, room?.code, room?.w, room?.h, bloqueadas, draft])
+
+  /** O estado dos OUTROS bichinhos (os que não estão sendo cuidados agora). */
+  function estadoDe(bicho) {
+    if (bicho.sick) return 'doente'
+    if (bicho.mood === 'sonolento') return 'dormir'
+    if (['triste', 'faminto', 'imundo'].includes(bicho.mood)) return 'triste'
+    return null
+  }
+
+  /**
+   * Quando dois se encontram, eles se OLHAM e reagem.
+   *
+   * É o pedido de "interagindo um com o outro", e é o mínimo que faz a casa
+   * parecer habitada em vez de ter vários bichos ignorando uns aos outros no
+   * mesmo cômodo. A conta é simples de propósito: quem está a menos de uma
+   * célula e meia de distância vira pro outro e troca a ação por uma social.
+   *
+   * Bicho doente ou triste NÃO entra na brincadeira — ele continua no estado
+   * dele. Um bicho doente pulando de alegria porque passou perto de outro seria
+   * a mesma mentira que a legenda da casa já contou uma vez.
+   */
+  function conversar(lista) {
+    for (let i = 0; i < lista.length; i++) {
+      for (let j = i + 1; j < lista.length; j++) {
+        const a = lista[i]
+        const b = lista[j]
+        const dist = Math.hypot(a.col - b.col, a.row - b.row)
+        if (dist > 1.6) continue
+        const ocupado = (x) => ['doente', 'triste', 'dormir'].includes(x.action)
+        // eles se encaram
+        if (!ocupado(a)) a.olhando = b.col > a.col ? 'direita' : 'esquerda'
+        if (!ocupado(b)) b.olhando = a.col > b.col ? 'direita' : 'esquerda'
+        // e reagem: quem está mais à esquerda cheira, o outro responde
+        if (!ocupado(a)) a.action = 'cocar'
+        if (!ocupado(b)) b.action = 'feliz'
+        a.juntos = true
+        b.juntos = true
+      }
+    }
+    return lista
+  }
+
   const scene = useMemo(
     () =>
       room
@@ -134,31 +228,35 @@ export default function House() {
             // `pet` e uma FUNCAO, avaliada a cada quadro pelo desenho. Se fosse
             // um objeto fixo, a posicao so mudaria quando o React re-renderizasse
             // — ou seja, o bichinho voltaria a ficar parado.
-            pet: aqui
-              ? (t) => {
-                  const passo = passeio.current
-                  if (!passo) return null
-                  const forcado = acaoDoBicho()
-                  passearAte(passo, t, forcado !== null)
-                  return {
-                    ...data.pet,
-                    col: passo.col,
-                    row: passo.row,
-                    olhando: passo.olhando,
-                    // Tres origens, nesta ordem: o que a tela mandou (carinho,
-                    // doente), o que ele foi FAZER no movel (dormir na caminha,
-                    // comer no pote) e, por ultimo, andar ou estar parado.
-                    action: forcado || passo.acao || (passo.andando ? 'andar' : 'parado'),
-                  }
-                }
-              : null,
+            // TODOS os bichinhos do cômodo, avaliados a cada quadro.
+            pets: (t) => {
+              const saida = []
+              for (const bicho of moradores) {
+                const passo = passeios.current.get(bicho.id)
+                if (!passo) continue
+                const ativo = bicho.id === data.pet.id
+                const forcado = ativo ? acaoDoBicho() : estadoDe(bicho)
+                passearAte(passo, t, forcado !== null)
+                saida.push({
+                  ...bicho,
+                  col: passo.col,
+                  row: passo.row,
+                  olhando: passo.olhando,
+                  // Tres origens, nesta ordem: o que a tela mandou (carinho,
+                  // doente), o que ele foi FAZER no movel (dormir na caminha,
+                  // comer no pote) e, por ultimo, andar ou estar parado.
+                  action: forcado || passo.acao || (passo.andando ? 'andar' : 'parado'),
+                })
+              }
+              return conversar(saida)
+            },
             items: [
               ...draft,
               ...room.mess.map((m) => ({ ...m, id: `mess-${m.id}`, w: 1, d: 1, mess: true })),
             ],
           }
         : null,
-    [room, draft, aqui, data?.pet, reacao, voador]
+    [room, draft, aqui, data?.pet, data?.pets, moradores, reacao, voador]
   )
 
   async function save() {

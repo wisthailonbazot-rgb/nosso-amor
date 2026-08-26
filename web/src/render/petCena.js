@@ -404,3 +404,74 @@ export function desenharFrente(p, { t = 0, periodo = 'dia' } = {}) {
     }
   }
 }
+
+/**
+ * A lambida no vidro.
+ *
+ * É o gesto que o dono citou do Kinectimals: o filhote chega no vidro e passa a
+ * língua nele, do seu lado. Ela é desenhada por ÚLTIMO, na frente de tudo —
+ * inclusive da grama da frente —, porque acontece na superfície da tela, e não
+ * dentro da cena. Desenhada junto com o bichinho, a grama passaria por cima e
+ * o efeito ficaria "atrás do mundo", que não quer dizer nada.
+ *
+ * Duas partes: a LÍNGUA (que aparece grande, perto) e o RASTRO ÚMIDO que ela
+ * deixa e que vai secando. É o rastro que vende a ideia de vidro — sem ele
+ * parece só uma língua desenhada.
+ */
+export function desenharLambida(p, { forca = 0, t = 0 } = {}) {
+  const ctx = p.ctx
+  const w = p.w
+  const h = p.h
+  const f = Math.max(0, Math.min(1, forca))
+  // A língua sai e volta várias vezes enquanto ele lambe.
+  const ciclo = (Math.sin(t * 0.006) + 1) / 2
+  const saida = f * ciclo
+
+  // rastro molhado: faixas claras que ficam depois da passada
+  ctx.save()
+  ctx.globalAlpha = 0.10 + f * 0.16
+  ctx.fillStyle = '#ffffff'
+  for (let i = 0; i < 3; i++) {
+    const y = h * (0.52 + i * 0.12) + Math.sin(t * 0.001 + i) * 3
+    const larg = w * (0.28 + i * 0.12) * f
+    ctx.beginPath()
+    ctx.ellipse(w * 0.5, y, larg, h * 0.045, 0, 0, TAU)
+    ctx.fill()
+  }
+  ctx.restore()
+
+  if (saida < 0.05) return
+
+  // a língua
+  // A língua sai de BAIXO e é pequena.
+  //
+  // Grande e alta ela virava um morro rosa no peito do bichinho, e não uma
+  // língua: a leitura de "está lambendo o vidro" vem de ela aparecer NA BORDA
+  // da tela, do seu lado, e não de ocupar o meio do bicho.
+  const cx = w * 0.5
+  const base = h * 0.96
+  const comp = h * 0.20 * saida
+  const larg = w * 0.10 * (0.7 + saida * 0.5)
+  ctx.save()
+  ctx.fillStyle = '#e8607e'
+  ctx.beginPath()
+  ctx.moveTo(cx - larg, base)
+  ctx.quadraticCurveTo(cx - larg * 1.05, base - comp, cx, base - comp)
+  ctx.quadraticCurveTo(cx + larg * 1.05, base - comp, cx + larg, base)
+  ctx.closePath()
+  ctx.fill()
+  // o vinco do meio, que é o que faz ler como língua e não como pétala
+  ctx.strokeStyle = '#c9435f'
+  ctx.lineWidth = Math.max(1, h / 108)
+  ctx.beginPath()
+  ctx.moveTo(cx, base)
+  ctx.lineTo(cx, base - comp * 0.75)
+  ctx.stroke()
+  // brilho de saliva
+  ctx.globalAlpha = 0.5
+  ctx.fillStyle = '#ffb6c8'
+  ctx.beginPath()
+  ctx.ellipse(cx - larg * 0.3, base - comp * 0.55, larg * 0.22, comp * 0.16, -0.3, 0, TAU)
+  ctx.fill()
+  ctx.restore()
+}

@@ -46,6 +46,10 @@ export default function Games() {
   const [target, setTarget] = useState(0)
   const [clock, setClock] = useState(Date.now())
   const started = useRef(0)
+  // O identificador DA PARTIDA. Vai junto do placar pra que o toque duplo no
+  // fim nao pague duas vezes pela mesma partida — agora que toda partida paga,
+  // essa diferenca virou dinheiro.
+  const partidaId = useRef('')
   const sent = useRef(false)
   const caught = useRef(false)
 
@@ -77,7 +81,7 @@ export default function Games() {
     sent.current = true
     setPlaying(false)
     setSending(true)
-    api.post('/api/pet/game', { game: 'bolinha', score, duration_ms: Math.max(5000, Date.now() - started.current) })
+    api.post('/api/pet/game', { game: 'bolinha', score, duration_ms: Math.max(5000, Date.now() - started.current), match_id: partidaId.current })
       .then((x) => {
         setPet(x.pet)
         window.casalSound?.('success')
@@ -125,6 +129,7 @@ export default function Games() {
     setTime(20); setStatus(null)
     sent.current = false; caught.current = true
     started.current = Date.now()
+    partidaId.current = `b${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     setPlaying(true)
     window.casalSound?.('game')
   }
@@ -141,7 +146,7 @@ export default function Games() {
   async function terminouCorrida(pontos, duracao) {
     setSending(true)
     try {
-      const r = await api.post('/api/pet/game', { game: 'corrida', score: pontos, duration_ms: duracao })
+      const r = await api.post('/api/pet/game', { game: 'corrida', score: pontos, duration_ms: duracao, match_id: `c${pontos}-${duracao}` })
       setPet(r.pet)
       window.casalSound?.('success')
       setStatus({
@@ -164,8 +169,11 @@ export default function Games() {
   if (!carregouPet) return <div className="full-center"><div className="spinner" /></div>
 
   const [left, top] = SPOTS[target]
-  const cooldown = pet?.toy_ready?.game_bolinha
-  const resting = cooldown && new Date(cooldown).getTime() > clock
+  // O que impede de jogar agora e a ENERGIA, nao mais um descanso de relogio.
+  // Um bloqueio de dois minutos sem nada pra fazer no meio so irrita; energia
+  // baixa e um estado que aparece na barra e que da pra resolver cuidando dele.
+  const energia = pet?.stats?.energy ?? 100
+  const cansado = energia < 8
   // Os dois primeiros sao do bichinho e precisam dele; os dois ultimos, nao.
   const abas = [
     ['corrida', 'Corrida'], ['bolinha', 'Bolinha'],
@@ -173,7 +181,18 @@ export default function Games() {
   ]
   const titulos = { corrida: 'Corrida', bolinha: 'Bolinha', memoria: 'Memória', naval: 'Batalha naval' }
 
-  const corrida = pet && <PetRunner pet={pet} aoTerminar={terminouCorrida} telaCheia={cheia} />
+  const corrida = pet && (cansado
+    ? (
+      <div className="card center">
+        <Icon name="paw" size={40} />
+        <h2>{pet.name} está cansado</h2>
+        <p className="muted small">
+          Correr gasta energia, e ele está no fim dela. Dê comida ou deixe ele
+          descansar um pouco — daqui a pouco volta a valer.
+        </p>
+      </div>
+    )
+    : <PetRunner pet={pet} aoTerminar={terminouCorrida} telaCheia={cheia} />)
 
   const bolinha = pet && (
     <>
@@ -197,9 +216,9 @@ export default function Games() {
         )}
         {playing && combo >= 4 && <div className="game-perfect">Combo! Está ficando rápido.</div>}
       </div>
-      <button className="btn btn-primary btn-block" disabled={playing || sending || resting} onClick={start}>
+      <button className="btn btn-primary btn-block" disabled={playing || sending || cansado} onClick={start}>
         <Icon name="game" size={18} />
-        {playing ? 'Pegando...' : sending ? 'Guardando...' : resting ? 'Descansando (2 min)' : 'Começar aventura'}
+        {playing ? 'Pegando...' : sending ? 'Guardando...' : cansado ? 'Cansado demais — dê comida ou deixe descansar' : 'Começar aventura'}
       </button>
     </>
   )

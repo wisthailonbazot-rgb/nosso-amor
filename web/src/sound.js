@@ -1,5 +1,11 @@
 // Sons procedurais: nenhum MP3 pesado e nenhuma reprodução automática.
+//
+// A voz dos BICHINHOS mora em `petVoz.js`: ela é síntese de verdade (fonte
+// harmônica + ruído + formantes), e não cabia aqui no meio dos bipes de
+// interface. Aqui ficou o que é interface mesmo.
 // O AudioContext só nasce no primeiro toque, exatamente como Safari/iOS exige.
+import { vocalizar } from './petVoz'
+
 let ctx
 const AC=()=>window.AudioContext||window.webkitAudioContext
 function tone(freq,duration=.09,type='sine',gain=.035,delay=0){
@@ -11,7 +17,10 @@ function tone(freq,duration=.09,type='sine',gain=.035,delay=0){
 }
 export function playSound(kind,detail=''){
   if(!ctx||ctx.state!=='running')return
-  if(kind==='pet'){const f={gato:620,cachorro:220,coelho:760,passaro:1100,capivara:180,dragao:120}[detail]||480;tone(f,.13,detail==='dragao'?'sawtooth':'triangle',.045);tone(f*1.3,.1,'sine',.025,.1);return}
+  // `detail` pode vir como "gato" ou como "gato:feliz" — a tela diz a especie e,
+  // quando sabe, o humor. Dois bipes viravam o mesmo som pra todo mundo; agora
+  // cada bicho tem a voz dele, e o humor muda o jeito de falar.
+  if(kind==='pet'){const [especie,humor]=String(detail||'').split(':');vocalizar(ctx,especie,{humor:humor||'normal'});return}
   if(kind==='coin'){tone(740,.08,'square',.025);tone(990,.12,'square',.02,.07);return}
   if(kind==='success'){tone(440,.1,'triangle');tone(660,.1,'triangle',.035,.08);tone(880,.16,'triangle',.03,.16);return}
   if(kind==='game'){tone(240,.06,'square',.025);tone(360,.08,'square',.018,.04);return}

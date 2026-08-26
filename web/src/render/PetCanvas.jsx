@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { Painter, mix } from './pixel'
-import { desenharCena, desenharFrente, periodoDe } from './petCena'
+import { desenharCena, desenharFrente, desenharLambida, periodoDe } from './petCena'
+import { criarPalco, enquadrar } from './petPalco'
 import { cenaDoItem } from './petProps'
 import {
   OUT, clipeDe, crescimentoDe, planoDe, poseEm, desenharRig,
@@ -36,13 +37,24 @@ const PADRAO = ['#c98a4b', '#8a5f3c', '#f0ebe2', OUT]
  * que teve de ser corrigido na revisao anterior.
  */
 export function acaoDe(pet) {
-  if (pet.action) return pet.action
+  // O ITEM EM USO GANHA DE TUDO, inclusive de `action`.
+  //
+  // `action` e a reacao de toque (ele pula, coca, rola). Dar comida e uma
+  // decisao que a pessoa acabou de tomar, e a mao dela passa POR CIMA do
+  // bichinho no caminho ate soltar o prato — entao a reacao de toque disparava
+  // e engolia a cena de comer. O resultado era o dono dando sushi e nao vendo
+  // ele comer nenhuma vez. Entre "encostei nele" e "dei comida pra ele", quem
+  // manda e a comida.
   const cena = cenaDoItem(pet.prop)
   if (cena?.cena) return cena.cena
+  if (pet.action) return pet.action
   if (pet.sick) return 'doente'
   if (pet.mood === 'sonolento') return 'dormir'
   if (['triste', 'faminto', 'imundo', 'incomodado'].includes(pet.mood)) return 'triste'
-  if (pet.mood === 'feliz') return 'parado'
+  // O que o CEREBRO DO PALCO esta mandando fazer (andar, correr, um truque).
+  // Fica abaixo dos estados ruins de proposito: bichinho doente nao sai
+  // correndo pela ilha porque o sorteio mandou.
+  if (pet.acaoPalco) return pet.acaoPalco
   return 'parado'
 }
 
@@ -143,7 +155,12 @@ export function drawPet(p, pet, tick, escala, enquadrar) {
   }
 
   // Aviso desenhado, sem emoji.
-  if (pet.sick || pet.mess_count > 2) {
+  //
+  // `semAviso` existe pro CÔMODO: lá são vários bichinhos na mesma cena, e um
+  // triângulo por cabeça vira uma placa de obra no meio da sala. O aviso é útil
+  // na tela DELE, onde há um só e onde se resolve o problema; na casa quem
+  // conta o estado é a legenda embaixo do cômodo.
+  if (!pet.semAviso && (pet.sick || pet.mess_count > 2)) {
     // Preso ao CANTO DO CANVAS, e nao a caixa de 128: com o bichinho grande, as
     // coordenadas antigas jogavam o aviso pra fora da tela.
     // O tamanho sai do CANVAS, nao da escala do bicho. Preso a escala, ele
@@ -411,7 +428,7 @@ function bolha(cx, cy, d) {
 }
 
 // ------------------------------------------------------------------ componente
-export default function PetCanvas({ pet, onPoke }) {
+export default function PetCanvas({ pet, onPoke, arrastando = false }) {
   const ref = useRef(null)
   // `res` = quantas vezes a caixa de referencia (128x108) o desenho tem de
   // resolucao; `zoom` = a ampliacao INTEIRA que o CSS aplica em cima.
@@ -482,6 +499,7 @@ export default function PetCanvas({ pet, onPoke }) {
   // segundo, reiniciando o laco de desenho no meio da animacao.
   const olhar = useRef({ dx: 0, dy: 0, ate: 0 })
   const afago = useRef({ forca: 0, andado: 0, ultimo: 0, premiado: 0 })
+  const palcoRef = useRef(null)
 
   useEffect(() => {
     let frame = 0
@@ -510,8 +528,14 @@ export default function PetCanvas({ pet, onPoke }) {
       + medida.cabecaA * (medida.orelha === 'longa' ? 2.15 : 1.5)
     const larguraU = medida.corpoL + medida.caudaL * 0.8 + medida.cabecaL
     const escalaCena = Math.min((painter.h * 0.74) / alturaU, (painter.w * 0.92) / larguraU)
+    // O cerebro do palco: ele anda, vira de lado, faz truque e vem no vidro.
+    // Fica FORA do estado do React porque muda a cada quadro.
+    if (!palcoRef.current) palcoRef.current = criarPalco({})
+    let ultimo = 0
     const paint = (t) => {
       painter.clear()
+      const dt = ultimo ? Math.min(120, t - ultimo) : 16
+      ultimo = t
       const r = reacao.current
       const ol = olhar.current
       // O olhar volta ao normal sozinho depois que o dedo sai: ficar congelado
@@ -519,22 +543,50 @@ export default function PetCanvas({ pet, onPoke }) {
       const vivo = ol.ate > Date.now()
       const af = afago.current
       af.forca = Math.max(0, af.forca - 0.02)
+      // Bichinho doente ou pra baixo NAO passeia: ele fica onde esta. Um
+      // bicho doente correndo pela ilha seria a mesma mentira que a legenda da
+      // casa dizia ("soneca na caminha", doente e com doze sujeiras).
+      // "incomodado" fica de FORA: esse humor é sobre a CASA estar suja, não
+      // sobre ele estar mal. Bicho incomodado com bagunça anda pela ilha do
+      // mesmo jeito — o que ele não faz é sair correndo estando doente ou
+      // faminto.
+      const quieto = !!pet.sick || ['triste', 'faminto', 'imundo', 'sonolento'].includes(pet.mood)
+      const pos = quieto
+        ? { x: 0.5, z: 0.55, virado: 1, acao: null, estado: 'parado', perto: 0, lambida: 0 }
+        : palcoRef.current.passo(t, dt)
+      const enq = enquadrar(pos, { w: painter.w, h: painter.h, escalaBase: escalaCena })
+
       const atual = {
         ...(r.ate > t ? { ...pet, action: r.acao } : pet),
         mirar: vivo ? { dx: ol.dx, dy: ol.dy } : null,
         carinho: af.forca,
+        acaoPalco: pos.acao,
       }
-      const enq = { cx: painter.w / 2, chao: painter.h * 0.84 }
-      desenharCena(painter, {
-        t,
-        chao: enq.chao,
-        periodo: periodoDe(new Date().getHours()),
-        triste: !!pet.sick,
-      })
-      drawPet(painter, atual, t, escalaCena, enq)
+      const periodo = periodoDe(new Date().getHours())
+      desenharCena(painter, { t, chao: painter.h * 0.84, periodo, triste: !!pet.sick })
+
+      // ESPELHAR pra ele virar de lado.
+      //
+      // O desenho todo olha pra um lado so — dar a ele um segundo conjunto de
+      // poses viradas seria refazer o motor inteiro. Espelhar em volta do
+      // proprio centro resolve, e leva junto o acessorio, o item na boca e o
+      // olhar, porque tudo isso e desenhado la dentro.
+      const ctx = painter.ctx
+      ctx.save()
+      if (pos.virado < 0) {
+        ctx.translate(enq.cx, 0)
+        ctx.scale(-1, 1)
+        ctx.translate(-enq.cx, 0)
+      }
+      drawPet(painter, atual, t, enq.escala, { cx: enq.cx, chao: enq.chao })
+      ctx.restore()
+
       // A grama da frente entra DEPOIS: o bichinho passa atras dela, e e essa
       // camada que tira a cena do "figurinha colada no vidro".
-      desenharFrente(painter, { t, periodo: periodoDe(new Date().getHours()) })
+      desenharFrente(painter, { t, periodo })
+      // ...e a lambida vem por ULTIMO, porque ela acontece NO vidro, na frente
+      // de tudo — inclusive da grama.
+      if (pos.lambida > 0) desenharLambida(painter, { forca: pos.lambida, t })
     }
     const loop = (t) => {
       if (!alive) return
@@ -591,6 +643,14 @@ export default function PetCanvas({ pet, onPoke }) {
     olhar.current = { ...d, ate: Date.now() + 2600 }
     const apertado = e.buttons > 0 || e.pointerType === 'touch'
     if (!apertado) return
+    // COM UM ITEM NA MAO, passar por cima dele NAO e carinho.
+    //
+    // Levar o sushi ate o bichinho e arrastar o dedo em cima dele — exatamente o
+    // gesto do afago. Sem esta linha, o caminho ate soltar o prato virava uma
+    // sequencia de carinhos, a reacao de "feliz" ficava por cima da cena de
+    // comer, e ainda saia uma chamada de carinho no servidor que a pessoa nunca
+    // pediu. Quem esta com a mao ocupada nao esta fazendo carinho.
+    if (arrastando) return
     const af = afago.current
     const agora = performance.now()
     const dist = af.ultimo ? Math.hypot(e.clientX - af.px, e.clientY - af.py) : 0
@@ -607,7 +667,7 @@ export default function PetCanvas({ pet, onPoke }) {
       // chamadas no servidor enquanto o dedo anda.
       if (agora - af.premiado > 4000) {
         af.premiado = agora
-        window.casalSound?.('pet')
+        window.casalSound?.('pet', `${pet.species}:${pet.sick ? 'doente' : 'feliz'}`)
         onPoke?.('carinho')
       }
     }
@@ -622,6 +682,17 @@ export default function PetCanvas({ pet, onPoke }) {
     const canvas = ref.current
     if (!canvas) return
     olhar.current = { ...direcao(e), ate: Date.now() + 2600 }
+    // Tocar LONGE dele e chamar; tocar NELE e mexer com ele. E o mesmo gesto
+    // com dois sentidos, separados pela distancia — que e como funciona com
+    // bicho de verdade.
+    const caixaC = canvas.getBoundingClientRect()
+    const fx = (e.clientX - caixaC.left) / caixaC.width
+    const fy = (e.clientY - caixaC.top) / caixaC.height
+    if (Math.hypot(fx - 0.5, fy - 0.62) > 0.34) {
+      palcoRef.current?.chamar()
+      window.casalSound?.('pet', `${pet.species}:feliz`)
+      return
+    }
     afago.current.px = e.clientX
     afago.current.py = e.clientY
     afago.current.ultimo = performance.now()
@@ -635,7 +706,7 @@ export default function PetCanvas({ pet, onPoke }) {
           ? 'feliz'          // corpo: pulo de alegria
           : 'rolar'          // barriga: deita e rola
     reacao.current = { ate: performance.now() + (acao === 'rolar' ? 2000 : 1500), acao }
-    window.casalSound?.('pet')
+    window.casalSound?.('pet', `${pet.species}:${pet.sick ? 'doente' : acao === 'triste' ? 'triste' : 'feliz'}`)
     onPoke?.(acao)
   }
 

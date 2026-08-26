@@ -2067,3 +2067,8 @@ button:disabled,
 .lab-grid-grande { grid-template-columns: 1fr; }
 .lab-grid-grande canvas { width: 100%; height: auto; image-rendering: pixelated; }
 .lab-fora-de-escala { outline: 3px solid var(--danger); border-radius: 12px; }
+/* Item que nao da pra usar agora: o motivo fica escrito, em vez de so cinza. */
+.pet-item.sem-uso small { color: var(--danger); font-weight: 700; }
+.pet-soltar { display: inline-flex; align-items: center; gap: 5px; margin: -4px 0 8px; color: var(--muted); }
+.lab-vozes { grid-template-columns: repeat(2, 1fr); }
+.lab-vozes .lab-tile { cursor: pointer; text-align: center; }

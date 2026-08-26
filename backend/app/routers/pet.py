@@ -73,6 +73,14 @@ class GameIn(BaseModel):
     score: int = Field(ge=0, le=60)
     duration_ms: int = Field(ge=5000, le=180000)
     game: str = Field(default="bolinha", max_length=20)
+    # Identificador DA PARTIDA, sorteado pelo app quando ela comeca.
+    #
+    # Ele existe pra uma coisa so: separar "o dedo bateu duas vezes no fim da
+    # mesma partida" de "joguei outra partida". Com o premio pago por partida,
+    # essa diferenca virou dinheiro — e datar a chave pelo relogio nao resolve,
+    # porque duas partidas curtas cabem no mesmo segundo e uma delas deixaria de
+    # pagar sem motivo nenhum.
+    match_id: str = Field(default="", max_length=40)
 
 
 def get_pet(db: Session) -> Pet:
@@ -127,6 +135,12 @@ def pets_resumo(db: Session) -> list[dict]:
             "growth": pet_care.growth_of(int(p.xp or 0)),
             "sick": bool(p.sick),
             "mood": pet_care.mood_of(p, 0),
+            # Onde cada um esta e o que cada um esta vestindo: e o que a CASA
+            # precisa pra desenhar todos eles andando pelo comodo, e nao so o
+            # que esta ativo. Sem `room_code` a casa nao sabe quem esta ali;
+            # sem `accessories` os outros apareceriam sem a coleira comprada.
+            "room_code": p.room_code or "sala",
+            "accessories": dict(p.accessories or {}),
             # o pior atributo: e o que denuncia, na lista, quem esta precisando
             "worst": min(getattr(p, stat) for stat in pet_care.STATS),
         }
@@ -413,6 +427,49 @@ def select(pet_id: int, user: User = Depends(current_user), db: Session = Depend
     return _respond(db, pet)
 
 
+@router.post("/{pet_id}/soltar")
+def soltar(pet_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    """Dispensa um bichinho da casa.
+
+    Faltava. Dava pra adotar e nunca pra desfazer — e como cada licença de
+    espécie da loja traz um bichinho NOVO, comprar a segunda licença de gato
+    deixa dois gatos na fila pra sempre, sem saída. Foi exatamente o que
+    aconteceu com o dono.
+
+    Duas travas, e as duas existem pra ninguém se arrepender:
+
+    1. **não dá pra soltar o último**: sem bichinho nenhum a tela do bichinho
+       volta pra adoção e a casa perde o morador — quem quer isso quer outra
+       coisa, não isto;
+    2. **soltar o ATIVO passa a vez pro próximo** antes de apagar. Sem isso,
+       `get_pet` ficaria sem ativo e todas as rotas de cuidado passariam a
+       responder sobre um bichinho que não existe mais.
+
+    A sujeira que ele deixou na casa continua lá, de propósito: o bicho foi
+    embora, a bagunça não se limpa sozinha.
+    """
+    pet = db.get(Pet, pet_id)
+    if pet is None or not pet.species:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Esse bichinho não existe")
+
+    vivos = [p for p in db.query(Pet).order_by(Pet.id).all() if p.species]
+    if len(vivos) <= 1:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Esse é o único bichinho de vocês — não dá pra ficar sem nenhum.",
+        )
+
+    nome = pet.name
+    if pet.active:
+        proximo = next(p for p in vivos if p.id != pet.id)
+        _ativar(db, proximo)
+
+    db.query(PetInteraction).filter(PetInteraction.pet_id == pet.id).delete()
+    db.delete(pet)
+    db.commit()
+    return _respond(db, get_pet(db), {"soltou": nome})
+
+
 @router.post("/move")
 def move(payload: MoveIn, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     """Leva o bichinho pra outro comodo. Ele passa a sujar LA."""
@@ -494,14 +551,23 @@ def play(payload: ItemIn, user: User = Depends(current_user), db: Session = Depe
     return _respond(db, pet, {"used": item.name, **result})
 
 
-# Corações que uma partida pode render — UMA VEZ POR DIA, por jogo.
+# Corações que uma partida rende. AGORA TODA PARTIDA PAGA.
 #
-# O prêmio em moeda é o que transformaria o minigame em caça-níquel: bastaria
-# ficar jogando pra imprimir Coração. Por isso ele não é por partida, e sim por
-# dia, garantido pelo índice único de `dedupe_key` no banco — não por um `if`,
-# que perde a corrida no toque duplo. Jogar mais continua valendo pela alegria
-# do bichinho; só o dinheiro é que tem torneira fechada.
-PREMIO_DIARIO = 12
+# Antes era uma vez por dia, por medo de virar caça-níquel — e o medo era justo:
+# prêmio por partida, sem nenhum limite, é imprimir moeda. Só que o efeito
+# colateral era pior do que o problema: a partir da segunda partida o jogo não
+# valia mais nada, e um jogo que não vale nada ninguém joga.
+#
+# O que resolve os dois é o limite não ser o RELÓGIO, e sim a **energia do
+# bichinho**: cada partida gasta energia, e sem energia não dá pra jogar. Foi o
+# que o dono pediu com todas as letras, e por acaso é o desenho certo — a
+# torneira continua fechada (de 100 de energia saem umas sete partidas), mas
+# fecha por um motivo que aparece na tela e que dá pra resolver cuidando dele,
+# em vez de por uma regra invisível de calendário.
+#
+# O valor acompanha o desempenho, então jogar bem vale mais do que jogar muito.
+PREMIO_MINIMO = 2
+PREMIO_MAXIMO = 10
 
 
 @router.post("/game")
@@ -524,15 +590,17 @@ def game(payload: GameIn, user: User = Depends(current_user), db: Session = Depe
     pet = _require_pet(db)
     now = utcnow()
     code = f"game_{payload.game}"
-    ready = pet_care.toy_ready_at(pet, code)
-    if ready and ready > now:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            f"{regra['nome']} está descansando. Volta em {regra['descanso_min']} minutos.",
-        )
+    # O DESCANSO POR RELÓGIO SAIU, e a energia ficou sendo o único freio.
+    #
+    # Eram dois freios pro mesmo problema, e o de relógio era o pior: ele
+    # bloqueava por dois minutos sem nada pra fazer no meio, e não tinha
+    # nenhuma relação com o estado do bichinho. A energia diz a mesma coisa de
+    # um jeito que se entende olhando a barra — e se acabou, dá pra alimentar e
+    # deixar ele descansar, que é jogo, não espera.
     if pet.energy < regra["energia"]:
         raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, f"{pet.name} está sem energia para brincar"
+            status.HTTP_409_CONFLICT,
+            f"{pet.name} está cansado demais pra brincar. Deixe ele descansar ou dê comida.",
         )
 
     # A alegria acompanha o desempenho, mas em fração do teto — assim os dois
@@ -542,22 +610,30 @@ def game(payload: GameIn, user: User = Depends(current_user), db: Session = Depe
     result = pet_care.touch(
         db, pet, {"happiness": happiness, "energy": -regra["energia"]}, "play", now
     )
-    pet_care.set_toy_cooldown(pet, code, regra["descanso_min"], now)
 
+    # Toda partida paga, proporcional ao que foi feito. `dedupe_key` continua
+    # existindo — não pra limitar por dia, mas pra que o toque duplo no fim da
+    # partida não pague duas vezes pela MESMA partida. É a mesma trava de
+    # sempre; o que mudou é o que ela identifica.
+    moedas = PREMIO_MINIMO + round((PREMIO_MAXIMO - PREMIO_MINIMO) * min(1.0, aproveitamento))
     premio = economy.try_earn(
         db,
         user.id,
-        PREMIO_DIARIO,
+        moedas,
         "minigame",
         reference=payload.game,
-        note=f"{regra['nome']} — primeira partida do dia",
-        dedupe_key=f"petgame:{payload.game}:{user.id}:{today().isoformat()}",
+        note=f"{regra['nome']} — {payload.score} ponto(s)",
+        dedupe_key=(
+            f"petgame:{payload.game}:{user.id}:{payload.match_id}"
+            if payload.match_id
+            else f"petgame:{payload.game}:{user.id}:{now.timestamp():.6f}"
+        ),
     )
 
     effect = {**result, "score": payload.score, "duration_ms": payload.duration_ms}
     _log(db, pet, user, "play", code, effect)
     missions.record(db, "pet_game")
-    body = _respond(db, pet, {**effect, "coins": PREMIO_DIARIO if premio else 0})
+    body = _respond(db, pet, {**effect, "coins": moedas if premio else 0})
     if premio:
         publish("wallet", {"balance": economy.balance(db, user.id)}, to_user=user.id)
     return body

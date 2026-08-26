@@ -184,6 +184,29 @@ def read(user: User = Depends(current_user), db: Session = Depends(get_db)) -> d
             for code, spec in sorted(placeable.items())
             if counts.get(code, 0) > 0
         ],
+        # TODOS os moradores, e nao so o que esta sendo cuidado.
+        #
+        # A casa mostrava um bichinho mesmo com quatro adotados — e eles moram
+        # todos ali (a sujeira de cada um cai neste mesmo chao). Cada um traz o
+        # que o desenho precisa: especie, cores, crescimento, acessorio e o
+        # comodo em que esta, que e o que decide quem aparece nesta sala.
+        "pets": [
+            {
+                "id": outro.id,
+                "name": outro.name,
+                "species": outro.species,
+                "room_code": outro.room_code or "sala",
+                "mood": pet_care.mood_of(outro, sum(len(v) for v in mess_by_room.values())),
+                "stage": pet_care.stage_for(pet_care.level_for(int(outro.xp or 0))),
+                "growth": pet_care.growth_of(int(outro.xp or 0)),
+                "accessories": outro.accessories or {},
+                "colors": (catalog.PET_SPECIES_BY_CODE.get(outro.species) or {}).get("colors", []),
+                "sick": bool(outro.sick),
+                "active": bool(outro.active),
+            }
+            for outro in pet_care.all_pets(db)
+            if outro.species
+        ],
         "pet": {
             "chosen": bool(pet.species),
             "species": pet.species,

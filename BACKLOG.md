@@ -657,3 +657,58 @@ interação; e as orelhas estão apagadas nas pontas.
 Estado: **609 verificações, 0 falha**; build Vite aprovada; as 6 espécies
 conferidas no tamanho real, o cômodo conferido, e o carinho testado ponta a ponta.
 Causas no HANDOFF, seção 9.11.
+
+### 26/08/2026 — Kinectimals, vozes, moedas dos jogos e a casa cheia
+
+Pedido do dono: no Kinectimals o animal corre pelo cenário, vira de lado e
+interage com a câmera (meio que lambendo a câmera) — achar todos esses
+comportamentos e trazer; está bugado, não consigo dar sushi pra ele comer; os
+minigames devem sempre gerar moedas, a não ser que o animal esteja cansado, aí
+não deve dar pra jogar; pesquisar um jeito de criar sons pros animais condizentes
+com cada um, assim como as interações; na casa devem aparecer todos os nossos
+animais andando e interagindo um com o outro; e no perfil o gato ficou duplicado,
+deixar só o Salem.
+
+- **[x]** **O sushi.** Não era o sushi: era o **carinho por arrasto sequestrando
+      o item**, regressão da entrega anterior. Levar a comida até ele é
+      literalmente o gesto do afago (dedo pressionado passeando em cima dele), e
+      a reação de "feliz" entrava por cima da cena de comer — dava pra dar sushi
+      e nunca ver ele comer. Agora quem está com a mão ocupada não faz carinho, e
+      o item em uso ganha da reação de toque. O cartão também passou a dizer o
+      motivo (`acabou`, `sem fome`, `já limpo`, `descansando`) em vez de só ficar
+      cinza, e a recusa por estado virou aviso, não erro vermelho.
+- **[x]** **Minigame paga sempre; o freio é a energia.** O descanso de dois
+      minutos saiu. Cada partida gasta energia e paga proporcional ao placar; sem
+      energia não dá pra jogar, e a recusa diz que é cansaço. De 100 de energia
+      saem umas sete partidas — a torneira continua fechada, mas por um motivo
+      que aparece na barra e que dá pra resolver cuidando dele. Memória e naval
+      também passaram a pagar sempre, com valor menor depois da primeira do dia
+      (elas não gastam energia de ninguém, então precisavam de algum limite).
+- **[x]** **Voz própria por espécie.** A pesquisa levou ao modelo do `soundgen`:
+      fonte harmônica + ruído, moldados por formantes, com contorno de altura,
+      abertura de boca e jitter. Miado, latido, guincho, piado, grunhido e
+      rosnado — e o humor muda o jeito de falar. A bancada ganhou a aba **Vozes**
+      (som era a única coisa do app sem conferência) e já reprovou uma coisa: gato
+      e coelho estavam a 12% de distância e soariam iguais.
+- **[x]** **Os comportamentos do Kinectimals.** Ele anda e corre pelo cenário com
+      **profundidade** (longe fica pequeno e alto, perto fica grande e embaixo),
+      **vira de lado**, faz truque (sentar, rolar, implorar, deitar, coçar,
+      brincar) e **vem até o vidro e lambe** — com língua e rastro úmido que vai
+      secando. Tocar longe dele é **chamar** (ele vem correndo); tocar nele é
+      mexer com ele. Bichinho doente ou triste não passeia.
+- **[x]** **A casa com todos.** Os quatro aparecem, cada um com o seu passeio, na
+      mesma fila de profundidade dos móveis (um passa atrás do outro e atrás do
+      sofá). Quando dois se encontram, **eles se viram um pro outro e reagem** —
+      menos os que estão doentes ou dormindo.
+- **[x]** **Dispensar bichinho** (`POST /api/pet/{id}/soltar`), que é o conserto
+      do gato duplicado. Faltava: dava pra adotar e nunca pra desfazer, e como
+      cada licença de espécie traz um bichinho NOVO, a segunda licença de gato
+      deixa dois gatos na fila pra sempre. Não dá pra soltar o último, e soltar o
+      ativo passa a vez pro próximo antes de apagar.
+      - [ ] **O gato repetido de vocês** ainda está lá: eu não tenho como entrar
+            na conta de vocês pra apagar, e não daria pra adivinhar qual dos dois
+            é o Salem. Está a um toque: Bichinho → "Dispensar" no que não é o
+            Salem, e confirmar.
+
+Estado: **623 verificações, 0 falha**; build Vite aprovada; conferido no
+navegador. Causas no HANDOFF, seção 9.12.

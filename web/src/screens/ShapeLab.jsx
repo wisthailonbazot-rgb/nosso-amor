@@ -22,6 +22,7 @@ import Sticker from '../components/Sticker'
 import { STICKERS_HD } from '../render/stickersHD'
 import { drawPet } from '../render/PetCanvas'
 import { CODIGOS_ESPECIE, NOMES_CLIPES, clipeDe, planoDe } from '../render/petRig'
+import { VOZES, nomeDaVoz, vocalizar } from '../petVoz'
 
 // As seis espécies, os três estágios e os humores que MUDAM o desenho.
 // Estão aqui porque o bichinho é desenhado por espécie: um `if` esquecido numa
@@ -119,6 +120,126 @@ function caixaPintada(width, height, paint) {
   return { larg: (x1 - x0 + 1) / width, alt: (y1 - y0 + 1) / height }
 }
 
+/**
+ * A aba de VOZES.
+ *
+ * O som era a unica coisa do app que ninguem conferia. As artes tem bancada
+ * desde cedo — movel, bichinho, figurinha, item —, mas a voz do bicho so dava
+ * pra saber se estava certa apertando o botao e ouvindo, e ninguem faz isso
+ * depois de cada mexida. Resultado: por muito tempo os seis bichos usaram o
+ * MESMO bipe com a frequencia trocada, e isso passou.
+ *
+ * Aqui cada especie e sintetizada num `OfflineAudioContext` — que renderiza sem
+ * tocar nada — e viram dois numeros e um desenho:
+ *
+ *   - **volume (RMS)**: se der zero, a voz nao esta saindo. E o equivalente ao
+ *     "⚠ vazio" das abas de desenho;
+ *   - **centro do espectro**: onde a energia do som se concentra. E o numero
+ *     que separa um piado de um rosnado. Duas especies com o centro quase igual
+ *     soariam iguais na pratica, e a aba reprova.
+ *
+ * O botao toca a voz de verdade, pra conferir de ouvido o que os numeros nao
+ * contam.
+ */
+function AbaVozes() {
+  const [medidas, setMedidas] = useState(null)
+
+  useEffect(() => {
+    let vivo = true
+    const medir = async () => {
+      const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext
+      if (!OAC) { setMedidas('sem-suporte'); return }
+      const saida = []
+      for (const especie of Object.keys(VOZES)) {
+        const ctx = new OAC(1, 44100 * 2, 44100)
+        // `vocalizar` so trabalha com o contexto rodando; no offline o estado e
+        // 'suspended' ate o render, entao a checagem e enganada de proposito.
+        Object.defineProperty(ctx, 'state', { get: () => 'running' })
+        vocalizar(ctx, especie, { humor: 'normal' })
+        const buffer = await ctx.startRendering()
+        const d = buffer.getChannelData(0)
+        let soma = 0
+        for (let i = 0; i < d.length; i++) soma += d[i] * d[i]
+        const rms = Math.sqrt(soma / d.length)
+        // centro do espectro por autocorrelacao grosseira: conta quantas vezes
+        // o sinal cruza o zero. Mais cruzamentos = som mais agudo. E o jeito
+        // mais simples de medir "grave x agudo" sem uma FFT inteira.
+        let cruzou = 0
+        let ultimo = 0
+        let amostras = 0
+        for (let i = 0; i < d.length; i++) {
+          if (Math.abs(d[i]) < 1e-4) continue
+          amostras++
+          const sinal = d[i] > 0 ? 1 : -1
+          if (ultimo && sinal !== ultimo) cruzou++
+          ultimo = sinal
+        }
+        const agudez = amostras ? Math.round((cruzou / amostras) * 44100 / 2) : 0
+        // quanto tempo houve som de verdade
+        let dur = 0
+        for (let i = 0; i < d.length; i++) if (Math.abs(d[i]) > 0.002) dur = i
+        saida.push({
+          especie,
+          nome: nomeDaVoz(especie),
+          rms: +(rms * 1000).toFixed(2),
+          agudez,
+          duracao: +(dur / 44100).toFixed(2),
+        })
+      }
+      if (vivo) setMedidas(saida)
+    }
+    medir()
+    return () => { vivo = false }
+  }, [])
+
+  function tocar(especie) {
+    window.casalSound?.('pet', especie)
+  }
+
+  if (!medidas) return <p className="muted small">Sintetizando as vozes…</p>
+  if (medidas === 'sem-suporte') return <p className="notice warn">Este navegador não renderiza áudio offline.</p>
+
+  const mudas = medidas.filter((m) => m.rms <= 0.01)
+  // Duas vozes com agudez muito parecida soam iguais na prática.
+  const parecidas = []
+  for (let i = 0; i < medidas.length; i++) {
+    for (let j = i + 1; j < medidas.length; j++) {
+      const a = medidas[i]
+      const b = medidas[j]
+      const dif = Math.abs(a.agudez - b.agudez) / Math.max(a.agudez, b.agudez, 1)
+      if (dif < 0.12) parecidas.push(`${a.especie} e ${b.especie}`)
+    }
+  }
+
+  return (
+    <>
+      <p className="muted small">
+        Cada voz é sintetizada sem tocar nada e medida. Toque para ouvir —
+        o áudio só liga depois do primeiro toque na página (regra do iPhone).
+      </p>
+      {mudas.length > 0 && (
+        <p className="notice error">Sem som nenhum: {mudas.map((m) => m.especie).join(', ')}</p>
+      )}
+      {parecidas.length > 0 && (
+        <p className="notice error">
+          Vozes quase idênticas (soariam iguais): {parecidas.join(' · ')}
+        </p>
+      )}
+      <div className="lab-grid lab-vozes">
+        {medidas.map((m) => (
+          <button key={m.especie} className="lab-tile" onClick={() => tocar(m.especie)}>
+            <strong>{m.especie}</strong>
+            <span className="lab-tile-label">
+              {m.nome} · {m.duracao}s<br />
+              volume {m.rms} · agudez {m.agudez} Hz
+            </span>
+          </button>
+        ))}
+      </div>
+    </>
+  )
+}
+
 function Tile({ label, width, height, paint, animate = false }) {
   const ref = useRef(null)
   const [painted, setPainted] = useState(null)
@@ -184,6 +305,7 @@ export default function ShapeLab() {
     { key: 'crescimento', name: `Crescimento (${LAB_SPECIES.length * LAB_CRESCIMENTO.length})` },
     { key: 'vestidos', name: `Vestidos (${LAB_SPECIES.length * LAB_ACESSORIOS.length})` },
     { key: 'escala', name: `Escala grande (${LAB_SPECIES.length})` },
+    { key: 'vozes', name: `Vozes (${Object.keys(VOZES).length})` },
     { key: 'itens', name: `Itens (${PET_ICON_CODES.length})` },
     { key: 'figurinhas', name: `Figurinhas (${STICKER_CODES.length})` },
     { key: 'cores', name: 'Acabamentos' },
@@ -564,6 +686,8 @@ export default function ShapeLab() {
           </div>
         </>
       )}
+
+      {aba === 'vozes' && <AbaVozes />}
 
       {aba === 'itens' && (
         <div className="lab-grid">
