@@ -821,3 +821,29 @@ recorte verde na parte de cima".
 
 Estado: **642 verificações, 0 falha**; build Vite aprovada. Causas no HANDOFF,
 seção 9.14.
+
+### 27/08/2026 — O campo, a língua e o diagnóstico do microfone
+
+Pedido do dono: "o quadrado verde na metade da tela do bichinho continua, quando
+ele lambe a câmera ainda tá bugado, e mandar áudio no Android ainda não
+funciona, mesmo no navegador pelo link".
+
+- **[x]** **O quadrado verde.** A geometria da 9.14 estava certa (ele parou de
+      flutuar), mas o campo era um retângulo de cor chapada — e passando a
+      ocupar 40% da tela, virou um bloco verde com borda reta atravessando tudo.
+      Agora tem profundidade: cinco faixas do fundo pra frente, com reticulado
+      nas emendas e manchas de tom.
+- **[x]** **A língua.** Terceira tentativa, e as duas anteriores erraram porque
+      eu estava CHUTANDO onde fica a boca — a última usava 0,74 da altura do
+      bicho, e a altura do coelho é quase toda orelha, então a língua saía das
+      PONTAS DAS ORELHAS. Agora ela usa `marcos.focinho`, que é onde o desenho
+      pôs o focinho naquele quadro. E vai pra frente do rosto, não pra cima.
+- **[~]** **O áudio no Android.** Parei de adivinhar: agora existe
+      **Perfil → Áudio neste aparelho**, que roda os sete passos de verdade
+      (HTTPS, APIs, formato, permissão, faixa viva, gravar 2s, mandar pro
+      servidor conferir, tocar de volta) e diz em qual deles parou, em
+      português. Mesma solução que destravou o push do iPhone.
+      - [ ] **Rodar no seu Android e me dizer em que linha aparece o ❌.** Com
+            esse dado o conserto é direto; sem ele qualquer correção é chute.
+
+Estado: **646 verificações, 0 falha**. Causas no HANDOFF, seção 9.15.

@@ -88,18 +88,41 @@ def save_image(upload: UploadFile) -> dict:
     return {"path": name, "thumb": thumb_name, "width": full.width, "height": full.height}
 
 
+def probe_audio(upload: UploadFile) -> dict:
+    """Confere um audio pelo mesmo caminho do envio, mas NAO grava em disco.
+
+    Alimenta o diagnostico do Perfil. A conferencia tem que ser a mesma do
+    `save_audio` — um teste que valida diferente do caminho de verdade mente, e
+    mentir aqui e pior do que nao ter teste: mandaria procurar o defeito no
+    lugar errado.
+    """
+    data = _read_limited(upload)
+    extension = _detect_audio(data)
+    if extension is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Formato de áudio não reconhecido (os primeiros bytes não batem com "
+            "webm, ogg, mp3, wav nem m4a).",
+        )
+    return {"tipo": extension, "bytes": len(data)}
+
+
+def _detect_audio(data: bytes) -> str | None:
+    """O tipo pelos primeiros bytes. Uma fonte so, usada pelos dois caminhos."""
+    for signature, ext in AUDIO_SIGNATURES.items():
+        if data.startswith(signature):
+            return ext
+    # o MediaRecorder do Safari grava MP4/AAC, que comeca com "....ftyp"
+    if len(data) > 12 and data[4:8] == b"ftyp":
+        return "m4a"
+    return None
+
+
 def save_audio(upload: UploadFile, duration_ms: int = 0) -> dict:
     """Guarda um áudio de recado, conferindo o tipo pelos primeiros bytes."""
     data = _read_limited(upload)
 
-    extension = None
-    for signature, ext in AUDIO_SIGNATURES.items():
-        if data.startswith(signature):
-            extension = ext
-            break
-    # o MediaRecorder do Safari grava MP4/AAC, que começa com "....ftyp"
-    if extension is None and len(data) > 12 and data[4:8] == b"ftyp":
-        extension = "m4a"
+    extension = _detect_audio(data)
     if extension is None:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, "Formato de áudio não reconhecido"

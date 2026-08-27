@@ -220,6 +220,29 @@ def send_audio(
     return _out(row, token)
 
 
+@router.post("/audio/teste")
+def test_audio(
+    file: UploadFile = File(...),
+    user: User = Depends(current_user),
+) -> dict:
+    """Confere um audio SEM mandar pra conversa.
+
+    Existe pro diagnostico do Perfil. O dono relatou tres vezes que "mandar
+    audio no Android nao funciona", a ultima ja com o gravador corrigido e pelo
+    navegador no link — e daqui nao ha como saber em qual dos sete passos a
+    coisa para, porque quase todos falham do mesmo jeito: nada acontece.
+
+    Este e o unico passo que a tela nao consegue testar sozinha, e e onde um
+    formato que o servidor nao reconhece apareceria: `save_audio` decide o tipo
+    pelos primeiros BYTES, nao pelo que o navegador diz que mandou.
+
+    Ele valida pelo MESMO caminho do envio de verdade e joga o arquivo fora —
+    um teste que grava sujaria a pasta de midia a cada toque no botao.
+    """
+    data = media_store.probe_audio(file)
+    return {"ok": True, **data}
+
+
 @router.post("/read")
 def mark_read(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     """Marca como lida toda mensagem do outro. Só o destinatário marca."""

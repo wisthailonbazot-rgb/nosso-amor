@@ -199,13 +199,56 @@ function fundoFixo(w, h, periodo, chao) {
   // --- praia e campo
   x.fillStyle = cor.areia
   x.fillRect(0, linhaMar, w, Math.round(chao - linhaMar))
-  x.fillStyle = cor.campo
-  x.fillRect(0, Math.round(chao - 3 * e), w, h - Math.round(chao - 3 * e))
+  // --------------------------------------------------- o campo, COM PROFUNDIDADE
+  //
+  // Era um `fillRect` de cor chapada, e isso bastava enquanto o campo ocupava a
+  // faixa fina de baixo. Desde que o chão da cena passou a ser o mesmo em que o
+  // bichinho pisa (9.14), ele virou a MAIOR área da tela — e um retângulo liso
+  // do tamanho de meia tela não lê como campo: lê como um bloco verde colado
+  // por cima do cenário, com uma borda reta atravessando de ponta a ponta. Foi
+  // o que o dono chamou de "quadrado verde na metade da tela".
+  //
+  // O conserto é o campo ter distância, como o céu e o mar já têm: mais escuro
+  // e frio lá no fundo (onde a luz não chega e o capim se comprime), mais claro
+  // e quente na frente. Em FAIXAS com reticulado na emenda, que é a mesma
+  // linguagem do resto desta cena — degradê liso não combina com pixel art, e
+  // faixa sem reticulado devolve a listra dura que se está tirando.
+  const campoTopo = Math.round(chao - 3 * e)
+  const campoAlt = Math.max(1, h - campoTopo)
+  const FAIXAS = 5
+  for (let i = 0; i < FAIXAS; i++) {
+    const de = campoTopo + Math.round((campoAlt * i) / FAIXAS)
+    const ate = campoTopo + Math.round((campoAlt * (i + 1)) / FAIXAS)
+    // A faixa do fundo puxa pro escuro; a da frente, pro claro.
+    const t = i / (FAIXAS - 1)
+    x.fillStyle = mix(shade(cor.campo, -0.18), cor.campoClaro, t * 0.85)
+    x.fillRect(0, de, w, ate - de)
+  }
+  // O reticulado nas emendas: um pixel sim, um não, com a cor da faixa
+  // seguinte. É o que dissolve a linha reta entre duas faixas.
+  for (let i = 1; i < FAIXAS; i++) {
+    const y = campoTopo + Math.round((campoAlt * i) / FAIXAS)
+    const t = i / (FAIXAS - 1)
+    x.fillStyle = mix(shade(cor.campo, -0.18), cor.campoClaro, t * 0.85)
+    for (let px = 0; px < w; px += 2) {
+      x.fillRect(px, y - Math.max(1, e), 1, Math.max(1, e))
+    }
+  }
+  // Manchas de tom espalhadas: capim não é uniforme, e sem elas as faixas
+  // ainda se percebem como faixas.
+  for (let i = 0; i < 26; i++) {
+    const mx = Math.round(aleatorio(i * 3.7) * w)
+    const my = campoTopo + Math.round(aleatorio(i * 5.1) * campoAlt)
+    const t = (my - campoTopo) / campoAlt
+    const larg = Math.round((3 + aleatorio(i * 2.3) * 7) * e)
+    x.fillStyle = mix(cor.campo, cor.campoClaro, 0.2 + t * 0.6)
+    x.fillRect(mx, my, larg, Math.max(1, Math.round(e)))
+  }
   // a beirada clara do capim, onde a luz bate
   x.fillStyle = cor.campoClaro
   for (let i = 0; i < w; i += 1) {
     const alt = 2 * e + Math.round(aleatorio(i * 0.3) * 2 * e)
-    x.fillRect(i, Math.round(chao - 3 * e), 1, alt)
+    x.fillRect(i, campoTopo, 1, alt)
   }
 
   // --- moitas no fundo, atrás de onde o bichinho anda
@@ -466,12 +509,24 @@ export function desenharLambida(p, { forca = 0, t = 0, boca = null, alcance = 0,
   // Onde a n-ésima batida encostou no vidro. Espalhado de um jeito repetível
   // (não sorteado): sorteando, a marca mudaria de lugar a cada quadro e o
   // rastro tremeria inteiro.
+  // A língua vai PRA FRENTE, na direção do vidro — não pra cima.
+  //
+  // Era este o "ao lamber a câmera ainda tá bugado": o alvo subia de 0,55 a
+  // 0,85 do alcance ACIMA da boca, então a língua saía do focinho, passava por
+  // cima do crânio e aparecia entre as orelhas, apontando pro céu. Lia como um
+  // chifre rosa, não como uma lambida.
+  //
+  // Um bicho lambendo o vidro passa a língua PELA FRENTE do próprio rosto, na
+  // altura da boca, variando pouco de altura entre uma passada e outra. É isso
+  // aqui: o deslocamento grande é no eixo em que ele está virado, e o de altura
+  // fica em ±0,2 do alcance — o suficiente pra as passadas não caírem todas na
+  // mesma linha, sem nunca subir acima da cabeça.
   const alvoDa = (n) => {
     const giro = Math.sin(n * 2.399) // irracional o bastante pra não repetir cedo
-    const sobe = 0.55 + 0.3 * Math.abs(Math.cos(n * 1.7))
+    const altura = -0.06 + 0.22 * Math.cos(n * 1.7)
     return {
-      x: bx + virado * comprimento * (0.35 + 0.3 * giro),
-      y: by - comprimento * sobe,
+      x: bx + virado * comprimento * (0.62 + 0.28 * giro),
+      y: by + comprimento * altura,
     }
   }
 
@@ -518,7 +573,9 @@ export function desenharLambida(p, { forca = 0, t = 0, boca = null, alcance = 0,
   const alvo = alvoDa(batidaAtual)
   const px = bx + (alvo.x - bx) * saida
   const py = by + (alvo.y - by) * saida
-  const larg = comprimento * 0.19 * (0.75 + saida * 0.35)
+  // Fina o bastante pra ler como lingua: mais grossa que isto ela vira
+  // salsicha, que foi como saiu na primeira versao com a ancora certa.
+  const larg = comprimento * 0.15 * (0.72 + saida * 0.34)
 
   // A língua é desenhada como uma faixa da boca até a ponta, e não como um
   // triângulo em pé: ela tem que parecer sair de dentro dele, na diagonal.

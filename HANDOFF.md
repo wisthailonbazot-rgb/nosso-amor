@@ -1935,3 +1935,98 @@ não dá erro, dá um buraco na tela.
 **Estado: 642 verificações, 0 falha.** Build Vite aprovada.
 
 **Próximo passo:** continua sendo a seção 8.1 — mapa navegável do bairro.
+
+### 9.15 O campo, a língua e o diagnóstico do microfone (27/08/2026)
+
+Terceira volta nos mesmos três pontos: "o quadrado verde na metade da tela do
+bichinho continua", "quando ele lambe a câmera ainda tá bugado" e "mandar áudio
+no Android ainda não funciona, mesmo no navegador pelo link".
+
+**1. O quadrado verde: eu tinha consertado a geometria e criado um problema de
+desenho.**
+
+Na 9.14 o chão da cena passou a ser o mesmo em que o bichinho pisa — e isso
+estava certo, ele parou de flutuar. Só que o campo era um `fillRect` de cor
+chapada, o que bastava enquanto ele ocupava a faixa fina de baixo. Passando a
+ocupar **40% da tela**, um retângulo liso desse tamanho não lê como campo: lê
+como um bloco verde colado por cima do cenário, com uma borda reta atravessando
+de ponta a ponta. Era literalmente um quadrado verde na metade da tela.
+
+Agora o campo tem distância, como o céu e o mar já tinham: cinco faixas do mais
+escuro e frio no fundo ao mais claro na frente, **com reticulado nas emendas**
+(faixa sem reticulado devolve a listra dura que se está tirando) e manchas de
+tom espalhadas por cima.
+
+**2. A língua: eu estava chutando onde fica a boca.**
+
+Três tentativas, e as duas primeiras erradas pelo mesmo motivo de fundo.
+
+A da 9.13 ancorava a língua em **0,74 da altura do bicho**, medida do chão pra
+cima. Parece razoável até lembrar de QUEM é o bichinho dele: um coelho, cuja
+altura é quase toda orelha. Nele, 0,74 cai na altura das **pontas das orelhas** —
+e era de lá que a língua saía, apontando pro lado. Antes disso, na 9.12, ela
+nascia no meio do rodapé da tela.
+
+O conserto é não chutar: `desenharRig` já devolve `focinho: [x, y]`, que é onde
+o desenho colocou o focinho **naquele quadro**, com pose, espécie e crescimento
+já aplicados. `drawPet` passou a devolver esses marcos, e a lambida usa o ponto
+real. É o mesmo ponto que o rig usa pra desenhar o nariz — não há como
+divergirem.
+
+> Dois detalhes que a correção obrigou: o espelhamento tem de ser desfeito na
+> mão (o bicho é desenhado dentro de um `scale(-1, 1)` e a lambida roda fora
+> daquele `save/restore`), e o alcance da língua passou a sair da **cabeça**, não
+> da altura total — pela mesma razão das orelhas.
+>
+> E a direção: ela subia de 0,55 a 0,85 do alcance ACIMA da boca. Um bicho
+> lambendo o vidro passa a língua PELA FRENTE do rosto, na altura da boca. Agora
+> o deslocamento grande é no eixo em que ele está virado, e o de altura fica em
+> ±0,2 — o suficiente pra as passadas não caírem na mesma linha.
+
+**3. O áudio: parei de adivinhar e construí o diagnóstico.**
+
+Três relatos de "não funciona", o último já com o gravador corrigido **e pelo
+navegador, no link** — nem é caso de PWA ou APK. Daqui não há como saber onde
+para: gravar áudio depende de sete coisas em sequência, e quase todas falham do
+mesmo jeito quando falham — nada acontece.
+
+É a mesma situação do push no iPhone, que ficou muito tempo "não chegando" até
+existir uma tela dizendo qual das três condições tinha falhado. Então o
+entregável desta rodada não é mais um palpite de correção: é **transformar "não
+funciona" em "parou no passo N, por causa de X"**.
+
+`Perfil → Áudio neste aparelho` roda os sete passos de verdade, um por linha, em
+português:
+
+1. conexão segura (sem HTTPS o navegador nem pergunta);
+2. o navegador sabe gravar (`mediaDevices` e `MediaRecorder`);
+3. qual formato ele escolheu;
+4. a permissão do microfone — com o motivo separado por tipo de recusa
+   (negada, sem microfone, ocupado, bloqueada);
+5. **a faixa está viva e não está muda** — uma faixa `muted` grava silêncio e
+   ninguém avisa;
+6. grava 2 segundos e diz quantos KB saíram (é aqui que a gravação vazia do
+   WebView do Android apareceria, com nome);
+7. **manda pro servidor conferir** — o único passo que a tela não consegue
+   testar sozinha, e onde um formato que o servidor não reconhece apareceria,
+   porque ele decide o tipo pelos primeiros BYTES;
+8. e toca de volta.
+
+> A rota é `POST /api/chat/audio/teste`, e ela **valida pelo mesmo caminho do
+> envio de verdade** (`media_store.probe_audio`, que divide a detecção com o
+> `save_audio` numa função só) e joga o arquivo fora. Um diagnóstico que valida
+> diferente do caminho real manda procurar o defeito no lugar errado — pior do
+> que não ter diagnóstico. O smoke confere as duas coisas: que ele aceita e
+> recusa igual ao envio, e que **não deixa nada na conversa**.
+
+**Duas coisas que só apareceram porque a tela foi aberta de verdade:** o
+`Profile.jsx` não importava `Icon` (a tela inteira caía no ErrorBoundary com
+"Icon is not defined" — build passa, porque JS não confere símbolo), e não
+existe ícone `mic` no conjunto; um nome desconhecido não desenha nada e não
+reclama.
+
+**Estado: 646 verificações, 0 falha.** Build Vite aprovada.
+
+**O que fica com você:** abra Perfil → Áudio neste aparelho no Android e me diga
+em que linha aparece o ❌. Com esse dado o conserto é direto; sem ele, qualquer
+correção minha continua sendo chute.

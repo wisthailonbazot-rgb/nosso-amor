@@ -2,14 +2,19 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { api } from '../api'
+import Icon from '../components/Icon'
 import { useStore } from '../store'
 import { diagnose, disablePush, enablePush, isApple, isStandalone, permission } from '../push'
+import { diagnosticarAudio, ondeEstamos } from '../audioDiag'
 import { stamp } from '../lib/dates'
 
 export default function Profile() {
   const { user, partner, balance, couple, vapidKey, pushEnabled, logout, refreshMe } = useStore()
   const [status, setStatus] = useState(null)
   const [report, setReport] = useState(() => diagnose())
+  // Diagnóstico do microfone: null = nunca rodou, [] = rodando.
+  const [audio, setAudio] = useState(null)
+  const [testando, setTestando] = useState(false)
   const [message, setMessage] = useState(null)
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -210,6 +215,67 @@ export default function Profile() {
               </div>
             ))}
           </div>
+        )}
+      </div>
+
+      {/* ------------------------------------------------- microfone e áudio
+          Existe pelo mesmo motivo do diagnóstico de push logo acima: gravar
+          áudio depende de sete coisas em sequência, e quase todas falham do
+          mesmo jeito — nada acontece. Sem isto, "não funciona" é um chute entre
+          HTTPS, permissão, formato, gravação vazia, envio e reprodução. */}
+      <div className="card">
+        <p className="card-title">Áudio neste aparelho</p>
+        <p className="muted small">
+          Se o áudio do chat não está saindo daqui, toque abaixo: ele grava dois
+          segundos de verdade, manda pro servidor conferir e diz em qual passo
+          parou. Nada disso vai pra conversa.
+        </p>
+        <button
+          className="btn btn-ghost btn-block"
+          disabled={testando}
+          onClick={async () => {
+            setTestando(true)
+            setAudio([])
+            try {
+              await diagnosticarAudio(setAudio)
+            } finally {
+              setTestando(false)
+            }
+          }}
+        >
+          <Icon name="chat" size={16} /> {testando ? 'Testando…' : 'Testar o microfone'}
+        </button>
+
+        {audio && audio.length > 0 && (
+          <div style={{ marginTop: 10 }}>
+            {audio.map((item, i) => (
+              <div key={i} className="row" style={{ gap: 8, padding: '4px 0' }}>
+                <span aria-hidden="true">{item.ok ? '✅' : '❌'}</span>
+                <div className="grow">
+                  <div className="small">{item.label}</div>
+                  {item.detalhe && <div className="muted tiny">{item.detalhe}</div>}
+                </div>
+              </div>
+            ))}
+            {!testando && (
+              <p className="muted tiny" style={{ marginTop: 6 }}>
+                {audio.every((x) => x.ok)
+                  ? 'Tudo passou — daqui o áudio do chat funciona.'
+                  : 'Parou no passo marcado com ❌. É esse o motivo.'}
+              </p>
+            )}
+          </div>
+        )}
+
+        {audio && !testando && (
+          <details style={{ marginTop: 8 }}>
+            <summary className="muted tiny">Detalhes do aparelho</summary>
+            <pre className="muted tiny" style={{ whiteSpace: 'pre-wrap', margin: '6px 0 0' }}>
+              {Object.entries(ondeEstamos())
+                .map(([k, v]) => `${k}: ${v}`)
+                .join('\n')}
+            </pre>
+          </details>
         )}
       </div>
 

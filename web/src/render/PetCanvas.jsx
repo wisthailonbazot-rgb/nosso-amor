@@ -175,6 +175,14 @@ export function drawPet(p, pet, tick, escala, enquadrar) {
     p.rect(ax - g * 0.09, ay + g * 0.6, Math.max(1, g * 0.18), Math.max(2, g * 0.6), OUT)
     p.rect(ax - g * 0.09, ay + g * 1.35, Math.max(1, g * 0.18), Math.max(1, g * 0.18), OUT)
   }
+
+  // Devolve os marcos do desenho — em especial ONDE O FOCINHO FICOU.
+  //
+  // Quem desenha por cima do bichinho (hoje a lambida no vidro) precisa saber
+  // onde a boca caiu de verdade, e isso só o desenho sabe: depende da pose, da
+  // espécie e do crescimento. Adivinhar por fração da altura foi o que quebrou
+  // a lambida duas vezes seguidas — ver o comentário dela lá embaixo.
+  return marcos
 }
 
 // ------------------------------------------------------------------ acessorio
@@ -603,7 +611,7 @@ export default function PetCanvas({ pet, onPoke, arrastando = false }) {
         ctx.scale(-1, 1)
         ctx.translate(-enq.cx, 0)
       }
-      drawPet(painter, atual, t, enq.escala, { cx: enq.cx, chao: enq.chao })
+      const marcos = drawPet(painter, atual, t, enq.escala, { cx: enq.cx, chao: enq.chao })
       ctx.restore()
 
       // A grama da frente entra DEPOIS: o bichinho passa atras dela, e e essa
@@ -620,16 +628,34 @@ export default function PetCanvas({ pet, onPoke, arrastando = false }) {
       // chao e a altura do focinho, e o deslocamento lateral acompanha o lado
       // pra onde ele esta virado. Vale pra qualquer especie e qualquer tamanho,
       // que e o motivo de sair da medida e nao de um numero fixo.
-      if (pos.lambida > 0) {
-        const alturaPx = alturaU * enq.escala
+      if (pos.lambida > 0 && marcos?.focinho) {
+        // A ANCORA SAI DO DESENHO, e nao de uma fracao da altura.
+        //
+        // Duas tentativas erradas antes desta, e as duas pelo mesmo motivo —
+        // eu estava CHUTANDO onde fica a boca:
+        //
+        //   1. a lingua nascia no meio do rodape da tela, fixa;
+        //   2. depois passou a nascer em 0,74 da altura do bicho, o que parece
+        //      razoavel ate lembrar que a altura do COELHO e quase toda orelha.
+        //      Nele, 0,74 cai na altura das PONTAS DAS ORELHAS — e era de la
+        //      que a lingua saia, apontando pro lado. Foi o que o dono viu.
+        //
+        // `marcos.focinho` e onde o desenho colocou o focinho neste quadro,
+        // com a pose, a especie e o crescimento ja aplicados. Nao ha o que
+        // chutar: e o mesmo ponto que o rig usa pra desenhar o nariz.
+        //
+        // O espelhamento tem que ser desfeito na mao: o bicho foi desenhado
+        // dentro de um `scale(-1, 1)` em volta de `enq.cx`, e este trecho roda
+        // FORA daquele `save/restore`.
+        const [fx, fy] = marcos.focinho
+        const bocaX = pos.virado < 0 ? enq.cx * 2 - fx : fx
         desenharLambida(painter, {
           forca: pos.lambida,
           t,
-          boca: {
-            x: enq.cx + pos.virado * larguraU * enq.escala * 0.16,
-            y: enq.chao - alturaPx * 0.74,
-          },
-          alcance: alturaPx * 0.34,
+          boca: { x: bocaX, y: fy },
+          // O alcance sai da CABECA, que e o que da a escala do focinho — a
+          // altura total nao serve, pela mesma razao das orelhas.
+          alcance: medida.cabecaA * enq.escala * 0.85,
           virado: pos.virado,
         })
       }
