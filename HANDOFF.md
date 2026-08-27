@@ -2540,3 +2540,59 @@ como ele e confere que o `sub` do token que chega é o **dela** — conferido
 reintroduzindo o defeito de propósito, que deixa a verificação vermelha.
 
 **Estado: 667 verificações, 0 falha.**
+
+### 9.22 A câmera sumiu sozinha, e eu ramifiquei o texto num palpite (27/08/2026)
+
+Relato do dono: a linha do diagnóstico veio
+`NotAllowedError · permissão: denied · microfones: 1 · atalho`, e junto:
+"essa instrução do Nosso app nem faz sentido, tô abrindo direto no navegador,
+não está instalado". E mais: "a parte da câmera agora só aparece as fotos já
+tiradas, antes aparecia a opção de abrir a câmera e tirar a foto na hora".
+
+#### 1. A linha finalmente diz qual dos três andares é
+
+`microfones: 1` derruba as duas hipóteses "de baixo": o sistema **está**
+entregando microfone, então não é a chave geral do aparelho nem a permissão de
+app do navegador. O que está negado é a permissão **do site**.
+
+Só que o texto que apareceu abria com "Ajustes → Apps → **Nosso app** →
+Permissões", porque eu **ramifiquei a instrução pelo `display-mode: standalone`**.
+Duas coisas erradas nisso:
+
+1. **A detecção erra.** Vários navegadores Android respondem `standalone` fora de
+   um app instalado — e o dono estava numa aba normal. A linha dizia "atalho" e
+   ele leu uma afirmação errada sobre o próprio aparelho.
+2. **Mesmo acertando, aquela lista não tem Microfone.** Ele já tinha fotografado
+   a tela: um WebAPK só lista o que declarou.
+
+**Regra que fica:** escrever a instrução com o que foi **medido**, nunca com o
+que foi **deduzido**. Existe microfone + este endereço negado = permissão de
+site; isso vale em aba normal e em atalho, e o texto não precisa (nem deve)
+afirmar em qual dos dois a pessoa está. O caminho é o do navegador, com o do
+Samsung Internet escrito à parte (o cadeado dele não tem permissões), e o botão
+"Abrir no Chrome" fica disponível de qualquer forma — se for atalho é o único
+caminho até os ajustes, e se já for navegador não atrapalha.
+
+A linha de resumo também passou a mostrar **navegador e modo**
+(`Chrome`, `Chrome (modo app)`), em vez de um esconder o outro.
+
+#### 2. A câmera: o Android trocou o seletor debaixo do app
+
+Nada mudou no nosso código — mudou o Android. O `<input accept="image/*">`
+sempre deixou o sistema escolher entre câmera e galeria, e a partir do Android 13
+esse pedido passa a ser atendido pelo **seletor de fotos do sistema**, que mostra
+as fotos já tiradas e **não tem botão de câmera**. A opção de fotografar na hora
+sumiu sem ninguém encostar no app.
+
+Quem devolve a câmera é o atributo `capture` — e ele é **exclusivo**: com
+`capture` só dá pra fotografar, sem ele só dá pra escolher. Não existe um pedido
+que ofereça os dois de novo.
+
+Então agora são **duas entradas declaradas, uma por intenção**, em vez de um
+pedido ambíguo que o sistema resolve como quiser: no chat o ícone da câmera abre
+"Tirar foto agora" / "Escolher da galeria"; no mural são dois botões, "tirar
+foto" e "galeria".
+
+**Estado: 667 verificações, 0 falha.** Build Vite aprovada; menu conferido no
+navegador (as duas entradas existem, uma com `capture="environment"` e outra
+sem).

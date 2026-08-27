@@ -2251,3 +2251,36 @@ button:disabled,
 .pet-soltar { display: inline-flex; align-items: center; gap: 5px; margin: -4px 0 8px; color: var(--muted); }
 .lab-vozes { grid-template-columns: repeat(2, 1fr); }
 .lab-vozes .lab-tile { cursor: pointer; text-align: center; }
+
+/* ------------------------------------------------- escolher foto: câmera x galeria
+   O Android 13+ atende `<input accept="image/*">` com o seletor de fotos do
+   sistema, que só mostra o que já foi tirado — o botão de câmera sumiu de lá.
+   Quem devolve a câmera é o atributo `capture`, que é exclusivo (com ele, só
+   fotografa; sem ele, só escolhe). Por isso o ícone abre estas duas opções. */
+.foto-escolha { position: relative; display: flex; align-items: center; }
+.foto-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  min-width: 178px;
+  background: var(--cream, #fffaf3);
+  border: 2px solid var(--ink, #33203a);
+  border-radius: 12px 10px 13px 11px;
+  box-shadow: 0 6px 0 rgba(51, 32, 58, 0.16);
+}
+.foto-menu label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  cursor: pointer;
+  font: 700 13px 'Baloo 2', sans-serif;
+  white-space: nowrap;
+}
+.foto-menu label:active { background: rgba(51, 32, 58, 0.09); }

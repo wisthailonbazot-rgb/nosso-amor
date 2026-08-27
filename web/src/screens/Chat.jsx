@@ -479,6 +479,8 @@ export default function Chat() {
     setErroPassos(passos)
   }
   const [enviando, setEnviando] = useState(false)
+  // Câmera x galeria: o Android não oferece mais as duas num pedido só.
+  const [menuFoto, setMenuFoto] = useState(false)
   const fimRef = useRef(null)
   const listaRef = useRef(null)
   const gravador = useRecorder()
@@ -829,15 +831,50 @@ export default function Chat() {
               placeholder="mensagem"
             />
 
-            <label className="btn-plain" aria-label="Foto" style={{ cursor: 'pointer' }}>
-              <Icon name="camera" size={22} />
-              <input
-                type="file"
-                accept="image/*"
-                hidden
-                onChange={(e) => enviarFoto(e.target.files?.[0])}
-              />
-            </label>
+            {/* DUAS ENTRADAS, E NÃO UMA.
+                O `<input accept="image/*">` sozinho abria a câmera OU a galeria,
+                à escolha do Android. Só que o Android 13+ passou a atender esse
+                pedido com o **seletor de fotos** do sistema, que mostra as fotos
+                já tiradas e **não tem botão de câmera** — a opção de tirar na
+                hora simplesmente sumiu, sem nada ter mudado no app.
+                Quem devolve a câmera é o atributo `capture`, e ele é exclusivo:
+                com `capture` só dá pra fotografar, sem `capture` só dá pra
+                escolher. Por isso agora são dois caminhos declarados, um pra
+                cada intenção, em vez de um pedido ambíguo que o sistema resolve
+                como quiser. */}
+            <div className="foto-escolha">
+              <button
+                type="button"
+                className="btn-plain"
+                aria-label="Foto"
+                onClick={() => setMenuFoto((v) => !v)}
+              >
+                <Icon name="camera" size={22} />
+              </button>
+              {menuFoto && (
+                <div className="foto-menu">
+                  <label>
+                    <Icon name="camera" size={16} /> Tirar foto agora
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      hidden
+                      onChange={(e) => { setMenuFoto(false); enviarFoto(e.target.files?.[0]) }}
+                    />
+                  </label>
+                  <label>
+                    <Icon name="bag" size={16} /> Escolher da galeria
+                    <input
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      onChange={(e) => { setMenuFoto(false); enviarFoto(e.target.files?.[0]) }}
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
 
             {texto.trim() ? (
               <button className="btn-primary btn-sm" onClick={enviar} disabled={enviando}>

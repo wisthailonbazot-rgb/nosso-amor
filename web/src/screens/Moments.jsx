@@ -73,9 +73,17 @@ function Novo({ aoCriar, aoCancelar }) {
       </label>
 
       <div className="row" style={{ gap: 8 }}>
+        {/* Duas entradas: o seletor de fotos do Android 13+ não tem botão de
+            câmera, e só o atributo `capture` devolve a opção de tirar na hora.
+            Ver o comentário maior em `Chat.jsx`. */}
         <label className="btn btn-ghost grow" style={{ cursor: 'pointer' }}>
           <Icon name="camera" size={18} />
-          {arquivo ? 'trocar foto' : 'escolher foto'}
+          {arquivo ? 'trocar' : 'tirar foto'}
+          <input type="file" accept="image/*" capture="environment" hidden onChange={(e) => escolher(e.target.files?.[0])} />
+        </label>
+        <label className="btn btn-ghost grow" style={{ cursor: 'pointer' }}>
+          <Icon name="bag" size={18} />
+          galeria
           <input type="file" accept="image/*" hidden onChange={(e) => escolher(e.target.files?.[0])} />
         </label>
         <button className="btn-primary" onClick={enviar} disabled={enviando}>

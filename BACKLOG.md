@@ -1055,3 +1055,30 @@ seção 9.20.
       smoke.
 
 Estado: **667 verificações, 0 falha**. Causas no HANDOFF, seção 9.21.
+
+### 27/08/2026 — A câmera sumiu sozinha, e o texto do microfone chutava
+
+- **[x]** **A linha do diagnóstico resolveu o microfone:** `microfones: 1`
+      significa que o sistema ENTREGA microfone — então não é a chave geral nem
+      a permissão do navegador. O que está negado é a permissão **do site**.
+- **[x]** **Você estava certo sobre a instrução sem sentido.** Eu escolhia o
+      texto pelo `display-mode: standalone`, e essa detecção erra (vários
+      navegadores Android respondem "standalone" numa aba normal) — por isso
+      apareceu "Ajustes → Apps → Nosso app", que além de errado aponta pra uma
+      lista que não tem Microfone. Agora o texto usa só o que foi MEDIDO e não
+      afirma onde você está: caminho do navegador (com o do Samsung Internet
+      escrito à parte, porque o cadeado dele não tem permissões) e o botão
+      "Abrir no Chrome" sempre disponível.
+      - A linha de resumo passou a mostrar navegador **e** modo (`Chrome`,
+        `Chrome (modo app)`), em vez de um esconder o outro.
+- **[x]** **A câmera: não regrediu por minha causa — o Android trocou o
+      seletor.** Desde o Android 13 o `<input accept="image/*">` é atendido pelo
+      seletor de fotos do sistema, que só mostra o que já foi tirado e não tem
+      botão de câmera. Quem devolve a câmera é o atributo `capture`, e ele é
+      exclusivo (com ele só fotografa, sem ele só escolhe) — não existe mais um
+      pedido que ofereça os dois.
+      - Agora são duas entradas declaradas: no chat o ícone abre "Tirar foto
+        agora" / "Escolher da galeria"; no mural, dois botões.
+
+Estado: **667 verificações, 0 falha**; build aprovada; conferido no navegador.
+Causas no HANDOFF, seção 9.22.

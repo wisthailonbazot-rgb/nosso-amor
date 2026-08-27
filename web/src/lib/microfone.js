@@ -146,6 +146,109 @@ export function comoLiberar(onde = ondeRoda(), tipo = 'site') {
   //
   // O navegador comum não tem esse problema: o print do Chrome mostra Câmera,
   // Localização, Microfone e Notificações todos concedidos. É por lá que dá.
+  // ------------------ ATALHO INSTALADO, MICROFONE EXISTE, MAS O SITE ESTÁ NEGADO
+  //
+  // Este caso veio da linha de diagnóstico do próprio dono:
+  //
+  //     NotAllowedError · permissão: denied · microfones: 1 · atalho
+  //
+  // `microfones: 1` derruba as duas hipóteses "de baixo": o sistema ESTÁ
+  // entregando microfone, então não é a chave geral do aparelho nem a permissão
+  // do aplicativo. O que está negado é a permissão **do site** — e ela mora no
+  // perfil do Chrome, por origem.
+  //
+  // E aqui está o nó: o atalho instalado usa o perfil do Chrome, mas **não tem
+  // barra de endereço**, logo não tem cadeado nem menu de site. Mandar pra
+  // "Ajustes → Apps → Nosso app → Permissões" (o que esta função fazia antes)
+  // é mandar pra lista que o dono já fotografou e que **não tem Microfone**:
+  // um WebAPK só lista o que declarou, e microfone não estava lá.
+  //
+  // O caminho que existe de verdade é desfazer o "não" no Chrome. Como o atalho
+  // e o Chrome compartilham o mesmo perfil e a mesma origem, liberar lá vale
+  // aqui dentro também.
+  if (tipo === 'site-negado') {
+    // ------------------------------------------ SEM PALPITE SOBRE ONDE ELE ESTÁ
+    //
+    // A versão anterior escolhia o texto pelo `display-mode: standalone` e
+    // abria com "Ajustes → Apps → Nosso app". O dono respondeu: "essa instrução
+    // do Nosso app nem faz sentido, tô abrindo direto no navegador, não está
+    // instalado". E ele tem razão duas vezes: a detecção pode errar (vários
+    // navegadores Android respondem `standalone` fora de um app instalado), e
+    // mesmo acertando, aquela lista **não tem Microfone** — um WebAPK só lista
+    // o que declarou.
+    //
+    // O que foi MEDIDO, e não deduzido, é o suficiente: existe microfone no
+    // aparelho e a permissão deste endereço está negada. Isso é permissão de
+    // SITE, guardada pelo navegador. Então o texto fala só disso, e serve nos
+    // dois casos — aba normal ou atalho — sem afirmar em qual deles a pessoa
+    // está.
+    const passos = []
+    if (onde.navegador === 'Samsung Internet') {
+      passos.push('No Samsung Internet o cadeado NÃO tem permissões (só conexão, rastreadores e cookies).')
+      passos.push('Menu ☰ → Configurações → "Sites e downloads" → "Permissões de site" → Microfone → acha este endereço e marca "Permitir".')
+    } else {
+      passos.push('Toca no cadeado 🔒 ao lado do endereço → "Permissões" → Microfone → "Perguntar". Se aparecer "Redefinir permissões", serve e é mais rápido.')
+      passos.push('Se não houver nada disso no cadeado: menu ⋮ → Configurações → "Configurações do site" → Microfone → acha este endereço e marca "Permitir".')
+    }
+    passos.push('Se você abriu por um atalho da tela de início, ele não tem barra de endereço: usa o botão "Abrir no Chrome" aqui embaixo — é o mesmo endereço e a mesma permissão.')
+    passos.push('Recarrega a página e toca em "Liberar o microfone". A pergunta volta a aparecer.')
+    return passos
+  }
+
+  // ---------------------------- O ATALHO INSTALADO NÃO TEM MICROFONE PRA DAR
+  //
+  // Este é o caso que os prints de 27/08 fecharam, e ele não é "permissão
+  // negada" — é permissão que NÃO EXISTE.
+  //
+  // Quando o Chrome instala um app na tela de início, ele não cria um atalho:
+  // ele gera um aplicativo Android de verdade (WebAPK), com um manifesto
+  // próprio de permissões. E o microfone só pode ser concedido a um aplicativo
+  // que o DECLARE. O WebAPK gerado aqui declarou só notificações.
+  //
+  // A tela de "Permissões do app" do bichinho de coração prova isso melhor do
+  // que qualquer erro de JavaScript:
+  //
+  //     Com permissão:   Notificações
+  //     Sem permissão:   Nenhuma permissão negada
+  //
+  // Não há Microfone em lugar nenhum da lista. Nada foi negado — não há o que
+  // permitir. E como o Chrome, para um app instalado, DELEGA o microfone à
+  // permissão do aplicativo, o pedido morre antes de virar pergunta: sem
+  // pergunta, sem erro visível, e sem nenhum ajuste que resolva. Foi
+  // exatamente isso que o dono viveu por três rodadas.
+  //
+  // O navegador comum não tem esse problema: o print do Chrome mostra Câmera,
+  // Localização, Microfone e Notificações todos concedidos. É por lá que dá.
+  // ------------------ ATALHO INSTALADO, MICROFONE EXISTE, MAS O SITE ESTÁ NEGADO
+  //
+  // Este caso veio da linha de diagnóstico do próprio dono:
+  //
+  //     NotAllowedError · permissão: denied · microfones: 1 · atalho
+  //
+  // `microfones: 1` derruba as duas hipóteses "de baixo": o sistema ESTÁ
+  // entregando microfone, então não é a chave geral do aparelho nem a permissão
+  // do aplicativo. O que está negado é a permissão **do site** — e ela mora no
+  // perfil do Chrome, por origem.
+  //
+  // E aqui está o nó: o atalho instalado usa o perfil do Chrome, mas **não tem
+  // barra de endereço**, logo não tem cadeado nem menu de site. Mandar pra
+  // "Ajustes → Apps → Nosso app → Permissões" (o que esta função fazia antes)
+  // é mandar pra lista que o dono já fotografou e que **não tem Microfone**:
+  // um WebAPK só lista o que declarou, e microfone não estava lá.
+  //
+  // O caminho que existe de verdade é desfazer o "não" no Chrome. Como o atalho
+  // e o Chrome compartilham o mesmo perfil e a mesma origem, liberar lá vale
+  // aqui dentro também.
+  if (tipo === 'atalho-site-negado') {
+    return [
+      'O "não" é do SITE, e não do aplicativo — por isso não adianta procurar Microfone em Ajustes → Apps (o atalho não tem essa permissão na lista).',
+      'Toca em "Abrir no Chrome" logo abaixo: é o mesmo endereço, no navegador, onde existe barra de endereço.',
+      'Lá, toca no cadeado 🔒 ao lado do endereço → "Permissões" → "Redefinir permissões". Se preferir: menu ⋮ → Configurações → Configurações do site → Microfone → acha este endereço e marca "Permitir".',
+      'Ainda no Chrome, toca em "Liberar o microfone" e responde "Permitir" na pergunta.',
+      'Pronto: o atalho usa o mesmo perfil do Chrome, então ele passa a gravar também.',
+    ]
+  }
+
   if (tipo === 'atalho-sem-microfone') {
     return [
       'Não é permissão negada: o atalho instalado NÃO TEM microfone na lista dele pra dar.',
@@ -310,9 +413,11 @@ export async function pedirMicrofone() {
     // tela passa a dizer qual das causas é, sem ninguém ter que navegar até o
     // diagnóstico do Perfil.
     const estado = await estadoDoMicrofone()
-    const resumo = `${nome} · permissão: ${estado} · microfones: ${entradas.total} · ${
-      onde.apk ? 'APK' : onde.instalado ? 'atalho' : onde.navegador
-    }`
+    // O navegador aparece SEMPRE, e o modo vai entre parênteses. Antes um
+    // escondia o outro: a linha dizia só "atalho", e o dono — que estava numa
+    // aba normal — leu uma afirmação errada sobre o próprio aparelho.
+    const resumo = `${nome} · permissão: ${estado} · microfones: ${entradas.total}`
+      + ` · ${onde.navegador}${onde.apk ? ' (APK)' : onde.instalado ? ' (modo app)' : ''}`
 
     // A ORDEM IMPORTA: o atalho instalado vem antes da chave geral.
     //
@@ -355,15 +460,19 @@ export async function pedirMicrofone() {
       // junto com o resumo — perguntar de novo seria uma segunda fonte pro
       // mesmo fato, e num arquivo que existe justamente pra acabar com isso.
       if (estado === 'denied') {
+        // Dentro do atalho instalado não existe barra de endereço, e a permissão
+        // negada é a do SITE — que se desfaz no Chrome, não em Ajustes → Apps.
         return {
           ok: false,
           bloqueado: true,
           erro: nome,
           resumo,
-          motivo: 'Existe um microfone no aparelho, mas ele está negado para ESTE endereço — e enquanto estiver, o navegador não pergunta de novo:',
-          passos: comoLiberar(onde, 'site'),
-          depois: comoLiberar(onde, 'app'),
-          tituloDepois: 'Se falhar em mais de um navegador, não é do site — é a permissão do navegador:',
+          // O botão de sair pro Chrome vale aqui de qualquer jeito: se for
+          // atalho, é o único caminho até os ajustes; se já for navegador, não
+          // atrapalha ninguém.
+          abrirNoChrome: true,
+          motivo: 'Existe microfone no aparelho (o diagnóstico achou 1) — então não é a chave geral nem a permissão do navegador. O que está negado é a permissão DESTE ENDEREÇO, e enquanto estiver assim ele não pergunta de novo:',
+          passos: comoLiberar(onde, 'site-negado'),
         }
       }
       return {
