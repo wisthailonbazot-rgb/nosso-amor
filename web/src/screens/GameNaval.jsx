@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import Icon from '../components/Icon'
 import { subscribe, useStore } from '../store'
+import { arteDaNaval } from '../render/naval'
 
 /**
  * Batalha naval — o primeiro jogo de dois, cada um no seu celular.
@@ -55,11 +56,63 @@ function sortearFrota(lado, modelo) {
   return null
 }
 
-function Tabuleiro({ lado, marcas, aoTocar, titulo, ativo }) {
+/**
+ * Um tabuleiro. A `variante` decide o PAPEL dele na tela, não só o tamanho:
+ * `mar` é onde se joga (ocupa o espaço que sobrar), `mini` é a sua frota como
+ * minimapa (só de olhar, nunca recebe toque) e `frota` é o tamanho normal, que
+ * só aparece na hora de esconder os navios — ali não existe segundo tabuleiro
+ * disputando a tela.
+ */
+function Tabuleiro({ lado, marcas, aoTocar, titulo, ativo, variante = 'frota', navios = null }) {
+  const arte = arteDaNaval()
   return (
-    <div className={`naval-tab ${ativo ? 'ativo' : ''}`}>
-      <div className="naval-titulo">{titulo}</div>
-      <div className="naval-grade" style={{ '--lado': lado }}>
+    <div className={`naval-tab naval-${variante} ${ativo ? 'ativo' : ''}`}>
+      {titulo && <div className="naval-titulo">{titulo}</div>}
+      <div
+        className="naval-grade"
+        style={{ '--lado': lado, backgroundImage: `url(${arte.mar})` }}
+      >
+        {/* -------------------------------------------------- os navios
+            Uma camada que é uma grade IDÊNTICA à de baixo, sobreposta. Assim o
+            navio é posicionado com `grid-column: span N` e quem faz a conta do
+            tamanho da casa, do vão e da margem é o navegador — não uma conta
+            de porcentagem escrita aqui, que erraria por alguns pixels em toda
+            largura de tela e desalinharia o navio das casas.
+
+            Ela nunca recebe toque (`pointer-events: none`): quem responde ao
+            dedo continua sendo o `<button>` de cada casa, que é o que faz o
+            toque cair certo e o leitor de tela conseguir ler o tabuleiro.
+
+            Só existe no SEU tabuleiro. A posição da frota do outro não chega
+            neste app (ver `routers/games.py`), então não há o que desenhar lá —
+            e é isso que impede o truque de abrir o painel do navegador e ver
+            onde atirar. */}
+        {navios && navios.length > 0 && (
+          <div className="naval-frota" style={{ '--lado': lado }} aria-hidden="true">
+            {navios.map((n, i) => {
+              const linhas = n.casas.map((c) => c[0])
+              const colunas = n.casas.map((c) => c[1])
+              const l0 = Math.min(...linhas)
+              const c0 = Math.min(...colunas)
+              const deitado = Math.max(...linhas) === l0
+              const fonte = deitado ? arte.navios.h : arte.navios.v
+              const src = fonte[n.tamanho] || fonte[3]
+              const afundado = n.atingidas.length >= n.tamanho
+              return (
+                <img
+                  key={i}
+                  className={`naval-navio ${afundado ? 'afundado' : ''}`}
+                  src={src}
+                  alt=""
+                  style={{
+                    gridColumn: `${c0 + 1} / span ${deitado ? n.tamanho : 1}`,
+                    gridRow: `${l0 + 1} / span ${deitado ? 1 : n.tamanho}`,
+                  }}
+                />
+              )
+            })}
+          </div>
+        )}
         {Array.from({ length: lado * lado }).map((_, i) => {
           const l = Math.floor(i / lado)
           const c = i % lado
@@ -87,13 +140,21 @@ function Tabuleiro({ lado, marcas, aoTocar, titulo, ativo }) {
   )
 }
 
-export default function GameNaval() {
+export default function GameNaval({ telaCheia = false }) {
   const user = useStore((s) => s.user)
   const [partida, setPartida] = useState(null)
   const [carregando, setCarregando] = useState(true)
   const [rascunho, setRascunho] = useState(null) // frota antes de confirmar
   const [aviso, setAviso] = useState(null)
   const [erro, setErro] = useState('')
+  // Quantos Corações o tiro da vitória pagou.
+  //
+  // Isto NÃO está na vista da partida: o valor só existe na resposta do POST do
+  // tiro que venceu (o prêmio é por dia e travado por `dedupe_key`, então a vista
+  // não teria como dizer "quanto" sem inventar). Por isso ele é guardado aqui na
+  // hora em que chega — e quem PERDEU nunca recebe esse campo: a tela de fim dele
+  // fica sem número nenhum, que é o certo, em vez de mostrar um valor chutado.
+  const [premio, setPremio] = useState(null)
   const ocupado = useRef(false)
 
   // A revisão da última vista aplicada. Fica FORA do estado do React de
@@ -177,6 +238,8 @@ export default function GameNaval() {
 
   async function abrir() {
     setErro(''); setCarregando(true)
+    // Revanche: o prêmio da partida anterior não pode aparecer na próxima.
+    setPremio(null); setAviso(null)
     try {
       const r = await api.post('/api/games/naval/nova')
       aplicar(r.partida)
@@ -211,6 +274,7 @@ export default function GameNaval() {
     setErro('')
     try {
       const r = await api.post(`/api/games/naval/${partida.id}/tiro`, { linha, coluna })
+      if (r.venceu) setPremio(typeof r.coins === 'number' ? r.coins : null)
       aplicar(r.partida)
       window.casalSound?.(r.acertou ? 'success' : 'nav')
       setAviso(
@@ -237,27 +301,78 @@ export default function GameNaval() {
 
   if (carregando) return <div className="full-center"><div className="spinner" /></div>
 
+  // -------------------------------------------------------- fim de partida
+  //
+  // Estado PRÓPRIO, e não mais um aviso pequeno em cima do cartão de abrir
+  // partida. Do jeito antigo a tela do jogo simplesmente sumia no tiro final e
+  // voltava pro começo — quem perdeu nem chegava a entender que tinha acabado.
+  if (partida?.status === 'finished') {
+    const ganhei = !!partida.sou_o_vencedor
+    const nome = ganhei
+      ? (user?.name || 'Você')
+      : (partida.parceiro?.name || 'Seu amor')
+    return (
+      <div className={`naval-fim ${ganhei ? 'venci' : 'perdi'}`}>
+        {/* A ILUSTRAÇÃO É GERADA POR IA, e este é o lugar certo pra ela.
+            Aqui a imagem É a arte: não tem estado, não gira, não precisa
+            encaixar em grade nenhuma — o mesmo caso das 14 cartas da memória.
+            (O mar e os navios ficaram de fora por causa disso mesmo, e o motivo
+            está escrito por extenso em `render/naval.js`.)
+            Escolhidas olhando, 3 sementes por assunto, como manda o precedente:
+            uma das opções do troféu veio com uma MÃO de gente na imagem e foi
+            descartada — o mesmo defeito que já tinha aparecido nas cartas. */}
+        <img
+          className="naval-fim-arte"
+          src={ganhei ? '/naval-vitoria.webp' : '/naval-derrota.webp'}
+          alt=""
+          width="256"
+          height="256"
+        />
+        <div className="naval-fim-titulo">{ganhei ? 'Vitória!' : 'Fim de partida'}</div>
+        <div className="naval-fim-nome">{nome} venceu</div>
+        {/* Sem número quando não houve número. Duas situações diferentes:
+            quem PERDEU nunca recebe `coins`, e quem ganhou pode ter recarregado
+            a tela entre o tiro final e este momento — aí o valor se perdeu no
+            caminho e chutar um número seria pior do que não mostrar nenhum.
+            (Toda vitória paga desde 26/08; o que muda é o valor cair depois da
+            primeira do dia.) */}
+        {ganhei && premio ? (
+          <div className="naval-fim-premio">
+            <strong>+{premio}</strong>
+            <span>Corações</span>
+          </div>
+        ) : (
+          <p className="muted small naval-fim-nota">
+            {ganhei
+              ? 'Os Corações já entraram na sua carteira.'
+              : 'A sua frota foi afundada primeiro. Vai que a revanche é sua.'}
+          </p>
+        )}
+        <div className="naval-fim-placar">
+          <span>{partida.afundados_dele}/{modelo.length} afundados</span>
+          <span>{partida.afundados_meus}/{modelo.length} perdidos</span>
+        </div>
+        <button className="btn btn-primary btn-block" onClick={abrir}>
+          <Icon name="game" size={17} /> Revanche
+        </button>
+        {erro && <p className="notice error">{erro}</p>}
+      </div>
+    )
+  }
+
   // ---------------------------------------------------------- sem partida
-  if (!partida || partida.status === 'finished') {
-    const fimDaAnterior = partida?.status === 'finished'
+  if (!partida) {
     return (
       <div className="card center">
         <Icon name="game" size={42} />
         <h2>Batalha naval</h2>
-        {fimDaAnterior && (
-          <p className={`notice ${partida.sou_o_vencedor ? 'ok' : 'warn'}`}>
-            {partida.sou_o_vencedor
-              ? 'Você venceu a última!'
-              : `${partida.parceiro?.name || 'Seu amor'} venceu a última.`}
-          </p>
-        )}
         <p className="muted small">
           Cada um no seu celular. Vocês escondem {modelo.length} navios no
           tabuleiro de {lado}×{lado} e vão atirando um no outro. Quem acerta,
           joga de novo — quem erra, passa a vez.
         </p>
         <button className="btn btn-primary btn-block" onClick={abrir}>
-          <Icon name="game" size={17} /> {fimDaAnterior ? 'Revanche' : 'Abrir partida'}
+          <Icon name="game" size={17} /> Abrir partida
         </button>
         {erro && <p className="notice error">{erro}</p>}
       </div>
@@ -275,12 +390,26 @@ export default function GameNaval() {
       }
     }
     return (
-      <div className="naval">
+      <div className={`naval ${telaCheia ? 'cheia' : ''}`}>
         <p className="muted small">
           Esconda a sua frota: {modelo.join(', ')} casas. Só você vê onde ela
           está — o servidor não manda a sua posição pro outro celular.
         </p>
-        <Tabuleiro lado={lado} marcas={marcas} titulo="Sua frota" ativo />
+        <Tabuleiro
+          lado={lado}
+          marcas={marcas}
+          titulo="Sua frota"
+          ativo
+          variante="mar"
+          navios={(rascunho || []).map((n) => ({
+            tamanho: n.tamanho,
+            atingidas: [],
+            casas: Array.from({ length: n.tamanho }, (_, i) => [
+              n.horizontal ? n.linha : n.linha + i,
+              n.horizontal ? n.coluna + i : n.coluna,
+            ]),
+          }))}
+        />
         <div className="row" style={{ gap: 8 }}>
           <button className="btn btn-ghost btn-block" onClick={sortear}>
             <Icon name="sparkle" size={16} /> {rascunho ? 'Sortear de novo' : 'Posicionar'}
@@ -327,14 +456,19 @@ export default function GameNaval() {
       : { agua: true }
   }
 
+  // Um tabuleiro grande por vez. Os DOIS 8×8 empilhados não cabiam num celular
+  // junto com título, abas e barra de navegação — e era isso que fazia a tela
+  // parecer bugada. O mar do outro é onde se joga, então fica grande; a sua
+  // frota vira um minimapa no rodapé, que é só informação (quantas casas já
+  // levaram tiro) e nunca precisa de toque.
   return (
-    <div className="naval">
+    <div className={`naval naval-jogo ${telaCheia ? 'cheia' : ''}`}>
       <div className={`naval-vez ${partida.sua_vez ? 'minha' : ''}`}>
         {partida.sua_vez
           ? 'Sua vez — escolha uma casa'
           : `Vez de ${partida.parceiro?.name || 'seu amor'}`}
       </div>
-      {aviso && <p className={`notice ${aviso.tipo}`}>{aviso.texto}</p>}
+      {aviso && <p className={`notice ${aviso.tipo} naval-aviso`}>{aviso.texto}</p>}
 
       <Tabuleiro
         lado={lado}
@@ -342,13 +476,22 @@ export default function GameNaval() {
         titulo={`Mar de ${partida.parceiro?.name || 'seu amor'} — ${partida.afundados_dele}/${modelo.length} afundados`}
         aoTocar={partida.sua_vez ? atirar : null}
         ativo={partida.sua_vez}
+        variante="mar"
       />
-      <Tabuleiro
-        lado={lado}
-        marcas={meu}
-        titulo={`Sua frota — ${partida.afundados_meus}/${modelo.length} perdidos`}
-      />
-      <button className="btn-ghost btn-sm" onClick={desistir}>Desistir</button>
+
+      <div className="naval-rodape">
+        <Tabuleiro
+          lado={lado}
+          marcas={meu}
+          variante="mini"
+          navios={partida.meu_tabuleiro.navios}
+        />
+        <div className="naval-rodape-info">
+          <strong>Sua frota</strong>
+          <span className="muted small">{partida.afundados_meus}/{modelo.length} perdidos</span>
+          <button className="btn-ghost btn-sm" onClick={desistir}>Desistir</button>
+        </div>
+      </div>
       {erro && <p className="notice error">{erro}</p>}
     </div>
   )

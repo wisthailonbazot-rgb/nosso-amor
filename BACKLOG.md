@@ -776,3 +776,48 @@ lento pra jogar.
 
 Estado: **640 verificações, 0 falha**; build Vite aprovada; conferido no
 navegador. Causas no HANDOFF, seção 9.13.
+
+### 26/08/2026 — A naval ganha lugar, e o rosto que vazava
+
+Pedido do dono: "cria o desenho das embarcações no jogo, e uma tela finalizando
+mostrando quem ganhou e o presente em moedas também, do jeito que está é
+genérico, e nem tem um final, a tela só some; cria o desenho do mar também;
+além disso encontre um jeito de caber a tela toda do jogo, tá meio bugado pra
+jogar, fica com as informações dos outros jogos lá em cima; use a IA pras
+imagens". No meio da rodada: "a língua do bichinho continua bugada, e tem
+recorte verde na parte de cima".
+
+- **[x]** **Caber na tela.** Não faltava rolagem: eram DOIS tabuleiros 8×8
+      empilhados, e a naval era o único jogo fora do modo tela cheia por causa
+      disso. Agora é um grande por vez — o mar do outro ocupa a tela, a sua
+      frota virou minimapa no rodapé — e ela entra em tela cheia como os outros.
+- **[x]** **Tela de fim de partida.** Quem venceu, o prêmio em Corações em
+      destaque, o placar dos dois lados e a revanche. O valor vem do `coins` da
+      resposta do tiro vencedor e é guardado quando chega; quem perdeu não vê
+      número nenhum, em vez de ver um chutado.
+- **[x]** **O mar e a frota.** Mar em pixel art ladrilhado (emenda conferida) e
+      três navios coloridos, um por tamanho, com proa, cabine e chaminé. Duas
+      rodadas de desenho: a primeira saiu com o mar em listra de zebra e três
+      tubos cinza — genérico do mesmo jeito, e os dois só apareceram olhando.
+- **[x]** **A IA nas imagens** — na tela de fim, que é onde imagem funciona
+      (ilustração pura, sem estado e sem grade). Os navios eu tentei, 3 sementes
+      por assunto como manda o precedente das cartas: o modelo gratuito devolveu
+      navio de guerra cinza EM PERSPECTIVA nas seis, e navio em perspectiva não
+      encaixa numa grade vista de cima. Uma das opções do troféu veio com mão de
+      gente e foi descartada.
+- **[x]** **O recorte verde.** O chão da cena era 0,84 cravado e o bichinho
+      passou a pisar entre 0,60 e 0,98 — dois números pro mesmo fato, de novo.
+      Ele andava POR CIMA da grama e a borda do campo cortava a tela.
+- **[x]** **A "língua bugada" era o ROSTO vazando.** Bochecha e nariz eram
+      ancorados numa fração fixa da meia-largura da cabeça, que é uma elipse:
+      perto da borda ela já estreitou. No coelho a bochecha direita saía 5,7 px
+      pra FORA do contorno e o nariz 2,6 px — a mancha rosa que ele via na
+      lateral da cara. É o mesmo defeito dos olhos da 9.11, que não tinha sido
+      corrigido nestas três peças.
+      - Junto: a **coleira** estava em 1,38, que é peito em bicho sem pescoço
+        (coelho, capivara) — virava um crachá na barriga. Foi pra 1,14.
+- **[x]** **Bancada: aba Naval** (proporção dos navios, emenda do mar, desenho
+      vazio) e o smoke conferindo que as duas ilustrações existem no disco.
+
+Estado: **642 verificações, 0 falha**; build Vite aprovada. Causas no HANDOFF,
+seção 9.14.

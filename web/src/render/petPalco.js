@@ -65,6 +65,28 @@ const Z_VIDRO = 1
 const Z_FUNDO = 0.18
 
 /**
+ * ONDE FICA O CHÃO, em fração da altura da tela.
+ *
+ * Estes dois números são exportados porque **a cena e o bichinho têm que usar
+ * os mesmos**, e é exatamente aí que estava o "recorte verde na parte de cima"
+ * que o dono viu.
+ *
+ * A cena era pintada com a linha do chão em 0,84 da altura, cravada no
+ * `PetCanvas`, enquanto o bichinho passou a pisar entre 0,60 e 0,98 conforme a
+ * profundidade. Ou seja: dois números para o mesmo fato — de novo. O resultado
+ * é que ele passava a maior parte do passeio ANDANDO NO AR, acima da faixa de
+ * grama, com a borda reta do campo cortando a tela no meio como um recorte
+ * colado. Não era a grama que estava errada: era o chão dela não ser o mesmo
+ * chão em que ele pisa.
+ *
+ * `FUNDO` é onde a grama COMEÇA (o ponto mais longe em que ele pode pisar) e
+ * `PERTO` é a base da tela. Assim, ande ele onde andar, está sempre em cima da
+ * grama — e a faixa de campo é grande o bastante pra caber o passeio inteiro.
+ */
+export const CHAO_FUNDO = 0.6
+export const CHAO_PERTO = 0.98
+
+/**
  * Cria o cérebro de um bichinho no palco.
  *
  * Ele não sabe desenhar nada: devolve números. Quem desenha é o `PetCanvas`.
@@ -244,8 +266,8 @@ export function enquadrar(pos, { w, h, escalaBase }) {
   // 1,36 é escolhido pra dar ~0,62× no fundo e ~1,42× no vidro. Mais que isso
   // e a cabeça sai do quadro antes de ele chegar a lamber.
   const escala = escalaBase * (1.36 / distancia)
-  const chaoLonge = h * 0.6
-  const chaoPerto = h * 0.98
+  const chaoLonge = h * CHAO_FUNDO
+  const chaoPerto = h * CHAO_PERTO
   // O chão acompanha a mesma curva do tamanho, e não uma reta: se os dois não
   // andarem juntos, o bicho parece deslizar pra cima enquanto cresce.
   const t = (D_FUNDO / distancia - 1) / (D_FUNDO / D_VIDRO - 1)

@@ -265,7 +265,7 @@ export default function Games() {
       )
     }
     if (jogo === 'memoria') return <GameMemoria telaCheia={cheia} />
-    return <GameNaval />
+    return <GameNaval telaCheia={cheia} />
   }
 
   return (
@@ -276,14 +276,13 @@ export default function Games() {
         ) : (
           <h1 className="screen-title">{titulos[jogo]}</h1>
         )}
-        {/* A batalha naval nao entra em tela cheia: ela tem DOIS tabuleiros que
-            precisam rolar, e a sobreposicao trava a rolagem da pagina. */}
-        {jogo !== 'naval' && (
-          <button className="btn btn-sm btn-ghost" onClick={alternarCheia}>
-            <Icon name={cheia ? 'check' : 'game'} size={15} />
-            {cheia ? 'Sair' : 'Tela cheia'}
-          </button>
-        )}
+        {/* A naval voltou pra tela cheia como os outros: agora e UM tabuleiro
+            grande por vez (o mar do outro) com a sua frota de minimapa, entao
+            ela cabe na sobreposicao e nao depende mais de rolar a pagina. */}
+        <button className="btn btn-sm btn-ghost" onClick={alternarCheia}>
+          <Icon name={cheia ? 'check' : 'game'} size={15} />
+          {cheia ? 'Sair' : 'Tela cheia'}
+        </button>
       </div>
 
       {!cheia && (

@@ -2016,8 +2016,19 @@ button:disabled,
 .memo-pos { font: 800 15px 'Baloo 2', sans-serif; color: var(--rose); min-width: 22px; }
 .memo-placar .muted { margin-left: auto; font-size: 12px; }
 
-/* ------------------------------------------------------------ batalha naval */
-.naval { display: flex; flex-direction: column; gap: 12px; }
+/* ------------------------------------------------------------ batalha naval
+   A regra de layout aqui e UM TABULEIRO GRANDE POR VEZ. Os dois 8x8 empilhados
+   nao cabiam num celular junto com titulo, abas e barra de navegacao — sobrava
+   rolagem no meio da partida e o dedo errava a casa. O mar do adversario (onde
+   se joga) ocupa o espaco que sobrar; a sua frota vira minimapa no rodape.
+
+   O DESENHO das casas mora todo nas classes abaixo (`.naval-casa` e os quatro
+   estados) e no fundo `.naval-grade`, de proposito: a arte entra trocando estas
+   regras, sem encostar na tela. */
+.naval { display: flex; flex-direction: column; gap: 10px; }
+/* Em tela cheia o casco ja tem altura definida (`.jogo-cheio` e fixo), e e isso
+   que faz o `max-height` do tabuleiro ter contra o que medir. */
+.naval.cheia { flex: 1 1 auto; min-height: 0; }
 .naval-vez {
   padding: 9px 12px;
   border: 2px solid var(--ink);
@@ -2027,32 +2038,181 @@ button:disabled,
   text-align: center;
 }
 .naval-vez.minha { background: var(--rose); color: #fff; }
-.naval-tab { }
+.naval-aviso { margin: 0; }
 .naval-titulo { font: 700 12px 'Baloo 2', sans-serif; color: var(--muted); margin-bottom: 5px; }
+
+/* O fundo do mar: o ladrilho desenhado em `render/naval.js`, repetido.
+
+   `image-rendering: pixelated` e o tamanho em pixel INTEIRO andam juntos: o
+   ladrilho tem 48px de arte, e deixar o navegador reamostrar ele em fracao de
+   pixel devolve a franjinha cinza que o motor de pixel existe pra evitar. */
 .naval-grade {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(var(--lado), 1fr);
   gap: 3px;
   padding: 5px;
   border: 2px solid var(--ink);
   border-radius: 12px 9px 13px 10px;
-  background: #bfe0ef;
+  background-color: #5a9fc4;
+  background-repeat: repeat;
+  background-size: 48px 48px;
+  image-rendering: pixelated;
+  aspect-ratio: 1;
+  width: 100%;
   max-width: 360px;
 }
+
+/* A camada dos navios: a MESMA grade, por cima, sem receber toque. Ver o
+   comentario no `GameNaval.jsx` — e o navegador quem faz a conta do encaixe. */
+.naval-frota {
+  position: absolute;
+  /* HERDA o vao e a margem em vez de repetir os numeros.
+     Copiados na mao (inset:5px, gap:3px), eles batiam no tabuleiro grande e
+     erravam no minimapa, que usa padding:3px e gap:1px — os navios saiam 1 a 2
+     pixels fora das casas. Um elemento absoluto tem como referencia o padding
+     box do pai, entao `inset:0` mais o mesmo padding poe as duas grades
+     exatamente uma sobre a outra, seja qual for a variante. */
+  inset: 0;
+  box-sizing: border-box;
+  padding: inherit;
+  display: grid;
+  grid-template-columns: repeat(var(--lado), 1fr);
+  grid-template-rows: repeat(var(--lado), 1fr);
+  gap: inherit;
+  pointer-events: none;
+  z-index: 2;
+}
+.naval-navio {
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 1px 0 rgba(51, 32, 58, .25));
+}
+/* Navio afundado sai de cena sem sumir: apagado e cinza, porque ele continua
+   ocupando aquelas casas e some-lo deixaria um buraco no seu proprio mapa. */
+.naval-navio.afundado { opacity: .55; filter: grayscale(1) brightness(.75); }
+/* A casa por atirar fica TRANSPARENTE: o mar desenhado embaixo e que aparece.
+   Antes ela era um retangulo branco por cima do fundo, e com isso o fundo do
+   tabuleiro nunca era visto — pintar o mar sem mexer aqui nao teria mudado
+   nada na tela. O contorno leve continua, porque e ele que faz a grade ser
+   lida como grade e o dedo saber onde toca. */
 .naval-casa {
   aspect-ratio: 1;
+  min-width: 0;
   padding: 0;
-  border: 1px solid rgba(51,32,58,.28);
+  border: 1px solid rgba(255,255,255,.32);
   border-radius: 4px;
-  background: rgba(255,255,255,.45);
+  background: rgba(255,255,255,.10);
+  position: relative;
+  z-index: 3;
 }
+.naval-casa:disabled { cursor: default; }
 /* O navio só aparece no SEU tabuleiro — no do outro esta classe nunca é
    aplicada, porque a posição dele não chega aqui (ver `routers/games.py`). */
-.naval-casa.navio { background: #7d8ca3; border-color: var(--ink); }
-.naval-casa.agua { background: #5a93b8; box-shadow: inset 0 0 0 3px rgba(255,255,255,.5); }
-.naval-casa.acerto { background: #e8879b; border-color: var(--ink); }
-.naval-casa.afundado { background: #a2495a; }
+/* A casa com navio nao pinta mais nada: quem mostra o navio agora e o desenho
+   da camada de cima. Ela so marca a borda, pra a casa continuar clicavel na
+   fase de posicionar. */
+.naval-casa.navio { background: transparent; border-color: rgba(51,32,58,.45); }
+/* Agua: o circulo branco e a marca classica de "atirei aqui e nao tinha nada".
+   Ele NAO tapa a casa inteira de proposito — o mar continua aparecendo em volta. */
+.naval-casa.agua {
+  background: radial-gradient(circle at 50% 50%, rgba(255,255,255,.92) 0 26%, rgba(255,255,255,.18) 27% 42%, transparent 43%);
+  border-color: rgba(255,255,255,.45);
+}
+/* Acerto: mancha quente por cima de tudo, inclusive do navio. */
+.naval-casa.acerto {
+  background: radial-gradient(circle at 50% 45%, #ffd27a 0 22%, #f0803f 23% 48%, #d64b52 49% 72%, transparent 73%);
+  border-color: var(--ink);
+}
+.naval-casa.afundado { background: radial-gradient(circle at 50% 45%, #7a2f3c 0 62%, transparent 63%); }
 .naval-tab.ativo .naval-grade { box-shadow: 0 0 0 3px var(--rose); }
+
+/* O tabuleiro onde se joga. Ele encolhe pelo lado que faltar: numa tela baixa
+   quem manda e a altura (`max-height`), numa estreita e a largura — sempre
+   quadrado, e sempre inteiro na tela, sem rolagem. */
+.naval-mar {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.naval:not(.cheia) .naval-mar .naval-grade { width: 100%; max-width: 360px; }
+/* Fora da tela cheia a pagina tem altura livre e `height: 100%` nao teria contra
+   o que medir (viraria largura minima); por isso o encolhimento pela ALTURA vale
+   so no modo cheio, onde o casco e fixo. */
+.naval.cheia .naval-mar .naval-grade {
+  min-height: 0;
+  max-height: 100%;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+}
+
+/* O minimapa da sua frota: informacao, nunca alvo de toque (as casas vao
+   desabilitadas pela tela). */
+.naval-rodape { display: flex; align-items: center; gap: 12px; }
+.naval-mini { flex: 0 0 auto; }
+.naval-mini .naval-grade {
+  width: 92px;
+  max-width: 92px;
+  gap: 1px;
+  padding: 3px;
+  border-width: 1.5px;
+  border-radius: 8px 6px 9px 7px;
+}
+.naval-mini .naval-casa { border-radius: 2px; border-width: 0; }
+.naval-rodape-info { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.naval-rodape-info strong { font: 800 14px 'Baloo 2', sans-serif; }
+
+/* ------------------------------------------------------ fim de partida
+   Tela propria, e nao um aviso no cartao de abrir partida: antes o jogo
+   simplesmente sumia no tiro final e ninguem via quem tinha ganhado. */
+.naval-fim {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 22px 16px 16px;
+  border: 2px solid var(--ink);
+  border-radius: 18px 14px 20px 15px;
+  background: var(--paper);
+  text-align: center;
+}
+/* A ilustracao do fim de partida. `width/height` no HTML e o tamanho aqui
+   andam juntos: sem a medida no HTML a tela PULA quando a imagem carrega, e
+   pular bem na hora em que a pessoa esta lendo quem ganhou e quanto ganhou e
+   justamente o pior momento pra isso acontecer. */
+.naval-fim-arte {
+  width: 148px;
+  height: 148px;
+  object-fit: contain;
+  margin-bottom: 2px;
+  filter: drop-shadow(0 3px 6px rgba(51, 32, 58, .18));
+}
+.naval-fim-titulo { font: 800 24px 'Baloo 2', sans-serif; }
+.naval-fim-nome { font: 700 15px 'Baloo 2', sans-serif; color: var(--muted); }
+.naval-fim-premio {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 18px;
+  border: 2px solid var(--ink);
+  border-radius: 14px 10px 15px 11px;
+  background: var(--rose);
+  color: #fff;
+}
+.naval-fim-premio strong { font: 800 30px 'Baloo 2', sans-serif; }
+.naval-fim-premio span { font: 700 13px 'Baloo 2', sans-serif; }
+.naval-fim-nota { margin: 0; max-width: 30ch; }
+.naval-fim-placar {
+  display: flex;
+  gap: 14px;
+  font: 700 12px 'Baloo 2', sans-serif;
+  color: var(--muted);
+}
 
 /* O rotulo da peca na bancada. Existe porque a aba de figurinhas deixou de usar
    `Tile` (que ja trazia legenda) pra mostrar a figurinha COMO O CHAT MOSTRA. */

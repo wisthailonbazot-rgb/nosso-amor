@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { Painter, mix } from './pixel'
 import { desenharCena, desenharFrente, desenharLambida, periodoDe } from './petCena'
-import { criarPalco, enquadrar } from './petPalco'
+import { CHAO_FUNDO, criarPalco, enquadrar } from './petPalco'
 import { cenaDoItem } from './petProps'
 import {
   OUT, clipeDe, crescimentoDe, planoDe, poseEm, desenharRig,
@@ -219,8 +219,21 @@ function vestir(p, pet, m, cores, plano) {
     // 1,02 e a BORDA de baixo da cabeca — e a borda de baixo de uma cabeca
     // grande e ainda a bochecha. Na tela pequena isso passava; desenhado
     // grande, a coleira aparecia atravessada no focinho de todas as especies.
-    // 1,38 poe ela abaixo do queixo, no pescoco, que e onde coleira fica.
-    const centro = m.naCabeca(-0.06, 1.38)
+    // 1,38 poe ela abaixo do queixo... no bicho que TEM queixo.
+    //
+    // 1,38 da meia-altura da cabeca sao 0,38 de raio ABAIXO da borda dela. Num
+    // cachorro, que tem pescoco, isso cai no pescoco mesmo. No coelho e na
+    // capivara — os dois que "praticamente nao tem pescoco", como ja estava
+    // anotado aqui em cima — a cabeca encosta no corpo, e 0,38 de raio abaixo
+    // da borda ja e PEITO. A coleira virava um cracha pendurado no meio da
+    // barriga, e era assim nas seis especies vistas grandes.
+    //
+    // 1,14 e a borda da cabeca mais uma folga fina: encosta no queixo em quem
+    // tem pescoco e continua no lugar certo em quem nao tem. O erro de 1,02
+    // (bochecha) e o de 1,38 (peito) sao os dois extremos da mesma medida, e o
+    // valor bom fica bem mais perto do primeiro do que a correcao anterior
+    // supos.
+    const centro = m.naCabeca(-0.06, 1.14)
     const o = m.naCabeca(0, 0)
     const b = m.naCabeca(0, 1)
     const dc = Math.hypot(b[0] - o[0], b[1] - o[1]) || 1
@@ -563,7 +576,19 @@ export default function PetCanvas({ pet, onPoke, arrastando = false }) {
         acaoPalco: pos.acao,
       }
       const periodo = periodoDe(new Date().getHours())
-      desenharCena(painter, { t, chao: painter.h * 0.84, periodo, triste: !!pet.sick })
+      // O CHAO DA CENA E O MESMO EM QUE ELE PISA.
+      //
+      // Estava cravado em 0,84 da altura aqui, enquanto o bichinho passou a
+      // pisar entre 0,60 e 0,98 conforme a profundidade — e por isso ele andava
+      // POR CIMA da grama a maior parte do tempo, com a borda reta do campo
+      // atravessando a tela. Agora os dois saem da mesma constante; ver o
+      // comentario dela em `petPalco.js`.
+      desenharCena(painter, {
+        t,
+        chao: painter.h * CHAO_FUNDO,
+        periodo,
+        triste: !!pet.sick,
+      })
 
       // ESPELHAR pra ele virar de lado.
       //

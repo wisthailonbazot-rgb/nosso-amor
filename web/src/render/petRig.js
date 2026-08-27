@@ -1058,6 +1058,41 @@ export function desenharRig(p, plano, q, cores, extra = {}) {
     ]
   }
 
+  /**
+   * Como `naCabeca`, mas GARANTINDO que uma peça de raio `rx` caiba no rosto.
+   *
+   * A cabeça é uma ELIPSE, e é isso que a versão anterior de cada peça do rosto
+   * esquecia: cada uma era ancorada numa fração fixa da meia-largura (o nariz em
+   * 0,78, a bochecha direita em 0,80) com o raio saindo de outra conta, que não
+   * sabia da primeira. Enquanto a peça fica perto do meio da altura isso passa;
+   * perto da borda de cima ou de baixo, a elipse já estreitou e a meia-largura
+   * real ali é bem menor que `cabecaL / 2`.
+   *
+   * Medido no coelho grande — o pior caso, porque é quem tem a cabeça menor em
+   * relação ao corpo: a bochecha direita passava **5,7 px** da borda e o nariz
+   * **2,6 px**. Na tela isso lia como uma mancha rosa grudada na lateral da
+   * cara, do lado de fora do contorno, e foi o que o dono viu e chamou de
+   * "a língua continua bugada" — não era a língua, era o rosto vazando.
+   *
+   * Aqui a meia-largura é calculada NA ALTURA em que a peça vai ficar, e o `x`
+   * recua o quanto for preciso. Vale pra qualquer espécie e qualquer escala.
+   */
+  const noRosto = (fx, fy, rx = 0) => {
+    const ry = (fy * plano.cabecaA) / 2
+    const a = plano.cabecaL / 2
+    const b = plano.cabecaA / 2
+    // Meia-largura da elipse naquela altura. O `max` evita raiz de negativo
+    // quando a peça é pedida acima do topo da cabeça.
+    const meia = a * Math.sqrt(Math.max(0, 1 - (ry / b) ** 2))
+    const limite = Math.max(0, meia - rx)
+    const bruto = (fx * plano.cabecaL) / 2
+    const x = Math.sign(bruto) * Math.min(Math.abs(bruto), limite)
+    return [
+      cabecaCX + x * Math.cos(ca) - ry * Math.sin(ca),
+      cabecaCY + x * Math.sin(ca) + ry * Math.cos(ca),
+    ]
+  }
+
   // ----------------------------------------------------------- sombra
   // Encolhe conforme ele sobe. É o único jeito de a altura ser LEGÍVEL: sem
   // sombra que responde, pulo e voo viram o sprite deslizando pra cima.
@@ -1458,31 +1493,68 @@ export function desenharRig(p, plano, q, cores, extra = {}) {
 
   // focinheira: o narizinho fecha a leitura de mamífero
   if (!plano.bico) {
-    const [nx, ny] = naCabeca(0.78, 0.24)
-    p.fillPoly(elipse(nx, ny, 2.4 * e, 1.7 * e, 0, 10), OUT)
-    p.rect(nx - 1 * e, ny - 1 * e, Math.max(1, e), Math.max(1, e), mix(principal, '#fffaf2', 0.5))
+    const narizRx = Math.min(2.4 * e, plano.cabecaL * 0.11)
+    const [nx, ny] = noRosto(0.78, 0.24, narizRx)
+    p.fillPoly(elipse(nx, ny, narizRx, Math.min(1.7 * e, plano.cabecaA * 0.08), 0, 10), OUT)
+    p.rect(nx - narizRx * 0.42, ny - narizRx * 0.42, Math.max(1, e), Math.max(1, e),
+      mix(principal, '#fffaf2', 0.5))
   }
 
-  const [bmx, bmy] = naCabeca(0.62, 0.62)
+  // ---------------------------------------------------------------- a boca
+  //
+  // A MEDIDA SAI DA CABECA, e nao da escala solta. Este e o mesmo defeito que
+  // os olhos tinham antes da 9.11 — "ficavam em duas fracoes fixas da cabeca
+  // enquanto o raio saia de outra conta, que nao sabia da primeira" — e ele
+  // sobreviveu ali na boca porque a lista daquela rodada (orelha, chifre, bico,
+  // cauda, pata, asa, espinho, marca, sombra) nao incluiu ela.
+  //
+  // O estrago aparecia no COELHO, que e quem tem a cabeca menor em relacao ao
+  // corpo (as orelhas comem o resto do tamanho): a boca aberta, com raio de
+  // 3,1 unidades de escala, ficava maior do que o espaco que sobrava do
+  // focinho ate a borda — e, ancorada em 0,62 da meia-largura, ela VAZAVA PRA
+  // FORA do rosto. Na tela isso lia como uma bolha rosa grudada na lateral da
+  // cara, e foi isso que o dono chamou de "a lingua continua bugada": a lingua
+  // que ele via nao era a da lambida no vidro, era a boca aberta escapando do
+  // rosto durante as animacoes de comer, brincar e lamber-se.
+  //
+  // Agora o raio tem TETO pela cabeca, e a ancora recua o quanto for preciso
+  // pra boca inteira caber. Nao ha como ela sair do rosto, cresca a escala o
+  // quanto crescer.
+  const bocaRx = Math.min(3.1 * e, plano.cabecaL * 0.15)
+  const bocaRy = Math.min(2.5 * e, plano.cabecaA * 0.13)
+  const [bmx, bmy] = noRosto(0.62, 0.58, bocaRx)
+  // O traco tambem: uma boca fechada de 3,6 unidades de cada lado estourava
+  // pelo mesmo motivo, so que sem cor pra chamar atencao.
+  const bw = Math.min(3.6 * e, plano.cabecaL * 0.17)
+
   if (q.boca === 'aberta') {
-    p.fillPoly(elipse(bmx, bmy + 1 * e, 3.1 * e, 2.5 * e, 0, 10), '#a2495a')
-    p.fillPoly(elipse(bmx + 0.5 * e, bmy + 2 * e, 1.7 * e, 1.1 * e, 0, 8), '#e8879b')
+    p.fillPoly(elipse(bmx, bmy + bocaRy * 0.4, bocaRx, bocaRy, 0, 10), '#a2495a')
+    // A lingua: sempre menor que a boca e presa ao fundo dela, pra nunca
+    // aparecer sozinha se a boca encolher.
+    p.fillPoly(
+      elipse(bmx + bocaRx * 0.16, bmy + bocaRy * 0.8, bocaRx * 0.55, bocaRy * 0.44, 0, 8),
+      '#e8879b'
+    )
   } else if (q.boca === 'triste') {
-    grossa(p, bmx - 3.5 * e, bmy + 1.6 * e, bmx, bmy - 0.4 * e, traco)
-    grossa(p, bmx, bmy - 0.4 * e, bmx + 3.5 * e, bmy + 1.6 * e, traco)
+    grossa(p, bmx - bw, bmy + 1.6 * e, bmx, bmy - 0.4 * e, traco)
+    grossa(p, bmx, bmy - 0.4 * e, bmx + bw, bmy + 1.6 * e, traco)
   } else if (q.boca === 'reta') {
-    p.rect(bmx - 3 * e, bmy, 6 * e, Math.max(1, traco), OUT)
+    p.rect(bmx - bw * 0.85, bmy, bw * 1.7, Math.max(1, traco), OUT)
   } else {
-    grossa(p, bmx - 3.6 * e, bmy - 0.6 * e, bmx - 1 * e, bmy + 1.4 * e, traco)
-    grossa(p, bmx - 1 * e, bmy + 1.4 * e, bmx + 1.6 * e, bmy - 1 * e, traco)
-    grossa(p, bmx + 1.6 * e, bmy - 1 * e, bmx + 3.8 * e, bmy + 0.4 * e, traco)
+    grossa(p, bmx - bw, bmy - 0.6 * e, bmx - bw * 0.28, bmy + 1.4 * e, traco)
+    grossa(p, bmx - bw * 0.28, bmy + 1.4 * e, bmx + bw * 0.44, bmy - 1 * e, traco)
+    grossa(p, bmx + bw * 0.44, bmy - 1 * e, bmx + bw, bmy + 0.4 * e, traco)
   }
 
   if (extra.bochechas) {
-    const [cxE, cyE] = naCabeca(0.02, 0.42)
-    const [cxD, cyD] = naCabeca(0.8, 0.46)
-    p.fillPoly(elipse(cxE, cyE, 2.5 * e, 1.5 * e, 0, 8), '#e8879b')
-    p.fillPoly(elipse(cxD, cyD, 2.3 * e, 1.4 * e, 0, 8), '#e8879b')
+    // A da direita era a pior: em 0,80 da meia-largura, numa altura em que a
+    // elipse já estreitou, ela saía inteira pra fora do rosto.
+    const rE = Math.min(2.5 * e, plano.cabecaL * 0.12)
+    const rD = Math.min(2.3 * e, plano.cabecaL * 0.11)
+    const [cxE, cyE] = noRosto(0.02, 0.42, rE)
+    const [cxD, cyD] = noRosto(0.8, 0.46, rD)
+    p.fillPoly(elipse(cxE, cyE, rE, rE * 0.6, 0, 8), '#e8879b')
+    p.fillPoly(elipse(cxD, cyD, rD, rD * 0.61, 0, 8), '#e8879b')
   }
   if (plano.marca === 'bigode') {
     const [wx, wy] = naCabeca(0.72, 0.36)

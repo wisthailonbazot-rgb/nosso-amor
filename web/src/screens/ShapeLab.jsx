@@ -25,6 +25,7 @@ import { CODIGOS_ESPECIE, NOMES_CLIPES, clipeDe, planoDe } from '../render/petRi
 import { VOZES, nomeDaVoz, vocalizar } from '../petVoz'
 import { criarPalco, enquadrar } from '../render/petPalco'
 import { desenharLambida } from '../render/petCena'
+import { ladrilhoDoMar, navio, navioEmPe } from '../render/naval'
 
 // As seis espécies, os três estágios e os humores que MUDAM o desenho.
 // Estão aqui porque o bichinho é desenhado por espécie: um `if` esquecido numa
@@ -517,6 +518,178 @@ function AbaPasseio() {
   )
 }
 
+/**
+ * A arte da batalha naval: o mar e os navios.
+ *
+ * Mesma regra das outras abas — peça que não desenha nada aparece MARCADA em
+ * vermelho. Aqui isso importa mais que o normal por um motivo específico: estes
+ * desenhos viram `data:` URL e entram pelo CSS como imagem de fundo. Quando um
+ * `background-image` aponta pra uma imagem vazia, o navegador não reclama de
+ * nada: a casa simplesmente fica sem fundo, e "sem fundo" é indistinguível de
+ * "ainda não implementei". Um navio que não desenhou seria um navio invisível
+ * no seu próprio tabuleiro.
+ *
+ * Duas conferências além de "pintou alguma coisa":
+ *
+ *  - **a proporção**, que é o que faz o navio encaixar na grade. Um navio de 3
+ *    casas TEM que sair com 3× mais largura que altura; se essa conta escorregar,
+ *    ele fica torto em cima das casas e não há CSS que conserte;
+ *  - **a emenda do ladrilho do mar**, que se repete. Uma onda que termina no
+ *    meio da borda direita reaparece cortada na esquerda e vira uma listra
+ *    visível atravessando o tabuleiro inteiro. Aqui a coluna da esquerda é
+ *    comparada com a da direita (e o topo com a base): quanto mais parecidas,
+ *    mais invisível a emenda.
+ */
+function AbaNaval() {
+  const [r, setR] = useState(null)
+
+  useEffect(() => {
+    const medir = (url) =>
+      new Promise((resolve) => {
+        const img = new Image()
+        img.onload = () => {
+          const c = document.createElement('canvas')
+          c.width = img.width
+          c.height = img.height
+          const ctx = c.getContext('2d')
+          ctx.imageSmoothingEnabled = false
+          ctx.drawImage(img, 0, 0)
+          const d = ctx.getImageData(0, 0, c.width, c.height).data
+          let pintados = 0
+          for (let i = 3; i < d.length; i += 4) if (d[i] > 0) pintados++
+          resolve({ w: img.width, h: img.height, pintados, d, url })
+        }
+        img.onerror = () => resolve({ w: 0, h: 0, pintados: 0, d: null, url })
+        img.src = url
+      })
+
+    Promise.all([
+      medir(ladrilhoDoMar(48)),
+      ...[2, 3, 4].map((n) => medir(navio(n))),
+      ...[2, 3, 4].map((n) => medir(navioEmPe(n))),
+    ]).then(([mar, h2, h3, h4, v2, v3, v4]) => {
+      // A emenda: diferença média de cor entre a primeira e a última coluna, e
+      // entre a primeira e a última linha. 0 seria emenda perfeita.
+      let emenda = 999
+      if (mar.d) {
+        const { w, h, d } = mar
+        const px = (x, y) => {
+          const i = (y * w + x) * 4
+          return [d[i], d[i + 1], d[i + 2]]
+        }
+        let soma = 0
+        let n = 0
+        for (let y = 0; y < h; y++) {
+          const a = px(0, y)
+          const b = px(w - 1, y)
+          soma += (Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2])) / 3
+          n++
+        }
+        for (let x = 0; x < w; x++) {
+          const a = px(x, 0)
+          const b = px(x, h - 1)
+          soma += (Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2])) / 3
+          n++
+        }
+        emenda = +(soma / n).toFixed(1)
+      }
+      const navios = [
+        { nome: 'deitado 2', casas: 2, m: h2, deitado: true },
+        { nome: 'deitado 3', casas: 3, m: h3, deitado: true },
+        { nome: 'deitado 4', casas: 4, m: h4, deitado: true },
+        { nome: 'em pé 2', casas: 2, m: v2, deitado: false },
+        { nome: 'em pé 3', casas: 3, m: v3, deitado: false },
+        { nome: 'em pé 4', casas: 4, m: v4, deitado: false },
+      ].map((n) => {
+        const razao = n.deitado ? n.m.w / Math.max(1, n.m.h) : n.m.h / Math.max(1, n.m.w)
+        return { ...n, razao: +razao.toFixed(2), ok: Math.abs(razao - n.casas) < 0.02 && n.m.pintados > 0 }
+      })
+      setR({ mar, emenda, navios })
+    })
+  }, [])
+
+  if (!r) return <p className="muted small">Desenhando o mar e a frota…</p>
+
+  const vazios = [
+    ...(r.mar.pintados === 0 ? ['o mar'] : []),
+    ...r.navios.filter((n) => n.m.pintados === 0).map((n) => n.nome),
+  ]
+  const tortos = r.navios.filter((n) => n.m.pintados > 0 && !n.ok)
+  // 18 é folga: o ladrilho tem faixas de profundidade, então as bordas nunca
+  // são idênticas — o que não pode é haver um degrau de cor entre elas.
+  const emendaOk = r.emenda <= 18
+
+  return (
+    <>
+      <p className="muted small">
+        O mar e os navios da batalha naval, desenhados pelo mesmo motor de pixel
+        do resto do app. O que se confere aqui é o que o CSS não teria como
+        acusar: desenho vazio, proporção errada e a emenda do ladrilho.
+      </p>
+      {vazios.length > 0 && (
+        <p className="notice error">Não desenhou nada: {vazios.join(', ')}</p>
+      )}
+      {tortos.length > 0 && (
+        <p className="notice error">
+          Proporção errada (não encaixa na grade):{' '}
+          {tortos.map((n) => `${n.nome} saiu ${n.razao}× em vez de ${n.casas}×`).join(' · ')}
+        </p>
+      )}
+      {emendaOk ? (
+        <p className="notice ok">
+          A emenda do mar é invisível: diferença de <strong>{r.emenda}</strong> entre
+          as bordas opostas (o limite é 18).
+        </p>
+      ) : (
+        <p className="notice error">
+          O ladrilho do mar não fecha: diferença de {r.emenda} entre as bordas.
+          Isso vira uma listra atravessando o tabuleiro.
+        </p>
+      )}
+      <div className="lab-grid">
+        <div className="lab-tile">
+          <img
+            src={r.mar.url}
+            alt="mar"
+            style={{ width: 96, height: 96, imageRendering: 'pixelated' }}
+          />
+          <span className="lab-tile-label">
+            mar 1× · {r.mar.pintados} px
+          </span>
+        </div>
+        <div className="lab-tile">
+          <div
+            style={{
+              width: 96,
+              height: 96,
+              backgroundImage: `url(${r.mar.url})`,
+              backgroundSize: '48px 48px',
+              imageRendering: 'pixelated',
+            }}
+          />
+          <span className="lab-tile-label">repetido 2×2 (olhe a emenda)</span>
+        </div>
+        {r.navios.map((n) => (
+          <div className="lab-tile" key={n.nome}>
+            <img
+              src={n.m.url}
+              alt={n.nome}
+              style={{
+                width: n.deitado ? 120 : 40,
+                height: n.deitado ? 40 : 120,
+                imageRendering: 'pixelated',
+              }}
+            />
+            <span className="lab-tile-label">
+              {n.nome} · {n.razao}× · {n.m.pintados} px
+            </span>
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
+
 function Tile({ label, width, height, paint, animate = false }) {
   const ref = useRef(null)
   const [painted, setPainted] = useState(null)
@@ -584,6 +757,7 @@ export default function ShapeLab() {
     { key: 'escala', name: `Escala grande (${LAB_SPECIES.length})` },
     { key: 'vozes', name: `Vozes (${Object.keys(VOZES).length})` },
     { key: 'passeio', name: 'Passeio' },
+    { key: 'naval', name: 'Naval' },
     { key: 'itens', name: `Itens (${PET_ICON_CODES.length})` },
     { key: 'figurinhas', name: `Figurinhas (${STICKER_CODES.length})` },
     { key: 'cores', name: 'Acabamentos' },
@@ -967,6 +1141,7 @@ export default function ShapeLab() {
 
       {aba === 'vozes' && <AbaVozes />}
       {aba === 'passeio' && <AbaPasseio />}
+      {aba === 'naval' && <AbaNaval />}
 
       {aba === 'itens' && (
         <div className="lab-grid">

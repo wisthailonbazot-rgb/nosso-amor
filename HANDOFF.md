@@ -1790,3 +1790,148 @@ notificações no iPhone são correções que só o celular de vocês fecha, e a
 agora dizem na tela o que deu errado se ainda der.
 
 **Próximo passo:** continua sendo a seção 8.1 — mapa navegável do bairro.
+
+### 9.14 A batalha naval ganha lugar, e o rosto que vazava (26/08/2026)
+
+Pedido do dono, no mesmo dia: desenhar as embarcações e o mar ("do jeito que
+está é genérico"), uma tela de fim mostrando quem ganhou e o prêmio em moedas
+("nem tem um final, a tela só some"), fazer o jogo caber na tela ("fica com as
+informações dos outros jogos lá em cima") — e, no meio disso, que a língua do
+bichinho continuava bugada e havia "um recorte verde na parte de cima".
+
+**1. Não cabia porque eram dois tabuleiros, não porque faltava rolagem.**
+
+A naval era o ÚNICO jogo fora do modo tela cheia, e havia um comentário no
+`Games.jsx` explicando o motivo: "são DOIS tabuleiros que precisam rolar". Só
+que a rolagem era o remendo, não o problema. Num celular sobravam o título, o
+botão, a fileira de abas dos quatro jogos, a barra de navegação **e** dois 8×8
+empilhados.
+
+Agora é **um tabuleiro grande por vez**: o mar do adversário ocupa a tela e a
+sua frota virou minimapa de 92 px no rodapé, ao lado do contador e do Desistir.
+Com isso a naval passou a caber, e a exclusão do modo tela cheia caiu junto —
+ela entra como os outros três.
+
+**2. O fim de partida virou uma tela.**
+
+Antes, o tiro final derrubava a partida no mesmo `if` do "sem partida": a tela
+do jogo sumia e voltava o cartão de abrir, com um aviso de uma linha. Quem
+perdia nem entendia que tinha acabado. Agora é um estado próprio, com quem
+venceu, o prêmio em Corações em destaque, o placar dos dois lados e a revanche.
+
+> O valor **não** está na vista da partida: ele vem no `coins` da resposta do
+> tiro que venceu, e só pra quem venceu. Ele é guardado quando chega. Quem
+> perdeu, e quem recarregou a tela entre o tiro e o fim, não vê número nenhum —
+> chutar um valor ali seria pior do que não mostrar.
+
+**3. A arte: onde a IA entra, e onde ela não entra.**
+
+O dono pediu "use a IA pras imagens". A régua de onde usar não foi inventada
+agora — é a que o projeto já tinha escrito, na 9.9, sobre as cartas da memória:
+*"aqui a carta É a arte, não tem estado, pose nem cor variável"*.
+
+- **A tela de fim usa IA** (Pollinations `sana`, o mesmo gerador das cartas):
+  duas ilustrações, 3 sementes por assunto, escolhidas olhando uma a uma. Uma
+  das opções do troféu veio com uma **mão de gente** na imagem e foi descartada
+  — o mesmo defeito que já tinha aparecido nas cartas. 3,2 KB e 2,4 KB.
+- **O mar e os navios são código.** O navio cai do outro lado daquela frase: ele
+  tem tamanho (2, 3 ou 4 casas), orientação (deitado ou em pé) e estado
+  (inteiro, afundado), e precisa cair alinhado ao pixel numa grade que muda de
+  tamanho conforme a tela. Tentei mesmo assim, como manda o precedente: o modelo
+  devolveu **navio de guerra cinza em perspectiva nas seis tentativas**, nunca
+  visto de cima — e um navio em perspectiva não encaixa numa grade vista de
+  cima.
+
+> **Duas rodadas de desenho, e as duas correções vieram de OLHAR.** A primeira
+> versão saiu com o mar em faixas diagonais fortes, que ladrilhado não lia como
+> água e sim como ZEBRA, e com três tubos cinza iguais de quadradinho branco em
+> cima — genérico exatamente como o dono tinha reclamado. Hoje o mar é quase
+> liso, com a variação em RETICULADO (mancha sólida virava gotas espalhadas, e o
+> ladrilho parecia pele de réptil) e três ondinhas por quadro; e cada tamanho de
+> navio tem a sua cor, com proa curta, cabine com janelinha e chaminé. A cor por
+> tamanho não é enfeite: no seu tabuleiro é o que deixa ver de relance qual
+> navio já foi atingido.
+
+**4. Como os navios encaixam na grade.**
+
+Uma camada que é uma grade IDÊNTICA à de baixo, sobreposta, com o navio
+posicionado por `grid-column: span N` — quem faz a conta do tamanho da casa, do
+vão e da margem é o navegador. Ela nunca recebe toque: quem responde ao dedo
+continua sendo o `<button>` de cada casa.
+
+> A camada copiava `inset: 5px` e `gap: 3px` na mão. Batia no tabuleiro grande e
+> errava no minimapa, que usa `padding: 3px` e `gap: 1px` — os navios saíam de 1
+> a 2 px fora das casas. Com `padding: inherit` e `gap: inherit` o desvio caiu
+> pra menos de 1 px, e passa a valer pra qualquer variante nova.
+
+E ela só existe no SEU tabuleiro: a posição da frota do outro não chega neste
+app, então não há o que desenhar lá — que é a mesma trava de sempre.
+
+**5. O "recorte verde": o chão da cena não era o chão do bicho.**
+
+`desenharCena` recebe onde o bichinho pisa, e o próprio comentário dela avisava:
+*"a mesma `plano.chao`, senão ele aparece flutuando acima da grama"*. O
+`PetCanvas` mandava **0,84 da altura, cravado**, enquanto o passeio novo (9.13)
+faz ele pisar entre 0,60 e 0,98 conforme a profundidade.
+
+Dois números para o mesmo fato, **de novo** — e o resultado era o bicho andando
+no ar a maior parte do tempo, com a borda reta do campo cortando a tela no meio
+como um recorte colado. Agora os dois saem da mesma constante exportada
+(`CHAO_FUNDO`), e a faixa de grama é grande o bastante pra caber o passeio.
+
+**6. A "língua bugada" não era a língua: era o rosto vazando.**
+
+O que o dono via era uma mancha rosa grudada na lateral da cara, **do lado de
+fora do contorno**. Não tinha relação com a lambida no vidro.
+
+A cabeça é uma ELIPSE, e cada peça do rosto era ancorada numa fração fixa da
+meia-largura com o raio saindo de outra conta, que não sabia da primeira — a
+mesma frase que descreve o defeito dos olhos, corrigido na 9.11. A lista daquela
+rodada (orelha, chifre, bico, cauda, pata, asa, espinho, marca, sombra) não
+incluiu nariz, bochecha e boca, e neles o defeito sobreviveu.
+
+Perto do meio da altura isso passa; perto da borda, a elipse já estreitou e a
+meia-largura real ali é bem menor. Medido no coelho grande, que é o pior caso
+(cabeça menor em relação ao corpo, porque as orelhas comem o tamanho):
+
+| peça | borda | limite da cabeça | |
+|---|---|---|---|
+| bochecha direita | 36,1 | 30,4 | **vazava 5,7 px** |
+| nariz | 35,8 | 33,2 | **vazava 2,6 px** |
+| bochecha esquerda | 10,2 | 31,0 | ok |
+| focinho | 29,2 | 32,2 | ok |
+
+Agora existe `noRosto(fx, fy, raio)`: ele calcula a meia-largura da elipse **na
+altura em que a peça vai ficar** e recua o `x` o quanto for preciso. Não há como
+uma peça sair do rosto, cresça a escala o quanto crescer.
+
+> **A coleira veio junto, e é o outro extremo da mesma medida.** Ela tinha ido
+> de 1,02 (que era bochecha) para 1,38 na 9.11. Só que 1,38 são 0,38 de raio
+> ABAIXO da borda da cabeça: num cachorro isso é pescoço, mas no coelho e na
+> capivara — os dois que praticamente não têm pescoço, como já estava anotado no
+> próprio código — a cabeça encosta no corpo e aquilo já é PEITO. A coleira
+> virava um crachá pendurado na barriga nas seis espécies. 1,14 é a borda mais
+> uma folga fina, e serve para quem tem e para quem não tem pescoço.
+
+**7. A bancada ganhou a aba Naval.**
+
+Ela confere o que o CSS não teria como acusar, porque estes desenhos viram
+`data:` URL e entram como imagem de fundo — e um `background-image` vazio não
+reclama de nada, só deixa a casa sem fundo:
+
+- **desenho vazio** (a regra de sempre, em vermelho);
+- **a proporção**, que é o que faz o navio encaixar: um navio de 3 casas TEM que
+  sair com 3× mais largura que altura. Os seis batem exatamente, e as versões em
+  pé têm a mesma contagem de pixels das deitadas — prova de que a rotação (feita
+  no canvas, não por `transform`, que reamostra) não perde nada;
+- **a emenda do ladrilho**: a coluna da esquerda é comparada com a da direita e o
+  topo com a base. Uma onda que não fecha vira uma listra atravessando o
+  tabuleiro inteiro. Deu **2,4** de diferença, com o limite em 18.
+
+E o teste de fumaça passou a conferir que as duas ilustrações do fim existem no
+disco — mesma ponte das cartas da memória, e pelo mesmo motivo: arquivo faltando
+não dá erro, dá um buraco na tela.
+
+**Estado: 642 verificações, 0 falha.** Build Vite aprovada.
+
+**Próximo passo:** continua sendo a seção 8.1 — mapa navegável do bairro.
