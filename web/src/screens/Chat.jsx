@@ -208,36 +208,102 @@ function useRecorder() {
 function Audio({ src, duration }) {
   const ref = useRef(null)
   const [tocando, setTocando] = useState(false)
+  const [erro, setErro] = useState('')
   const total = Math.max(1, Math.round((duration || 0) / 1000))
 
+  // ------------------------------------- O ENDEREÇO DO ÁUDIO NÃO PODE BALANÇAR
+  //
+  // A URL da mídia é DUAS coisas de uma vez: a identidade do arquivo (o caminho)
+  // e a credencial pra abrir (o `?token=`). Enquanto o token era cunhado com
+  // "agora + 2h", ele mudava a cada segundo — e a conversa se re-sincroniza a
+  // cada evento do WebSocket, a cada volta pro app e a cada reconexão. Cada
+  // sincronização entregava um `src` novo pra MESMA mensagem, e trocar o `src`
+  // faz o navegador ABORTAR e recarregar o elemento: o áudio da outra pessoa
+  // parava no meio, ou nem começava.
+  //
+  // O vencimento passou a ser arredondado no servidor (`create_media_token`), o
+  // que já estabiliza a URL. Este cinto de segurança fica aqui de qualquer
+  // forma, porque a regra vale sozinha: **quem manda no elemento é o CAMINHO**.
+  // Token novo do mesmo arquivo não é motivo pra recarregar nada.
+  const caminho = (src || '').split('?')[0]
+  // O endereço completo mais recente, guardado FORA do React: ele serve pra uma
+  // coisa só — se o token tiver vencido na hora de tocar, dá pra tentar de novo
+  // com o mais novo em vez de falhar.
+  const maisNovo = useRef(src)
+  maisNovo.current = src
+  const [fixo, setFixo] = useState(src)
+  useEffect(() => {
+    setFixo(maisNovo.current)
+  }, [caminho])
+
+  async function alternar() {
+    const el = ref.current
+    if (!el) return
+    if (!el.paused) {
+      el.pause()
+      setTocando(false)
+      return
+    }
+    setErro('')
+    try {
+      await el.play()
+      setTocando(true)
+      return
+    } catch {
+      /* cai pra tentativa com o endereço mais novo, logo abaixo */
+    }
+    // SEGUNDA E ÚLTIMA TENTATIVA, com o token mais recente.
+    //
+    // O caso real: a tela ficou aberta além da validade do token e o arquivo
+    // responde 401. Recarregar com o endereço novo resolve sem a pessoa
+    // precisar saber que existe token.
+    try {
+      if (maisNovo.current && maisNovo.current !== fixo) setFixo(maisNovo.current)
+      el.src = maisNovo.current
+      el.load()
+      await el.play()
+      setTocando(true)
+    } catch (e) {
+      // E AQUI ESTAVA O OUTRO DEFEITO: `el.play()` devolve uma Promise, e a
+      // recusa dela nunca era lida. O botão virava ❚❚, nada tocava e nada
+      // aparecia na tela — "não funciona", sem uma palavra de explicação. É a
+      // mesma falha calada que este projeto já pagou várias vezes.
+      setTocando(false)
+      setErro(
+        e?.name === 'NotSupportedError'
+          ? 'Este aparelho não sabe tocar o formato deste áudio.'
+          : 'Não consegui tocar este áudio. Puxe a conversa pra baixo pra recarregar.'
+      )
+    }
+  }
+
   return (
-    <div className="row" style={{ gap: 8 }}>
-      <button
-        className="btn-plain audio-play"
-        onClick={() => {
-          const el = ref.current
-          if (!el) return
-          if (el.paused) {
-            el.play()
-            setTocando(true)
-          } else {
-            el.pause()
-            setTocando(false)
-          }
-        }}
-        aria-label={tocando ? 'Pausar' : 'Tocar'}
-      >
-        {tocando ? '❚❚' : '▶'}
-      </button>
-      {/* onda decorativa: barras de altura variada, o mesmo desenho toda vez
-          pra mesma duração (sem aleatório, que mudaria a cada render) */}
-      <div className="audio-wave">
-        {Array.from({ length: 22 }).map((_, i) => (
-          <i key={i} style={{ height: 4 + ((i * 7 + total * 3) % 14) }} />
-        ))}
+    <div>
+      <div className="row" style={{ gap: 8 }}>
+        <button
+          className="btn-plain audio-play"
+          onClick={alternar}
+          aria-label={tocando ? 'Pausar' : 'Tocar'}
+        >
+          {tocando ? '❚❚' : '▶'}
+        </button>
+        {/* onda decorativa: barras de altura variada, o mesmo desenho toda vez
+            pra mesma duração (sem aleatório, que mudaria a cada render) */}
+        <div className="audio-wave">
+          {Array.from({ length: 22 }).map((_, i) => (
+            <i key={i} style={{ height: 4 + ((i * 7 + total * 3) % 14) }} />
+          ))}
+        </div>
+        <span className="tiny muted">{total}s</span>
+        <audio
+          ref={ref}
+          src={fixo}
+          onEnded={() => setTocando(false)}
+          onPause={() => setTocando(false)}
+          preload="none"
+        />
       </div>
-      <span className="tiny muted">{total}s</span>
-      <audio ref={ref} src={src} onEnded={() => setTocando(false)} preload="none" />
+      {erro && <div className="tiny" style={{ marginTop: 4, opacity: 0.85 }}>{erro}</div>}
     </div>
   )
 }

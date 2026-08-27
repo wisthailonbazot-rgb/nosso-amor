@@ -2,7 +2,7 @@ import hashlib
 import hmac
 import os
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import jwt
 from fastapi import Depends, HTTPException, Request, status
@@ -56,18 +56,53 @@ def create_token(user: User) -> str:
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
+# De quanto em quanto tempo o token de midia PODE mudar.
+#
+# Ver `create_media_token` logo abaixo: o vencimento e arredondado pra cima ate a
+# proxima marca destas, e e isso que faz duas leituras seguidas devolverem o
+# MESMO token, byte por byte.
+MEDIA_TOKEN_JANELA_MIN = 60
+
+
 def create_media_token(user: User, minutes: int = 120) -> str:
     """Token curto pra carregar foto em <img src>.
 
     A tag <img> nao manda header de autenticacao, entao o token precisa ir na URL
     — e URL vaza (historico, log de proxy, print de tela). Por isso este token nao
     e o da sessao: ele so abre arquivo de midia, nao abre a API.
+
+    ------------------------------------------- por que o vencimento e arredondado
+
+    Porque a URL de midia e DUAS COISAS ao mesmo tempo: a identidade do arquivo
+    (o caminho) e a credencial pra abrir (o token). Enquanto o vencimento era
+    `agora + 120min`, ele mudava a cada segundo — e com ele o token, e com o
+    token a URL inteira. Duas leituras da mesma conversa devolviam enderecos
+    diferentes para a MESMA mensagem.
+
+    Do lado do app isso nao e detalhe: o `<audio src>` recebia um valor novo,
+    e trocar o `src` faz o navegador ABORTAR e recarregar o elemento. O audio
+    que a outra pessoa mandou parava no meio, ou nem comecava — e a conversa
+    se re-sincroniza a cada evento do WebSocket, a cada volta pro app e a cada
+    reconexao. Depois que a reconexao ficou mais agressiva (secao 9.13), isso
+    passou a acontecer o tempo todo. Valia igual pras FOTOS, que eram baixadas
+    de novo a cada sincronizacao.
+
+    Arredondando o vencimento pra proxima marca de `MEDIA_TOKEN_JANELA_MIN`, o
+    payload fica identico entre leituras seguidas — e JWT com a mesma carga e a
+    mesma chave da o mesmo texto. A identidade volta a ser estavel; o token
+    continua curto (entre 1 e 2 horas de vida) e continua abrindo so midia.
     """
+    janela = MEDIA_TOKEN_JANELA_MIN * 60
+    vence = utcnow() + timedelta(minutes=minutes)
+    # Pra cima, nunca pra baixo: arredondar pra baixo poderia entregar um token
+    # ja vencido pra quem pedisse em cima da marca.
+    carimbo = int(vence.timestamp())
+    carimbo = -(-carimbo // janela) * janela
     payload = {
         "sub": str(user.id),
         "ver": user.token_version,
         "typ": "media",
-        "exp": utcnow() + timedelta(minutes=minutes),
+        "exp": datetime.fromtimestamp(carimbo, tz=timezone.utc),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 

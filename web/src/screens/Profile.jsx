@@ -6,7 +6,7 @@ import Icon from '../components/Icon'
 import { useStore } from '../store'
 import { diagnose, disablePush, enablePush, isApple, isStandalone, permission } from '../push'
 import { diagnosticarAudio, ondeEstamos } from '../audioDiag'
-import { abrirPergunta, comoLiberar } from '../lib/microfone'
+import { abrirPergunta, linkParaOChrome } from '../lib/microfone'
 import { stamp } from '../lib/dates'
 
 export default function Profile() {
@@ -284,6 +284,34 @@ export default function Profile() {
                   {permissao.depois.map((linha, k) => <li key={k} style={{ marginBottom: 3 }}>{linha}</li>)}
                 </ol>
               </>
+            )}
+            {/* A SAÍDA, em um toque.
+                Quando o app está rodando como atalho instalado, o microfone é
+                delegado a uma permissão que o atalho não tem — então instrução
+                nenhuma resolve DENTRO dele. O que resolve é sair pro Chrome, e
+                um `target="_blank"` não sai (o endereço está no escopo do
+                próprio app: abre ali mesmo). O `intent:` nomeia o pacote do
+                Chrome e sai de verdade. O "copiar o link" fica do lado porque o
+                intent depende do Chrome estar instalado. */}
+            {!permissao.ok && permissao.abrirNoChrome && (
+              <div className="row" style={{ gap: 6, marginTop: 10 }}>
+                <a className="btn btn-primary grow" href={linkParaOChrome()}>
+                  Abrir no Chrome
+                </a>
+                <button
+                  className="btn btn-ghost"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(location.origin + '/perfil')
+                      setMessage('Link copiado. Cola na barra do Chrome.')
+                    } catch {
+                      setMessage(location.origin + '/perfil')
+                    }
+                  }}
+                >
+                  Copiar o link
+                </button>
+              </div>
             )}
             {!permissao.ok && permissao.erro && (
               <p className="tiny" style={{ margin: '8px 0 0', opacity: 0.7 }}>

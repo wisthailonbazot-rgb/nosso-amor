@@ -2293,3 +2293,96 @@ cadeado, e que o nome do erro chegue à tela.
 **Estado: 662 verificações, 0 falha.** Build Vite aprovada; os dois cenários
 (nenhuma entrada de áudio, e entrada existindo com o site negado) conferidos no
 navegador.
+
+### 9.19 O atalho não tem microfone pra dar, e a URL do áudio balançava (27/08/2026)
+
+Duas coisas nesta rodada, e a segunda é uma regressão de verdade que o dono
+pegou no meio: "agora os áudios que a outra pessoa enviou não estão funcionando
+também".
+
+#### 1. O microfone: o atalho instalado não tem a permissão, e nem tem como ter
+
+Os prints fecharam o caso. A tela "Permissões do app" do **"Nos"** (que é o
+`short_name` do nosso `manifest.webmanifest` — é o atalho instalado) mostra:
+
+```
+Com permissão:   Notificações
+Sem permissão:   Nenhuma permissão negada
+```
+
+**Não existe Microfone em lugar nenhum daquela lista.** Não foi negado: não há o
+que permitir. E o print do Chrome, ao lado, mostra Câmera, Localização,
+**Microfone** e Notificações todos concedidos — ou seja, a chave geral do
+aparelho está ligada e o Chrome tem microfone. As duas hipóteses das rodadas 9.17
+e 9.18 caem juntas.
+
+O que acontece de verdade: quando o Chrome instala um app na tela de início, ele
+gera um **aplicativo Android (WebAPK)** com um manifesto próprio de permissões, e
+**delega** microfone/câmera/localização à permissão desse aplicativo. O WebAPK
+gerado aqui declarou só notificações. Então, dentro do atalho, o pedido de
+microfone morre antes de virar pergunta — sem prompt, sem erro visível e sem
+nenhum ajuste que resolva. Foi isso que o dono viveu por três rodadas enquanto eu
+mandava ele mexer em permissão de site.
+
+`enumerateDevices()` devolvendo **zero** entradas de áudio é o sinal, e agora ele
+é lido **antes** da hipótese da chave geral — os dois casos dão zero, e o do
+atalho é o mais específico.
+
+A tela agora diz isso com todas as letras e oferece a saída em um toque: um botão
+**"Abrir no Chrome"**. `target="_blank"` não serve (o endereço está no escopo do
+próprio app, então abre ali mesmo, que é justamente o lugar de onde se precisa
+sair); quem sai é um `intent:` nomeando o pacote do Chrome. Ao lado fica
+"Copiar o link", porque o intent depende do Chrome estar instalado.
+
+> **O que ficou pendente e não dá pra resolver daqui:** gravar áudio *dentro do
+> atalho* exige um app que declare `RECORD_AUDIO` — que é exatamente o que o APK
+> por Capacitor faz (`web/android/.../AndroidManifest.xml` já tem a linha, e o
+> Capacitor 8 mostra o modal nativo por `onPermissionRequest`). Mas **não há Java
+> nem Android SDK nesta máquina** (`java: command not found`, `ANDROID_HOME`
+> vazio) e o projeto não tem workflow de CI. O APK em `releases/` continua o de
+> 23/08. Montar o build no GitHub Actions, como no app do painel da barbearia, é
+> a tarefa que fecha isso.
+
+#### 2. A regressão: a URL da mídia mudava a cada leitura
+
+A URL de mídia é **duas coisas ao mesmo tempo**: a identidade do arquivo (o
+caminho) e a credencial pra abrir (o `?token=`). E o token era cunhado com
+`exp = agora + 120min` — **que muda a cada segundo**. Duas leituras seguidas da
+mesma conversa devolviam endereços diferentes pra mesma mensagem. Medido:
+
+```
+mensagem 27: a URL e a MESMA nas duas leituras? False
+mensagem 28: a URL e a MESMA nas duas leituras? False
+```
+
+Do lado do app isso não é detalhe: trocar o `src` de um `<audio>` faz o navegador
+**abortar e recarregar** o elemento. E a conversa se re-sincroniza a cada evento
+do WebSocket, a cada volta pro app e a cada reconexão — então o áudio da outra
+pessoa parava no meio, ou nem começava. Piorou agora porque a 9.13 deixou a
+reconexão mais agressiva (dois pings de silêncio derrubam o socket) e acrescentou
+uma conferência a cada 5 s. As **fotos** eram baixadas de novo pelo mesmo motivo.
+
+**Conserto na raiz, no servidor:** `create_media_token` arredonda o vencimento
+pra próxima marca de uma janela (`MEDIA_TOKEN_JANELA_MIN = 60`). JWT com a mesma
+carga e a mesma chave dá o mesmo texto, então leituras seguidas devolvem o token
+**byte por byte igual**. O token continua curto (entre 1 e 2 horas) e continua
+abrindo só mídia.
+
+**Cinto de segurança no app:** o `<audio>` passou a ser governado pelo
+**caminho**, não pela URL inteira — token novo do mesmo arquivo não recarrega
+nada. E se tocar falhar, ele tenta uma segunda vez com o endereço mais recente
+(o caso de a tela ficar aberta além da validade).
+
+**E o defeito calado que estava junto:** `el.play()` devolve uma Promise e a
+recusa dela **nunca era lida**. O botão virava ❚❚, nada tocava e nada aparecia na
+tela. Agora o motivo aparece embaixo do áudio.
+
+> **Medido no navegador:** com o áudio tocando, uma sincronização da conversa
+> forçada no meio — ele seguiu de 0,48 s para 1,71 s, ainda tocando, e o `src`
+> não mudou.
+
+**Travado no smoke:** duas chamadas seguidas de `create_media_token` têm que dar
+o mesmo texto, e o token não pode passar de ~3 h de vida (arredondar não pode
+virar token eterno).
+
+**Estado: 664 verificações, 0 falha.** Build Vite aprovada.

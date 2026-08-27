@@ -954,3 +954,45 @@ instruções não funcionam; **testei em outros navegadores**".
 
 Estado: **662 verificações, 0 falha**; build Vite aprovada; os dois cenários
 conferidos no navegador. Causas no HANDOFF, seção 9.18.
+
+### 27/08/2026 — O atalho sem microfone, e o áudio que recarregava sozinho
+
+- **[x]** **O microfone: seus prints fecharam o caso, e não era nada do que eu
+      vinha dizendo.** A tela "Permissões do app" do **"Nos"** (o atalho
+      instalado) mostra "Com permissão: Notificações" e "Sem permissão: Nenhuma
+      permissão negada" — **não existe Microfone naquela lista**. Não foi
+      negado: não há o que permitir. E o Chrome, ao lado, tem Microfone
+      concedido — então a chave geral do aparelho está ligada e o navegador tem
+      microfone. As duas hipóteses anteriores caem juntas.
+      - Quem instala o atalho é o Chrome, e ele gera um aplicativo Android
+        (WebAPK) que **delega** o microfone à permissão do próprio app — e esse
+        app declarou só notificações. Dentro do atalho o pedido morre antes de
+        virar pergunta.
+      - A tela agora diz isso e oferece **"Abrir no Chrome"** em um toque
+        (`target="_blank"` não sai do atalho; um `intent:` nomeando o Chrome
+        sai), com "Copiar o link" do lado.
+      - [ ] **Pra gravar DENTRO do atalho** só com um app que declare
+            `RECORD_AUDIO` — que é o APK por Capacitor (o manifesto já tem a
+            linha). Não dá pra gerar aqui: esta máquina não tem Java nem Android
+            SDK. Montar o build no GitHub Actions, como no app do painel da
+            barbearia, fecha isso.
+- **[x]** **Os áudios da outra pessoa: a URL mudava a cada leitura.** Achado
+      medindo: duas leituras seguidas da mesma conversa devolviam endereços
+      diferentes pra mesma mensagem, porque o token da mídia era cunhado com
+      "agora + 2h" e isso muda a cada segundo. Trocar o `src` de um `<audio>`
+      faz o navegador ABORTAR e recarregar — e a conversa se re-sincroniza a
+      cada evento do WebSocket e a cada volta pro app. Piorou agora porque a
+      reconexão ficou mais agressiva em 26/08. As fotos baixavam de novo junto.
+      - Raiz no servidor: o vencimento passou a ser arredondado pra uma janela,
+        então leituras seguidas dão o token byte por byte igual (e ele continua
+        curto, entre 1 e 2 horas).
+      - No app: o `<audio>` é governado pelo CAMINHO, não pela URL inteira; e se
+        falhar, tenta de novo com o endereço mais recente.
+      - E `el.play()` falhava **em silêncio** (a recusa da Promise nunca era
+        lida): botão virava ❚❚, nada tocava, nada explicava. Agora o motivo
+        aparece embaixo do áudio.
+      - Medido: com o áudio tocando, uma sincronização forçada no meio — seguiu
+        de 0,48s para 1,71s, ainda tocando, sem trocar de endereço.
+
+Estado: **664 verificações, 0 falha**; build Vite aprovada; conferido no
+navegador. Causas no HANDOFF, seção 9.19.
