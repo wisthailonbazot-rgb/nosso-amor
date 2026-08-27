@@ -1240,8 +1240,13 @@ button:disabled,
 .trait-row span { position: relative; z-index: 1; padding-left: 8px; font: 700 12px/20px 'Baloo 2', sans-serif; }
 .pet-name { margin: 0; }
 .pet-sub { margin: -2px 0 8px; }
-.pet-stage { min-height: 155px; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 4px; overflow: hidden; background: linear-gradient(#dcead9 0 62%, #c99e70 62%); }
-.pet-stage.sick { background: linear-gradient(#e4d9e4 0 62%, #b9a69a 62%); }
+/* O fundo do palco é a cor do CÉU da cena (`--pet-ceu`, vinda de petCena.js),
+   e não mais um `linear-gradient(#dcead9 0 62%, #c99e70 62%)` próprio — aquele
+   era o fundo de duas faixas chapadas de antes da ilha ser desenhada, e é ele
+   que aparecia como o quadrado verde de borda reta acima do bichinho sempre que
+   a caixa ficava mais alta que o canvas. Dois donos pro mesmo fundo; agora um. */
+.pet-stage { min-height: 155px; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 4px; overflow: hidden; background: var(--pet-ceu, #8fd0ef); }
+.pet-stage.sick { background: var(--pet-ceu, #8fd0ef); }
 .pet-canvas { width: 160px; height: 130px; image-rendering: pixelated; flex: none; }
 .pet-stage-note { align-self: flex-end; margin: 0 0 14px -18px; padding: 7px 9px; background: rgba(255,250,243,.9); border: 1px solid var(--ink); transform: rotate(1deg); max-width: 135px; }
 .pet-stage-note strong, .pet-stage-note span { display: block; font-size: 11px; line-height: 1.2; }
@@ -1562,16 +1567,30 @@ button:disabled,
   display: grid;
   grid-template-columns: 1fr 96px;
   gap: 8px;
-  align-items: stretch;
+  /* `start`, e não `stretch`: o palco tem altura própria (a da cena) e não
+     deve mais crescer atrás da lista de itens. */
+  align-items: start;
   margin-bottom: 10px;
 }
+/* A ALTURA DO PALCO é a segunda metade do conserto do quadrado verde.
+   Antes ela era `height: 100%` dentro de um grid `align-items: stretch`, ou
+   seja: o palco esticava até a altura da LISTA DE ITENS do lado. Com seis itens
+   ele ia a 552 px enquanto a cena desenhada tem 324 — 226 px de caixa vazia
+   acima do bichinho. Era essa a tira que aparecia pintada, e é por isso que ela
+   era tão grande.
+   Agora o palco tem a proporção da PRÓPRIA cena. O 102,4 não é chute: o canvas
+   é 128x108 e pode transbordar 1,25x na largura de propósito (é o que deixa o
+   bichinho grande, ver `PetCanvas`), então a caixa que ele cobre inteira é
+   128/1,25 por 108. Com essa proporção as duas contas — largura e altura —
+   apertam juntas, e o que sobra é só o degrau do fator inteiro. */
 .pet-arena .pet-stage {
-  min-height: 300px;
-  height: 100%;
+  aspect-ratio: 102.4 / 108;
+  height: auto;
+  min-height: 0;
   margin: 0;
   align-items: flex-end;
   justify-content: center;
-  padding-bottom: 0;
+  padding: 0;
 }
 .pet-arena .pet-canvas { width: auto; height: auto; flex: none; }
 

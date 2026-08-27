@@ -847,3 +847,50 @@ funciona, mesmo no navegador pelo link".
             esse dado o conserto é direto; sem ele qualquer correção é chute.
 
 Estado: **646 verificações, 0 falha**. Causas no HANDOFF, seção 9.15.
+
+### 27/08/2026 — O quadrado verde era o CSS, e o microfone está bloqueado
+
+Pedido do dono: "o quadro verde acima do boneco ainda aparece, já pedi pra
+corrigir múltiplas vezes; e o áudio ainda não funciona, e não pede a permissão
+como deveria". Veio com o print do diagnóstico da 9.15 — e o print entregou a
+resposta.
+
+- **[x]** **O quadrado verde, terceira vez — e as duas primeiras estavam certas.**
+      Ele nunca foi desenhado: era `linear-gradient(#dcead9 0 62%, #c99e70 62%)`
+      no `.pet-stage`, o fundo de duas faixas chapadas de antes da ilha existir,
+      que ninguém apagou quando a cena virou canvas. Aparecia na SOBRA da caixa —
+      e a sobra era de **288 px**, porque o palco tinha `height: 100%` e esticava
+      até a altura da lista de itens do lado (614 px) enquanto a cena tinha 324.
+      - Conserto em três partes, e nenhuma é pintar a sobra: o CSS perdeu o
+        fundo próprio (a cor vem de `corDoCeu()`, do desenho); o palco parou de
+        esticar; e a caixa de referência deixou de ser 128×108 cravado — a cena
+        sempre soube desenhar em qualquer tamanho, só a caixa é que estava fixa.
+      - Medido no navegador: sobra **288 px → 0**. O bichinho não encolheu (os
+        mesmos 198 px de largura); o bloco verde virou céu, montanha, mar, praia
+        e as cinco faixas do campo.
+- **[x]** **O áudio: o navegador não pergunta mais porque já tem um "não"
+      guardado.** `NotAllowedError` cobre dois fatos e o app tratava como um:
+      pergunta fechada agora (dá pra tentar de novo) e permissão negada pra
+      ORIGEM (não dá — nenhuma chamada reabre a pergunta, só os ajustes). Era
+      esse o "não pede a permissão como deveria".
+      - Agora o app lê o estado guardado antes e depois de pedir, separa os dois
+        casos, e mostra o passo a passo **do aparelho em que está** — no
+        diagnóstico e também no erro do chat.
+      - Fonte única em `lib/microfone.js`: a tradução do erro estava em dois
+        lugares, duas listas parecidas e diferentes pro mesmo fato.
+      - "Detalhes do aparelho" ganhou `microfone: denied` e `rodando: site no
+        Chrome`, que é o que faltava pra diagnosticar à distância.
+      - **O resto da corrente está provado bom:** com uma faixa de áudio real
+        gerada no navegador, os sete passos passam (31,4 KB gravados, servidor
+        reconhece como webm, toca de volta). O único elo quebrado no seu
+        aparelho é a permissão.
+      - [ ] **Liberar o microfone nos ajustes do site**, pelos passos que a tela
+            mostra agora. Depois disso o áudio do chat funciona.
+- **[ ]** **O APK de `releases/` é de 23/08** — anterior a todas as correções de
+      áudio e às telas de diagnóstico. Precisa ser regerado antes de servir pra
+      julgar qualquer coisa. (Seus prints são da tela nova, então você está pelo
+      link — o APK não está no caminho deste problema.)
+
+Estado: **655 verificações, 0 falha**; build Vite aprovada; conferido no
+navegador (sobra 0 px, `/lab` com as 13 abas sem desenho vazio, diagnóstico do
+microfone rodado bloqueado e liberado). Causas no HANDOFF, seção 9.16.

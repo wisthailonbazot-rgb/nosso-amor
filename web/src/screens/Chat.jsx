@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { pedirMicrofone } from '../lib/microfone'
 import { api, mediaUrl } from '../api'
 import { subscribe, useStore } from '../store'
 import Icon from '../components/Icon'
@@ -68,23 +69,11 @@ function escolherFormato() {
   return { tipo: '', ext: 'm4a' }
 }
 
-/** Por que o microfone recusou, em portugues. */
-function motivoDoMicrofone(err) {
-  const nome = err?.name || ''
-  if (!window.isSecureContext) {
-    return 'O app precisa estar em HTTPS pra usar o microfone. Abra pelo endereço com cadeado.'
-  }
-  if (nome === 'NotAllowedError' || nome === 'SecurityError') {
-    return 'A permissão do microfone está negada. Libere nos ajustes do aparelho para este app.'
-  }
-  if (nome === 'NotFoundError' || nome === 'DevicesNotFoundError') {
-    return 'Não encontrei microfone neste aparelho.'
-  }
-  if (nome === 'NotReadableError' || nome === 'TrackStartError') {
-    return 'O microfone está ocupado por outro app. Feche a ligação ou o gravador e tente de novo.'
-  }
-  return `Não consegui acessar o microfone (${nome || 'motivo desconhecido'}).`
-}
+// A tradução do "por que o microfone recusou" MUDOU DE CASA: agora mora em
+// `lib/microfone.js`, junto com o estado guardado da permissão e o caminho de
+// volta. Ela estava aqui e uma parecida estava no diagnóstico — duas tabelas
+// para o mesmo fato, e a pior das duas era justamente esta, a que a pessoa lê
+// no momento em que tenta gravar. Ver o cabeçalho de `lib/microfone.js`.
 
 function useRecorder() {
   const [gravando, setGravando] = useState(false)
@@ -105,12 +94,13 @@ function useRecorder() {
     const formato = escolherFormato()
     if (!formato) return { ok: false, reason: 'Este navegador não grava áudio.' }
 
-    let stream
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    } catch (err) {
-      return { ok: false, reason: motivoDoMicrofone(err) }
+    const pedido = await pedirMicrofone()
+    if (!pedido.ok) {
+      // `passos` só vem preenchido quando o conserto está fora do app (a
+      // permissão bloqueada na origem, em que o navegador não pergunta mais).
+      return { ok: false, reason: pedido.motivo, passos: pedido.passos }
     }
+    const stream = pedido.stream
 
     let recorder
     try {
@@ -392,7 +382,17 @@ export default function Chat() {
   const [respondendo, setRespondendo] = useState(null)
   const [marcada, setMarcada] = useState(null)
   const [digitando, setDigitando] = useState(false)
-  const [erro, setErro] = useState('')
+  const [erro, guardarErro] = useState('')
+  // Os passos de como liberar o microfone, quando o motivo tem um.
+  const [erroPassos, setErroPassos] = useState([])
+  // Uma porta só pra mostrar erro, e é de propósito: os passos são de UM erro,
+  // e sem passar pelos dois juntos o próximo erro herdaria as instruções do
+  // anterior — "não consegui enviar a foto" com o passo a passo do microfone
+  // embaixo. Mesmo motivo de todo `setEstado` duplo virar um só neste projeto.
+  const setErro = (msg, passos = []) => {
+    guardarErro(msg)
+    setErroPassos(passos)
+  }
   const [enviando, setEnviando] = useState(false)
   const fimRef = useRef(null)
   const listaRef = useRef(null)
@@ -599,7 +599,16 @@ export default function Chat() {
         </div>
       </div>
 
-      {erro && <div className="alert alert-error">{erro}</div>}
+      {erro && (
+        <div className="alert alert-error">
+          {erro}
+          {erroPassos.length > 0 && (
+            <ol className="tiny" style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+              {erroPassos.map((linha, k) => <li key={k} style={{ marginBottom: 3 }}>{linha}</li>)}
+            </ol>
+          )}
+        </div>
+      )}
 
       {/* Barra de ações da mensagem marcada, como no WhatsApp: a mensagem fica
           escolhida e o que dá pra fazer com ela aparece aqui em cima. */}
@@ -755,7 +764,7 @@ export default function Chat() {
                   className="btn-accent btn-sm"
                   onClick={async () => {
                     const r = await gravador.iniciar()
-                    if (!r.ok) setErro(r.reason)
+                    if (!r.ok) setErro(r.reason, r.passos)
                   }}
                   aria-label="Gravar áudio"
                 >

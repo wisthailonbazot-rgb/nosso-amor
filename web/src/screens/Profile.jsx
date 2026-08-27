@@ -15,6 +15,9 @@ export default function Profile() {
   // Diagnóstico do microfone: null = nunca rodou, [] = rodando.
   const [audio, setAudio] = useState(null)
   const [testando, setTestando] = useState(false)
+  // Os detalhes do aparelho passaram a incluir o ESTADO GUARDADO da permissão,
+  // que só se lê por Promise — então viraram estado em vez de chamada no render.
+  const [detalhes, setDetalhes] = useState(null)
   const [message, setMessage] = useState(null)
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -239,6 +242,7 @@ export default function Profile() {
             try {
               await diagnosticarAudio(setAudio)
             } finally {
+              setDetalhes(await ondeEstamos())
               setTestando(false)
             }
           }}
@@ -254,6 +258,16 @@ export default function Profile() {
                 <div className="grow">
                   <div className="small">{item.label}</div>
                   {item.detalhe && <div className="muted tiny">{item.detalhe}</div>}
+                  {/* Quando o conserto está FORA do app — o caso da permissão
+                      bloqueada, em que o navegador não pergunta mais — o passo
+                      traz o caminho de volta, e ele aparece aqui. Sem isso a
+                      pessoa fica tocando no botão esperando uma pergunta que
+                      não vem mais. */}
+                  {item.passos?.length > 0 && (
+                    <ol className="tiny" style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                      {item.passos.map((linha, k) => <li key={k} style={{ marginBottom: 3 }}>{linha}</li>)}
+                    </ol>
+                  )}
                 </div>
               </div>
             ))}
@@ -267,11 +281,11 @@ export default function Profile() {
           </div>
         )}
 
-        {audio && !testando && (
+        {detalhes && !testando && (
           <details style={{ marginTop: 8 }}>
             <summary className="muted tiny">Detalhes do aparelho</summary>
             <pre className="muted tiny" style={{ whiteSpace: 'pre-wrap', margin: '6px 0 0' }}>
-              {Object.entries(ondeEstamos())
+              {Object.entries(detalhes || {})
                 .map(([k, v]) => `${k}: ${v}`)
                 .join('\n')}
             </pre>

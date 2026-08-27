@@ -88,6 +88,31 @@ const PALETAS = {
   },
 }
 
+/**
+ * A cor do topo do céu — a MESMA que `fundoFixo` pinta na primeira faixa.
+ *
+ * Existe porque o palco (a caixa em volta do canvas) é mais alto do que a cena:
+ * o canvas só cresce em passos inteiros de pixel (é o que mantém a arte dura,
+ * ver `PetCanvas`), então quase sempre sobra uma tira de caixa acima dele.
+ *
+ * Essa tira tinha DONO PRÓPRIO: um `linear-gradient(#dcead9 0 62%, #c99e70 62%)`
+ * no CSS, que é o fundo de duas cores chapadas de antes desta ilha existir.
+ * Ninguém apagou quando a cena passou a ser desenhada, e o resultado é o
+ * "quadrado verde acima do boneco" — a sobra pintada de verde-claro, com borda
+ * reta, encostada no céu azul do desenho.
+ *
+ * Agora quem manda na cor é o desenho, e o CSS só recebe: a tira fica da cor do
+ * céu daquela hora e some dentro dele. Uma fonte só, como o chão da 9.15.
+ */
+export function corDoCeu(periodo) {
+  return (PALETAS[periodo] || PALETAS.dia).ceu[0]
+}
+
+/** Atalho: a cor do céu agora, que é o que a tela do bichinho precisa. */
+export function corDoCeuAgora(hora = new Date().getHours()) {
+  return corDoCeu(periodoDe(hora))
+}
+
 /** Ruído estável: o mesmo `i` devolve sempre o mesmo número entre 0 e 1. */
 function aleatorio(i) {
   const x = Math.sin(i * 127.1 + 311.7) * 43758.5453

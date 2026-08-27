@@ -2030,3 +2030,129 @@ reclama.
 **O que fica com você:** abra Perfil → Áudio neste aparelho no Android e me diga
 em que linha aparece o ❌. Com esse dado o conserto é direto; sem ele, qualquer
 correção minha continua sendo chute.
+
+### 9.16 O microfone estava bloqueado, e o quadrado verde era o CSS (27/08/2026)
+
+Pedido do dono: "o quadro verde acima do boneco ainda aparece, já pedi pra
+corrigir múltiplas vezes; e o áudio ainda não funciona, e não pede a permissão
+como deveria".
+
+Desta vez ele veio com o print do diagnóstico da 9.15, e o print **entregou a
+resposta**: os três primeiros passos ✅ e o quarto ❌ — `NotAllowedError`. Foi
+exatamente pra isso que a tela foi feita.
+
+#### O áudio: o navegador não pergunta mais porque já tem um "não" guardado
+
+O erro `NotAllowedError` cobre dois fatos bem diferentes, e o app tratava os
+dois como um só:
+
+| O que aconteceu | Dá pra tentar de novo? |
+|---|---|
+| A pergunta apareceu e foi fechada sem resposta | **Sim** — toca de novo e responde |
+| A permissão está negada para a ORIGEM | **Não.** O navegador não pergunta mais nada |
+
+No segundo caso não existe recurso do lado do app: nenhuma chamada, nenhum
+gesto e nenhuma opção reabrem a pergunta. Só o dono do aparelho reabre, nos
+ajustes do site. Enquanto a tela dizia só "libere nos ajustes do site", a pessoa
+ficava tocando no botão esperando uma pergunta que nunca mais vinha — que é
+literalmente o "não pede a permissão como deveria" do relato.
+
+E como o "não" é guardado **por origem**, ele vale para o site, para o atalho na
+tela de início e para qualquer aba: todos são o mesmo `https://<host>`. Por isso
+"no navegador pelo link também não" nunca contradisse nada — é o mesmo lugar,
+com o mesmo "não".
+
+**O que mudou:**
+
+- Nasceu `web/src/lib/microfone.js`, **fonte única**: onde o app está rodando
+  (site, atalho ou APK), o estado guardado da permissão
+  (`navigator.permissions.query`), o caminho de volta em passos para *aquele*
+  aparelho, e uma porta só de pedir o microfone.
+  - A tradução do erro existia em DOIS lugares — no chat e no diagnóstico —,
+    duas listas parecidas e diferentes pro mesmo fato. É a família de defeito
+    que este projeto já pagou caro três vezes (o prompt com dois donos, o chão
+    com dois números, o fundo do palco logo abaixo). Agora é uma.
+- O estado é lido **antes** de pedir, e relido **depois** de falhar: é a única
+  forma de separar "fechou a pergunta agora" de "está bloqueado", já que o erro
+  é o mesmo nos dois casos.
+- Quando está bloqueado, a tela mostra o passo a passo **do aparelho em que ela
+  está** — Ajustes do Android → Apps no APK, cadeado 🔒 → Permissões no
+  navegador, Ajustes → Safari → Microfone no iPhone. Sem "verifique as
+  configurações".
+- Isso vale nos dois lugares: no diagnóstico do Perfil **e** no erro do chat, que
+  é onde a pessoa está quando o problema aparece.
+- "Detalhes do aparelho" ganhou duas linhas que faltavam pra qualquer diagnóstico
+  à distância: `microfone: granted|denied|prompt` e `rodando: site no Chrome |
+  atalho na tela de início | APK`.
+
+**O resto da corrente está provado bom.** Com o microfone substituído por uma
+faixa de áudio real gerada no próprio navegador (um tom de 440 Hz por
+`MediaStreamDestination` — um `MediaStream` de verdade, não um simulacro), os
+sete passos passam: grava 31,4 KB, o servidor reconhece como webm e o arquivo
+toca de volta. Gravador, formato, envio e reprodução estão certos; **o único elo
+quebrado no aparelho dele é a permissão.**
+
+> ⚠️ **O APK em `releases/` é de 23/08** — anterior a todas as correções de
+> áudio, e às telas de diagnóstico. Quem abrir o áudio por ele não está testando
+> nada do que foi feito depois. Os prints do dono mostram a tela nova, então ele
+> está pelo link; mas o APK precisa ser regerado antes de ser usado pra julgar
+> qualquer coisa.
+
+#### O quadrado verde: terceira aparição, terceiro dono duplicado
+
+As duas primeiras foram a geometria do chão (9.14) e a cor chapada do campo
+(9.15). As duas estavam certas — e o quadrado continuou lá, porque **ele nunca
+foi desenhado**. Era CSS:
+
+```css
+.pet-stage { background: linear-gradient(#dcead9 0 62%, #c99e70 62%); }
+```
+
+Esse é o fundo de duas faixas chapadas de **antes da ilha existir** — o próprio
+cabeçalho de `petCena.js` o cita como "o que havia antes". A cena passou a ser
+pintada em canvas e ninguém apagou a linha. Ele só aparecia na sobra da caixa, e
+por isso parecia um retângulo com borda reta encostado no céu azul do desenho.
+
+E a sobra era **enorme** por uma segunda causa, medida no navegador:
+
+| | antes | depois |
+|---|---|---|
+| Palco | 343 × **614** | 343 × 614 |
+| Cena desenhada | 384 × **324** | 384 × **612** |
+| Sobra acima do bichinho | **288 px** | **0** |
+
+O palco tinha `height: 100%` num grid `align-items: stretch`: ele esticava até a
+altura da **lista de itens** ao lado. Seis itens, 614 px de caixa — e a cena com
+128×108 cravado nunca ia cobrir isso.
+
+**O conserto tem três partes, e nenhuma delas é pintar a sobra:**
+
+1. O CSS perdeu o fundo próprio. Quem decide a cor é o desenho: `corDoCeu()` em
+   `petCena.js` entrega a mesma cor da primeira faixa do céu, e a tela passa por
+   `--pet-ceu`. Uma fonte só.
+2. O palco parou de esticar (`align-items: start`) e ganhou a proporção da
+   própria cena.
+3. **A caixa de referência deixou de ser 128×108 cravado.** A cena nunca precisou
+   disso: `petCena` recebe largura, altura e a linha do chão, e `enquadrar` mede
+   tudo em fração da altura — só a caixa é que estava fixa. Com `preencher`, a
+   altura sai da caixa REAL, o canvas cobre o palco inteiro e **não existe mais
+   sobra pra pintar, de qualquer cor**.
+
+O bichinho não encolheu: ele continua com os mesmos 198 px de largura, e o que
+era bloco verde virou céu, montanha, mar, praia e as cinco faixas do campo.
+Fora da tela do bichinho nada muda — a ficha de espécie e a corrida continuam na
+caixa de 108, porque `preencher` é opt-in.
+
+**As duas causas ficaram travadas no smoke:** o CSS não pode voltar a ter fundo
+próprio (conferido com os comentários removidos, pra explicação poder citar o
+gradiente errado), o palco não pode voltar a esticar, a cena tem que desenhar na
+altura da caixa, e as duas telas do microfone têm que pedir pela fonte única sem
+tabela de erro própria.
+
+**Estado: 655 verificações, 0 falha.** Build Vite aprovada. Conferido no
+navegador: sobra 0 px, bancada `/lab` com as 13 abas sem nenhum desenho vazio, e
+o diagnóstico do microfone rodado nos dois caminhos (bloqueado e liberado).
+
+**O que fica com você:** liberar o microfone nos ajustes do site, pelos passos
+que a tela agora mostra. Depois disso o áudio do chat funciona — o resto da
+corrente já está provado.

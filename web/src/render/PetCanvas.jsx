@@ -449,11 +449,27 @@ function bolha(cx, cy, d) {
 }
 
 // ------------------------------------------------------------------ componente
-export default function PetCanvas({ pet, onPoke, arrastando = false }) {
+export default function PetCanvas({ pet, onPoke, arrastando = false, preencher = false }) {
   const ref = useRef(null)
   // `res` = quantas vezes a caixa de referencia (128x108) o desenho tem de
-  // resolucao; `zoom` = a ampliacao INTEIRA que o CSS aplica em cima.
-  const [{ res, zoom }, setVista] = useState({ res: 1, zoom: 2 })
+  // resolucao; `zoom` = a ampliacao INTEIRA que o CSS aplica em cima; `altura`
+  // = quantas linhas da caixa de referencia o desenho tem (108 e o padrao).
+  //
+  // ------------------------------------------------- por que a altura e variavel
+  //
+  // O "quadrado verde acima do boneco", terceira vez que ele aparece. As duas
+  // primeiras foram a geometria do chao e a cor chapada do campo; esta e a
+  // ultima peca, e e de ENQUADRAMENTO: a cena tem 128x108 cravado, e na tela do
+  // bichinho o palco ocupa a tela inteira (343x614 num celular). Uma proporcao
+  // 1,19 dentro de uma caixa 0,56 nao cobre de jeito nenhum — sobravam 288 px
+  // de caixa vazia acima do desenho, e era essa tira que aparecia pintada,
+  // qualquer que fosse a cor dela.
+  //
+  // A cena nunca precisou dos 108: `petCena` recebe largura, altura e a linha
+  // do chao, e `enquadrar` mede tudo em fracao da altura. So a caixa e que
+  // estava cravada. Com `preencher`, a altura da caixa de referencia sai da
+  // caixa REAL — mais ceu, a mesma ilha, e nenhuma sobra pra pintar.
+  const [{ res, zoom, altura }, setVista] = useState({ res: 1, zoom: 2, altura: 108 })
 
   // Mais pixel no bichinho, sem perder o tamanho na tela.
   //
@@ -485,7 +501,11 @@ export default function PetCanvas({ pet, onPoke, arrastando = false }) {
       // laterais e ar — e o palco corta com `overflow: hidden`. Com 1,1 a conta
       // perdia o 3x por dez pixels numa tela de 375.
       const larg = pai.clientWidth * 1.25
-      const alt = pai.clientHeight - 8
+      // Preenchendo, a altura nao limita mais a ampliacao: ela deixa de ser um
+      // teto e passa a ser o RESULTADO (quantas linhas desenhar). Fora do modo
+      // preencher nada muda — a caixa continua 108 e a altura continua cortando,
+      // que e o que mantem a ficha de especie e a corrida do jeito que estao.
+      const alt = preencher ? Infinity : pai.clientHeight - 8
       let melhor = { res: 1, zoom: 1, fisico: 128 }
       // Resolucoes inteiras: 128*res tem que ser inteiro, senao a ampliacao
       // por CSS voltaria a cair em meio pixel.
@@ -503,13 +523,19 @@ export default function PetCanvas({ pet, onPoke, arrastando = false }) {
           melhor = { res: r, zoom: z, fisico }
         }
       }
-      setVista({ res: melhor.res, zoom: melhor.zoom })
+      // `ceil`: melhor a cena passar um pixel ALEM da caixa (o palco corta com
+      // `overflow: hidden`, igual ja faz na largura) do que faltar um pixel e
+      // reabrir a tira.
+      const alturaRef = preencher
+        ? Math.max(108, Math.ceil(pai.clientHeight / (melhor.res * melhor.zoom)))
+        : 108
+      setVista({ res: melhor.res, zoom: melhor.zoom, altura: alturaRef })
     }
     medir()
     const obs = new ResizeObserver(medir)
     obs.observe(pai)
     return () => obs.disconnect()
-  }, [])
+  }, [preencher])
   // A reacao ao toque vive FORA do React: `setState` a cada toque re-renderizaria
   // a arvore e reiniciaria o laco de desenho no meio da animacao — o bichinho
   // daria um tranco justamente no quadro em que devia reagir.
@@ -527,7 +553,7 @@ export default function PetCanvas({ pet, onPoke, arrastando = false }) {
     let alive = true
     const canvas = ref.current
     const painter = new Painter(canvas)
-    painter.resize(128 * res, 108 * res)
+    painter.resize(128 * res, altura * res)
     // O bichinho ocupa o PALCO, e nao um cantinho dele.
     //
     // Com as ancoras da caixa de referencia ele saia com o tamanho relativo de
@@ -678,7 +704,7 @@ export default function PetCanvas({ pet, onPoke, arrastando = false }) {
     return () => { alive = false; cancelAnimationFrame(frame) }
     // `res` entra aqui: sem ele o canvas continuaria no tamanho antigo depois de
     // a medida mudar, e o desenho sairia recortado.
-  }, [pet, res])
+  }, [pet, res, altura])
 
   /**
    * Toque no bichinho.
@@ -786,7 +812,7 @@ export default function PetCanvas({ pet, onPoke, arrastando = false }) {
     <canvas
       ref={ref}
       className="pet-canvas"
-      style={{ width: 128 * res * zoom, height: 108 * res * zoom }}
+      style={{ width: 128 * res * zoom, height: altura * res * zoom }}
       onPointerDown={tocar}
       onPointerMove={mover}
       onPointerUp={soltar}

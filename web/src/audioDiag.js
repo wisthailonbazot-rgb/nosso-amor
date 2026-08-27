@@ -21,6 +21,7 @@
 // `POST /api/chat/audio/teste`, que valida o arquivo igualzinho e joga fora.
 
 import { api, apiUrl, getToken } from './api'
+import { estadoDoMicrofone, ondeRoda, pedirMicrofone } from './lib/microfone'
 
 const FORMATOS = [
   ['audio/webm;codecs=opus', 'webm'],
@@ -31,7 +32,10 @@ const FORMATOS = [
   ['audio/mp4', 'm4a'],
 ]
 
-const passo = (ok, label, detalhe = '') => ({ ok, label, detalhe })
+// `passos` é a lista do que fazer quando o passo falha e o conserto está fora
+// do app (o caso da permissão bloqueada). Vazia na maioria: quando o motivo já
+// diz tudo, mais texto é ruído.
+const passo = (ok, label, detalhe = '', passos = []) => ({ ok, label, detalhe, passos })
 
 /**
  * Roda o diagnóstico. TEM que ser chamado de dentro de um toque: pedir o
@@ -75,21 +79,22 @@ export async function diagnosticarAudio(aoAndar = () => {}) {
   anda(passo(true, 'Formato de gravação', formato ? formato.tipo : 'nenhum reconhecido — vai no padrão do aparelho'))
 
   // 4. permissão + microfone
-  let stream
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-  } catch (err) {
-    const nome = err?.name || 'erro'
-    const explica = {
-      NotAllowedError: 'Você (ou o navegador) negou o microfone para este site. Libere nos ajustes do site.',
-      SecurityError: 'O navegador bloqueou o microfone para este site.',
-      NotFoundError: 'Nenhum microfone encontrado neste aparelho.',
-      NotReadableError: 'O microfone está ocupado por outro app.',
-      AbortError: 'O aparelho interrompeu o pedido do microfone.',
-    }[nome] || `Falhou com ${nome}.`
-    anda(passo(false, 'Permissão do microfone', explica))
+  //
+  // Aqui estava o buraco da rodada passada. O passo devolvia `NotAllowedError`
+  // e dizia "Você (ou o navegador) negou — libere nos ajustes do site", que é
+  // verdade e não serve: não diz ONDE ficam esses ajustes, e principalmente não
+  // diz que **o navegador não vai perguntar de novo** enquanto o "não" estiver
+  // guardado. O dono continuou tocando no botão esperando a pergunta.
+  //
+  // `pedirMicrofone` separa os dois casos que dão o MESMO erro — pergunta
+  // fechada agora (dá pra tentar de novo) e permissão bloqueada na origem (só
+  // nos ajustes) — e devolve o caminho de volta em passos, para ESTE aparelho.
+  const pedido = await pedirMicrofone()
+  if (!pedido.ok) {
+    anda(passo(false, 'Permissão do microfone', pedido.motivo, pedido.passos))
     return linhas
   }
+  const stream = pedido.stream
   const faixas = stream.getAudioTracks()
   anda(passo(true, 'Permissão do microfone', faixas[0]?.label || 'liberado'))
 
@@ -166,13 +171,25 @@ export async function diagnosticarAudio(aoAndar = () => {}) {
   return linhas
 }
 
-/** Só pra tela mostrar o endereço em que está rodando, que já explicou caso. */
-export function ondeEstamos() {
+/**
+ * O que a tela mostra em "Detalhes do aparelho".
+ *
+ * Ganhou duas linhas nesta rodada, e as duas por causa do caso do Android: o
+ * ESTADO GUARDADO da permissão (que é o que explica o navegador não perguntar)
+ * e ONDE o app está rodando (site, atalho ou APK) — sem isso não dá pra saber
+ * em quais ajustes a pessoa tem que mexer, e a resposta é diferente em cada um.
+ *
+ * É `async` agora porque ler a permissão é uma Promise.
+ */
+export async function ondeEstamos() {
+  const onde = ondeRoda()
   return {
     endereco: location.origin,
     api: apiUrl('/api'),
     seguro: window.isSecureContext,
     temToken: !!getToken(),
+    microfone: await estadoDoMicrofone(),
+    rodando: onde.apk ? 'APK' : onde.instalado ? 'atalho na tela de início' : `site no ${onde.navegador}`,
     agente: navigator.userAgent.slice(0, 120),
   }
 }

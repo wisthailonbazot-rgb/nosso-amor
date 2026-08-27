@@ -6,6 +6,7 @@ import Icon from '../components/Icon'
 import ItemPreview from '../components/ItemPreview'
 import PetCanvas from '../render/PetCanvas'
 import { drawPet } from '../render/PetCanvas'
+import { corDoCeuAgora } from '../render/petCena'
 import { Painter } from '../render/pixel'
 import { subscribe } from '../store'
 
@@ -300,8 +301,15 @@ export default function Pet() {
         Com as opções em pé, do lado, sobra altura pro cenário e o arrasto vira
         um caminho curto: o item sai da lateral e cai em cima dele. */}
     <div className="pet-arena">
-      <div ref={palcoRef} className={`pet-stage card ${pet.sick ? 'sick' : ''} ${arrasto ? (arrasto.sobre ? 'alvo-aceso' : 'alvo') : ''}`}>
-        <PetCanvas pet={{ ...pet, prop: emUso }} onPoke={aoAfagar} arrastando={!!arrasto} />
+      {/* `--pet-ceu` é o conserto do quadrado verde: a sobra da caixa acima do
+          canvas recebe a cor do céu QUE O DESENHO usa naquela hora, em vez de
+          ter um fundo próprio de outra época. Ver `corDoCeu` em petCena.js. */}
+      <div
+        ref={palcoRef}
+        style={{ '--pet-ceu': corDoCeuAgora() }}
+        className={`pet-stage card ${pet.sick ? 'sick' : ''} ${arrasto ? (arrasto.sobre ? 'alvo-aceso' : 'alvo') : ''}`}
+      >
+        <PetCanvas pet={{ ...pet, prop: emUso }} onPoke={aoAfagar} arrastando={!!arrasto} preencher />
         {/* As barras viraram um HUD de canto.
             Elas ocupavam quatro cartões num grid embaixo do cenário — metade da
             tela pra dizer quatro números. Aqui são quatro tracinhos no canto,
