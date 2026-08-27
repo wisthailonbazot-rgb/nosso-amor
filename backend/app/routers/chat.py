@@ -6,7 +6,7 @@ from .. import media_store, missions, push
 from ..clock import utcnow
 from ..db import get_db
 from ..models import Message, User
-from ..realtime import hub, publish
+from ..realtime import hub, publish, publish_por_pessoa
 from ..schemas import moment_iso
 from ..security import create_media_token, current_user, partner_of
 
@@ -56,6 +56,29 @@ def _out(row: Message, media_token: str) -> dict:
         "read": row.read_at is not None,
         "created_at": moment_iso(row.created_at),
     }
+
+
+def _publicar_mensagem(db: Session, row: Message, evento: str = "chat") -> None:
+    """Manda a mensagem ao vivo com o token de midia de CADA pessoa.
+
+    Antes era `publish(evento, {"message": _out(row, token)})` com o token de
+    quem ENVIOU — o mesmo texto ia pros dois. Quem recebia um audio ficava com o
+    endereco emprestado do outro: tocava enquanto aquele token valia e parava
+    depois, enquanto pra quem mandou continuava funcionando. Recarregar a tela
+    escondia o problema, porque a leitura normal (`GET /api/chat`) sempre montou
+    o token certo. Ver `Hub.send_to_all_per_user`.
+    """
+    from ..models import User as _User
+
+    cache: dict[int, str] = {}
+
+    def montar(user_id: int) -> dict:
+        if user_id not in cache:
+            pessoa = db.get(_User, user_id)
+            cache[user_id] = create_media_token(pessoa) if pessoa else ""
+        return {"message": _out(row, cache[user_id])}
+
+    publish_por_pessoa(evento, montar)
 
 
 def nao_lidas(db: Session, user_id: int) -> int:
@@ -167,7 +190,7 @@ def send_text(
     db.commit()
 
     token = create_media_token(user)
-    publish("chat", {"message": _out(row, token)})
+    _publicar_mensagem(db, row)
     return _out(row, token)
 
 
@@ -192,7 +215,7 @@ def send_image(
     db.commit()
 
     token = create_media_token(user)
-    publish("chat", {"message": _out(row, token)})
+    _publicar_mensagem(db, row)
     return _out(row, token)
 
 
@@ -216,7 +239,7 @@ def send_audio(
     db.commit()
 
     token = create_media_token(user)
-    publish("chat", {"message": _out(row, token)})
+    _publicar_mensagem(db, row)
     return _out(row, token)
 
 
@@ -276,7 +299,7 @@ def react(
     row.reaction = payload.reaction[:10]
     db.commit()
     token = create_media_token(user)
-    publish("chat_update", {"message": _out(row, token)})
+    _publicar_mensagem(db, row, "chat_update")
     return _out(row, token)
 
 

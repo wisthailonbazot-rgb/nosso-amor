@@ -72,6 +72,25 @@ class Hub:
             total += await self.send_to(user_id, event, data)
         return total
 
+    async def send_to_all_per_user(self, event: str, build) -> int:
+        """Como `send_to_all`, mas o dado e MONTADO PRA CADA PESSOA.
+
+        Existe por causa da midia. A URL de um audio ou de uma foto carrega um
+        token que pertence a QUEM VAI LER — e o evento ao vivo era montado uma
+        vez, com o token de quem ENVIOU, e mandado igual pros dois. Quem recebia
+        ficava com um endereco emprestado: enquanto o token do outro valia, o
+        arquivo abria; quando vencia, o audio parava de tocar so pra quem
+        recebeu, e continuava tocando pra quem mandou. Um defeito assimetrico,
+        que e o pior tipo de achar.
+
+        Recarregar a tela consertava (a leitura normal monta o token certo), o
+        que deixava o rastro ainda mais confuso.
+        """
+        total = 0
+        for user_id in list(self._by_user.keys()):
+            total += await self.send_to(user_id, event, build(user_id))
+        return total
+
     async def broadcast_presence(self) -> None:
         await self.send_to_all("presence", {"online": self.online_users()})
 
@@ -90,6 +109,22 @@ class Hub:
 
 
 hub = Hub()
+
+
+def publish_por_pessoa(event: str, build) -> None:
+    """Publica um evento cujo conteudo muda conforme quem le.
+
+    `build(user_id)` devolve o dado daquela pessoa. Ver
+    `Hub.send_to_all_per_user` para o motivo de isso existir.
+    """
+    loop = hub._loop
+    if loop is None or loop.is_closed():
+        return
+    coroutine = hub.send_to_all_per_user(event, build)
+    try:
+        asyncio.run_coroutine_threadsafe(coroutine, loop)
+    except RuntimeError:
+        coroutine.close()
 
 
 def publish(event: str, data: Any = None, to_user: int | None = None) -> None:

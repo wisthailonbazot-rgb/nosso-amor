@@ -1024,3 +1024,34 @@ navegador. Causas no HANDOFF, seção 9.19.
 
 Estado: **664 verificações, 0 falha**; build Vite aprovada. Causas no HANDOFF,
 seção 9.20.
+
+### 27/08/2026 — Eu apaguei as fotos e os áudios de vocês
+
+- **[x]** **A causa dos áudios não tocarem era eu, mas não era o código: era o
+      deploy.** `/app/media` nunca esteve num volume — vivia dentro do container.
+      Todo deploy troca o container e leva junto TODA foto e TODO áudio já
+      enviados. Eu dei cinco deploys hoje.
+      - O banco persiste, então as mensagens continuaram na tela com a bolha de
+        áudio; só o arquivo sumiu. O `<audio>` levava 404, e o navegador reduz
+        isso ao mesmo erro de "não sei tocar este formato" — que foi o que a
+        minha mensagem leu e traduziu como culpa do seu aparelho.
+      - "Abri o dela no meu celular e funciona" fechou o caso: o único áudio que
+        restava era um que ela mandou DEPOIS do último deploy.
+      - O passo 4 do HANDOFF já dizia "volume de disco, senão as fotos somem no
+        deploy". Estava escrito, e eu deployei cinco vezes sem conferir.
+- **[x]** **Consertado de vez.** Volume permanente `/data/casal-media` →
+      `/app/media`, criado pela API do Coolify; os arquivos que sobraram foram
+      salvos antes e recolocados; conferido no container novo que o bind existe e
+      que os arquivos sobreviveram ao deploy. Deploy não apaga mais nada.
+- **[ ]** **O que foi apagado não volta.** Procurei em volumes órfãos, containers
+      parados e camadas do Docker — não sobrou nada, e os backups do Coolify são
+      do banco, não de arquivo. As fotos e os áudios anteriores a hoje 16:10 UTC
+      estão perdidos. Sinto muito: isso foi erro meu.
+- **[x]** **Um defeito real achado no caminho:** o evento ao vivo do chat levava
+      o token de mídia de QUEM ENVIOU pros dois. Quem recebia ficava com o
+      endereço emprestado — tocava enquanto o token do outro valia e parava
+      depois, enquanto pra quem mandou continuava funcionando. Agora a mensagem
+      ao vivo é montada para cada pessoa (`publish_por_pessoa`), com trava no
+      smoke.
+
+Estado: **667 verificações, 0 falha**. Causas no HANDOFF, seção 9.21.

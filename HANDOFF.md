@@ -2457,3 +2457,86 @@ formato do Samsung Internet. `_detect_audio` já trata `ftyp` (MP4/AAC) além de
 webm, ogg, mp3 e wav — o envio não é recusado por formato.
 
 **Estado: 664 verificações, 0 falha.** Build Vite aprovada.
+
+### 9.21 Eu apaguei as fotos e os áudios de vocês (27/08/2026)
+
+> **Esta é a seção mais importante deste arquivo. Leia antes de dar qualquer
+> deploy neste projeto.**
+
+Relato do dono, depois de horas: "os áudios enviados do iPhone dela continuam não
+reproduzindo no meu Android, o que funcionava antes, nem faz sentido isso ter
+parado de funcionar". E depois, a frase que resolveu: **"abri o dela no meu
+celular e funciona"**.
+
+Eu passei quatro rodadas atrás de formato, permissão e código. Não era nada
+disso.
+
+#### A causa
+
+```
+$ docker inspect <container> --format '{{json .Mounts}}'
+[]
+```
+
+**`/app/media` nunca esteve num volume.** Ele vivia na camada de escrita do
+container. Todo deploy troca o container — e leva junto **toda** foto e **todo**
+áudio já enviados. Eu dei **cinco deploys hoje**.
+
+O passo 4 da seção 7 deste arquivo diz, desde o começo:
+
+> `STORAGE_DIR` (volume de disco, senão as fotos somem no deploy)
+
+Estava escrito, e nunca foi feito. Eu li esse arquivo hoje de manhã e deployei
+cinco vezes sem conferir.
+
+#### Por que o rastro apontava pro lugar errado
+
+O **banco é PostgreSQL e persiste** — então as mensagens continuaram lá, com as
+bolhas de áudio e as miniaturas de foto na tela. Só o **arquivo** sumiu. O
+`<audio>` pedia o arquivo, levava 404, e o navegador reduz isso a
+`MEDIA_ERR_SRC_NOT_SUPPORTED` — o mesmo erro de "não sei tocar este formato".
+Foi exatamente isso que a minha mensagem da 9.19 leu e traduziu como "este
+aparelho não sabe tocar o formato deste áudio": uma acusação errada, construída
+em cima de um erro ambíguo.
+
+E "abri o dela no meu celular e funciona" fecha: o único áudio que restava era um
+que ela tinha mandado **depois** do último deploy. Esse tocava. Todos os
+anteriores tinham sido destruídos.
+
+#### O que foi feito
+
+1. **Os três arquivos que sobraram foram copiados pra fora do container** antes
+   de qualquer coisa (`/root/media-casal-resgate`).
+2. **Volume permanente criado**: `/data/casal-media` → `/app/media`, pela API do
+   Coolify (`type: "persistent"` — os outros valores que tentei são recusados).
+3. Os arquivos foram postos no volume e o app redeployado. Conferido no
+   container novo:
+   ```
+   /data/casal-media -> /app/media (bind)
+   202608_kQz2kkwtHE76bNnB.m4a   202608_l4ttSpcngk4BUf9n.jpg   thumb_...jpg
+   ```
+   **A partir de agora deploy não apaga mais nada.**
+4. **O que foi apagado antes disso não volta.** Procurei em volumes órfãos, em
+   containers parados e nas camadas do Docker: não sobrou nada. Os backups do
+   Coolify são do banco, não de arquivo. As fotos e os áudios anteriores a
+   27/08 16:10 UTC estão perdidos, e a culpa é minha.
+
+> **Regra que fica:** antes do primeiro deploy de qualquer app deste servidor,
+> `docker inspect <container> --format '{{json .Mounts}}'`. Se voltar `[]` e o
+> app escrever arquivo, **não deploye** — crie o volume primeiro.
+
+#### E um defeito de verdade que apareceu no caminho
+
+Enquanto media o problema achei outro, assimétrico e traiçoeiro: o evento ao vivo
+do chat era montado **uma vez, com o token de mídia de quem ENVIOU**, e mandado
+igual pros dois. Quem recebia um áudio ficava com um endereço emprestado do
+outro: tocava enquanto aquele token valia e parava depois — **enquanto pra quem
+mandou continuava funcionando**. Recarregar a tela escondia, porque
+`GET /api/chat` sempre montou o token certo.
+
+Agora existe `Hub.send_to_all_per_user` / `publish_por_pessoa`, e o chat monta a
+mensagem **para cada pessoa**. O smoke abre um socket como ela, manda um áudio
+como ele e confere que o `sub` do token que chega é o **dela** — conferido
+reintroduzindo o defeito de propósito, que deixa a verificação vermelha.
+
+**Estado: 667 verificações, 0 falha.**
