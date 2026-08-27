@@ -6,6 +6,7 @@ import Icon from '../components/Icon'
 import { useStore } from '../store'
 import { diagnose, disablePush, enablePush, isApple, isStandalone, permission } from '../push'
 import { diagnosticarAudio, ondeEstamos } from '../audioDiag'
+import { abrirPergunta, comoLiberar } from '../lib/microfone'
 import { stamp } from '../lib/dates'
 
 export default function Profile() {
@@ -18,6 +19,8 @@ export default function Profile() {
   // Os detalhes do aparelho passaram a incluir o ESTADO GUARDADO da permissão,
   // que só se lê por Promise — então viraram estado em vez de chamada no render.
   const [detalhes, setDetalhes] = useState(null)
+  // O resultado do botão de liberar: { ok, motivo, passos } ou null.
+  const [permissao, setPermissao] = useState(null)
   const [message, setMessage] = useState(null)
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -229,12 +232,49 @@ export default function Profile() {
       <div className="card">
         <p className="card-title">Áudio neste aparelho</p>
         <p className="muted small">
-          Se o áudio do chat não está saindo daqui, toque abaixo: ele grava dois
-          segundos de verdade, manda pro servidor conferir e diz em qual passo
-          parou. Nada disso vai pra conversa.
+          <strong>Liberar o microfone</strong> abre a pergunta do aparelho, a
+          mesma que apareceu para a câmera e para os avisos. Se ela não aparecer,
+          é porque já existe um "não" guardado — e aí o próprio botão diz onde
+          desfazer.
+          <br />
+          <strong>Testar o microfone</strong> grava dois segundos de verdade,
+          manda pro servidor conferir e diz em qual passo parou. Nada disso vai
+          pra conversa.
         </p>
+        {/* O BOTÃO QUE FAZ A PERGUNTA APARECER.
+            Ele existe separado do teste dos sete passos por pedido do dono —
+            "ao clicar, abre o modal de permissão igual foi com a câmera e as
+            notificações". E é separado por um motivo técnico, não por gosto: é
+            o caminho mais curto possível entre o toque e o `getUserMedia`, sem
+            nada no meio. Navegador só mostra a pergunta enquanto a ativação
+            pelo toque está de pé; qualquer trabalho antes disso é risco. */}
+        <button
+          className="btn btn-primary btn-block"
+          disabled={testando}
+          onClick={async () => {
+            setPermissao(null)
+            const r = await abrirPergunta()
+            setPermissao(r)
+            setDetalhes(await ondeEstamos())
+          }}
+        >
+          <Icon name="chat" size={16} /> Liberar o microfone
+        </button>
+
+        {permissao && (
+          <div className={`alert ${permissao.ok ? 'alert-ok' : 'alert-error'}`} style={{ marginTop: 8 }}>
+            {permissao.ok ? 'Microfone liberado. Já dá pra mandar áudio no chat.' : permissao.motivo}
+            {!permissao.ok && permissao.passos?.length > 0 && (
+              <ol className="tiny" style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                {permissao.passos.map((linha, k) => <li key={k} style={{ marginBottom: 3 }}>{linha}</li>)}
+              </ol>
+            )}
+          </div>
+        )}
+
         <button
           className="btn btn-ghost btn-block"
+          style={{ marginTop: 8 }}
           disabled={testando}
           onClick={async () => {
             setTestando(true)

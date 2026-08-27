@@ -894,3 +894,35 @@ resposta.
 Estado: **655 verificações, 0 falha**; build Vite aprovada; conferido no
 navegador (sobra 0 px, `/lab` com as 13 abas sem desenho vazio, diagnóstico do
 microfone rodado bloqueado e liberado). Causas no HANDOFF, seção 9.16.
+
+### 27/08/2026 — O modal de permissão do microfone
+
+Pedido do dono: "não tem onde dar essa permissão; quero que ao clicar em testar
+microfone abra o modal de permissão, igual foi com a câmera e as notificações".
+
+- **[x]** **A culpa do modal não aparecer era minha, de hoje de manhã.** Na
+      correção anterior eu botei uma consulta (`navigator.permissions.query`)
+      ANTES de pedir o microfone. Consultar é uma Promise, e um `await` na
+      frente tira o pedido de dentro do toque — que é a condição pro navegador
+      MOSTRAR a pergunta. É a armadilha nº 9 do HANDOFF, que eu reabri
+      escrevendo o conserto dela. De quebra, com o estado lido como "denied" o
+      código nem tentava.
+      - Agora pede primeiro, sem nada na frente. Medido no navegador nos três
+        caminhos (o botão novo, o teste e o botão do chat): todos pedem na mesma
+        tarefa do toque. Travado no smoke, e conferido reintroduzindo o defeito
+        de propósito.
+- **[x]** **"Não tem onde dar essa permissão" — e não tinha mesmo.** Eu te mandei
+      pro cadeado 🔒 do navegador, e num atalho instalado não existe barra de
+      endereço nem cadeado. Pior: quando o atalho vira aplicativo, o Chrome
+      **delega o microfone às permissões do APP** — a mesma lista da câmera e
+      dos avisos, que são justo os dois que funcionaram pra você. O passo a
+      passo agora começa por Ajustes → Apps → Nosso app → Permissões → Microfone.
+- **[x]** **Botão "Liberar o microfone"**, em destaque no Perfil, separado do
+      teste dos sete passos: é só tocar e a pergunta aparece. O teste continua
+      lá pra quando a pergunta já foi respondida e o áudio mesmo assim não sai.
+- **[x]** Descartado de saída: certificado inválido (o Chrome bloqueia permissão
+      sem oferecer onde liberar, o que casava com o relato). O Let's Encrypt do
+      site é válido até 09/11/2026, conferido sem `-k`.
+
+Estado: **657 verificações, 0 falha**; build Vite aprovada; conferido no
+navegador. Causas no HANDOFF, seção 9.17.

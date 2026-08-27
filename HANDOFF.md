@@ -2156,3 +2156,75 @@ o diagnóstico do microfone rodado nos dois caminhos (bloqueado e liberado).
 **O que fica com você:** liberar o microfone nos ajustes do site, pelos passos
 que a tela agora mostra. Depois disso o áudio do chat funciona — o resto da
 corrente já está provado.
+
+### 9.17 Eu tirei o pedido de dentro do toque, e por isso o modal sumiu (27/08/2026)
+
+Pedido do dono: "não tem onde dar essa permissão; quero que ao clicar em testar
+microfone abra o modal de permissão, igual foi com a câmera e as notificações".
+
+Duas coisas erradas, e a primeira é minha, da 9.16.
+
+#### 1. A consulta na frente do pedido matou a pergunta
+
+Na 9.16 eu escrevi `pedirMicrofone` assim:
+
+```js
+const antes = await estadoDoMicrofone()     // ← navigator.permissions.query
+if (antes === 'denied') return { bloqueado: true, ... }
+const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+```
+
+Parecia esperto e é o defeito inteiro, por dois motivos:
+
+1. **`getUserMedia` deixou de ser chamada dentro do toque.** O navegador só
+   mostra a pergunta enquanto a ativação por gesto está de pé, e um `await` no
+   caminho é exatamente o que pode derrubá-la. É a **armadilha nº 9 deste
+   próprio HANDOFF** ("a permissão só pode ser pedida dentro de um toque") — eu
+   a reabri escrevendo o conserto dela.
+2. **Com o estado lido como `denied`, o código nem tentava.** E o estado
+   guardado erra: em WebView e em atalho instalado ele responde por outra via.
+   Um "não" velho ali passou a impedir a pergunta que ainda apareceria.
+
+Agora a ordem é a certa e não tem nada na frente: **pede primeiro**. O estado só
+é consultado **depois de uma recusa**, e só para explicá-la. Consultar não
+conserta nada; pedir, sim.
+
+> **Medido no navegador, não deduzido.** Um ouvinte de captura no botão marca o
+> início do toque e agenda uma microtarefa; o `getUserMedia` é interceptado e
+> anota se ela já rodou. Se rodou, houve `await` no meio. Os três caminhos —
+> "Liberar o microfone", "Testar o microfone" e o botão do chat — respondem
+> **"mesma tarefa do toque"**. E o smoke trava isso: dentro de `pedirMicrofone`,
+> o `await navigator.mediaDevices.getUserMedia` tem que vir antes de qualquer
+> `await estadoDoMicrofone`. (Conferido reintroduzindo o defeito de propósito: a
+> verificação fica vermelha.)
+
+#### 2. "Não tem onde dar essa permissão" — e não tinha mesmo
+
+O caminho que a 9.16 mandava para o atalho instalado era o cadeado 🔒 do
+navegador. **Num atalho instalado não existe barra de endereço**, logo não existe
+cadeado; e pior, para um atalho que virou aplicativo (WebAPK, que é o que o
+Chrome no Android faz com um app instalável) o próprio Chrome **delega o
+microfone, a câmera e a localização às permissões do APLICATIVO**. Ou seja: nesse
+caso o microfone nem mora no cadeado — mora nos Ajustes do Android, na mesma
+lista em que ficam a câmera e os avisos, que são justamente os dois que ele viu
+funcionar.
+
+O passo a passo do caso instalado agora começa por lá — Ajustes → Apps → Nosso
+app → Permissões → Microfone — e o caminho do navegador fica como segunda opção,
+para quando o atalho não tiver virado aplicativo.
+
+#### 3. Um botão só para abrir a pergunta
+
+`abrirPergunta()` é o caminho mais curto que existe entre um toque e o
+`getUserMedia`: pede, fecha a faixa na hora (segurá-la acenderia a luz de
+"gravando" sem ninguém gravar) e devolve o motivo. Virou o botão **"Liberar o
+microfone"**, em destaque, acima do teste dos sete passos — que continua existindo
+e leva dois segundos gravando, tempo demais para uma coisa que ou pergunta na
+hora ou não pergunta nunca.
+
+**Uma hipótese descartada de saída, e vale registrar:** certificado inválido faz
+o Chrome bloquear permissões *sem oferecer onde liberar*, que casava exatamente
+com o relato. Não é o caso — `nossoamor.209.50.229.119.sslip.io` tem Let's
+Encrypt válido até 09/11/2026, conferido sem `-k`.
+
+**Estado: 657 verificações, 0 falha.** Build Vite aprovada.

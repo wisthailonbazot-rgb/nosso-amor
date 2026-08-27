@@ -91,20 +91,59 @@ export function comoLiberar(onde = ondeRoda()) {
       'Toca em "Testar o microfone" e responde "Permitir".',
     ]
   }
+  if (onde.instalado && onde.android) {
+    // ATENÇÃO À ORDEM AQUI — a primeira versão mandou pro lugar errado.
+    //
+    // O atalho instalado no Android não é um favorito: o Chrome o transforma
+    // num aplicativo de verdade (WebAPK) e, quando faz isso, ele **delega o
+    // microfone, a câmera e a localização às permissões do APLICATIVO**. Ou
+    // seja: nesse caso o microfone NÃO mora no cadeado do endereço — mora nos
+    // Ajustes do Android, na mesma lista em que ficam a câmera e os avisos.
+    //
+    // E como o atalho abre sem barra de endereço, não existe cadeado pra tocar:
+    // era literalmente "não tem onde dar essa permissão". O caminho do
+    // navegador continua listado abaixo, mas como segunda opção — ele só vale
+    // se o atalho não tiver virado aplicativo.
+    return [
+      'Ajustes do Android → Apps (ou "Aplicativos") → Nosso app → Permissões.',
+      'É a MESMA lista onde ficam a câmera e as notificações. Toca em Microfone e marca "Permitir".',
+      'Se não houver "Microfone" nessa lista, o atalho não virou aplicativo: aí é pelo navegador — abre o mesmo endereço no ' + onde.navegador + ', toca no cadeado 🔒 → Permissões → Microfone → "Perguntar" (ou "Redefinir permissões").',
+      'Volta pelo atalho e toca em "Liberar o microfone".',
+    ]
+  }
   if (onde.instalado) {
     return [
       'O atalho na tela de início usa a permissão do SITE, e ela está com "Bloquear" guardado.',
       `Abre o mesmo endereço no ${onde.navegador}, numa aba normal.`,
       'Toca no cadeado 🔒 ao lado do endereço → Permissões → Microfone → "Perguntar". Se aparecer "Redefinir permissões", serve também.',
-      'Volta pelo atalho e toca em "Testar o microfone".',
+      'Volta pelo atalho e toca em "Liberar o microfone".',
     ]
   }
   return [
     `No ${onde.navegador}, toca no cadeado 🔒 (ou no ⚙ / ⓘ) ao lado do endereço.`,
     'Abre "Permissões" e procura Microfone.',
     'Troca de "Bloquear" para "Perguntar" — ou toca em "Redefinir permissões", que apaga o "não" guardado.',
-    'Recarrega a página e toca em "Testar o microfone". Aí a pergunta volta a aparecer.',
+    'Recarrega a página e toca em "Liberar o microfone". Aí a pergunta volta a aparecer.',
   ]
+}
+
+/**
+ * O caminho mais curto que existe entre um toque e a pergunta do navegador.
+ *
+ * É `pedirMicrofone` com a faixa devolvida na hora: quem chama isto não quer
+ * gravar nada, quer só que a pergunta APAREÇA. Existe como botão próprio no
+ * Perfil porque o pedido do dono foi exatamente esse — "ao clicar em testar
+ * microfone, abre o modal de permissão igual foi com a câmera e as
+ * notificações" — e porque o teste dos sete passos leva dois segundos gravando,
+ * o que é muito para uma coisa que ou pergunta na hora ou não pergunta nunca.
+ *
+ * Segurar a faixa aberta acenderia a luzinha de "gravando" do celular sem
+ * ninguém estar gravando; por isso ela é fechada assim que chega.
+ */
+export async function abrirPergunta() {
+  const r = await pedirMicrofone()
+  r.stream?.getTracks().forEach((t) => t.stop())
+  return r
 }
 
 /**
@@ -133,16 +172,27 @@ export async function pedirMicrofone() {
     return { ok: false, bloqueado: false, motivo: 'Este navegador não sabe gravar áudio.', passos: [] }
   }
 
-  const antes = await estadoDoMicrofone()
-  if (antes === 'denied') {
-    return {
-      ok: false,
-      bloqueado: true,
-      motivo: 'O microfone está BLOQUEADO para este endereço — é por isso que ele não pergunta mais nada. Só dá para reabrir nos ajustes:',
-      passos: comoLiberar(onde),
-    }
-  }
-
+  // O PEDIDO VEM PRIMEIRO, E SEM NENHUM `await` NA FRENTE.
+  //
+  // Aqui estava o defeito que impedia o modal de aparecer. A versão anterior
+  // perguntava `navigator.permissions.query()` ANTES de pedir o microfone, pra
+  // decidir se valia a pena pedir — e essa consulta é uma Promise. Duas coisas
+  // ruins saíam disso:
+  //
+  //   1. `getUserMedia` deixava de ser chamada DENTRO do toque. O navegador só
+  //      mostra a pergunta enquanto a "ativação por gesto" está de pé, e um
+  //      `await` no meio do caminho é justamente o que pode derrubá-la. É a
+  //      armadilha nº 9 do HANDOFF ("a permissão só pode ser pedida dentro de um
+  //      toque"), que eu reabri sozinho.
+  //   2. Com o estado lido como `denied`, o código NEM TENTAVA. E o estado
+  //      guardado erra: em WebView e em atalho instalado ele responde por outra
+  //      via que nem sempre é a que vale, então "denied" ali pode ser um "não"
+  //      velho enquanto a pergunta ainda apareceria de verdade.
+  //
+  // Agora é o contrário, e é a ordem certa: PEDE — e a pergunta aparece sempre
+  // que ainda for possível aparecer. O estado só é consultado DEPOIS, e só pra
+  // explicar uma recusa que já aconteceu. Consultar não conserta nada; pedir,
+  // sim.
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     return { ok: true, bloqueado: false, motivo: '', passos: [], stream }
