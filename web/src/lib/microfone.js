@@ -69,18 +69,90 @@ export async function estadoDoMicrofone() {
 }
 
 /**
+ * Quantos microfones o sistema está ENTREGANDO para o navegador.
+ *
+ * ------------------------------------------------------------- por que importa
+ *
+ * Este é o dado que separa as três coisas que davam a mesma mensagem, e que
+ * eu vinha tratando como uma só. O dono disse a frase que resolve: **"testei em
+ * outros navegadores"**. Permissão de site é guardada por navegador — se falha
+ * em mais de um, não é permissão de site. Só sobra o que é comum aos dois: o
+ * APARELHO.
+ *
+ * `enumerateDevices()` responde isso sem pedir nada a ninguém:
+ *
+ * | audioinput | o que significa |
+ * |---|---|
+ * | 0 | o Android não está entregando microfone NENHUM ao navegador — chave geral do aparelho desligada, ou o navegador sem a permissão de app |
+ * | 1+ sem nome | existe microfone, e o site é que não tem permissão (o nome só aparece depois do "permitir") |
+ * | 1+ com nome | já está liberado |
+ *
+ * Sem esta medida, "bloqueado para este endereço" era um chute — e foi um chute
+ * errado, que mandou o dono procurar uma tela de permissões que o Samsung
+ * Internet nem tem no cadeado.
+ */
+export async function entradasDeAudio() {
+  try {
+    const lista = await navigator.mediaDevices.enumerateDevices()
+    const audio = lista.filter((d) => d.kind === 'audioinput')
+    return { total: audio.length, comNome: audio.filter((d) => d.label).length }
+  } catch {
+    return { total: -1, comNome: -1 }
+  }
+}
+
+/**
  * O caminho de volta, em passos, para o aparelho em que estamos.
  *
  * Escrito como quem explica para alguém com o celular na mão: onde tocar, com
  * que nome a coisa aparece na tela. Sem "verifique as configurações".
  */
-export function comoLiberar(onde = ondeRoda()) {
+export function comoLiberar(onde = ondeRoda(), tipo = 'site') {
+  // -------------------------------------------------- A CHAVE GERAL DO APARELHO
+  //
+  // Isto é o que faltava, e é o que explica "testei em outros navegadores".
+  //
+  // O Android (12+, e a One UI da Samsung com mais destaque ainda) tem um
+  // interruptor de "Acesso ao microfone" que vale pro APARELHO INTEIRO. Com ele
+  // desligado, nenhum app e nenhum navegador conseguem gravar — e não existe
+  // nada em ajuste de site que resolva, porque não é permissão de site. O sinal
+  // dele é um **ícone de microfone cortado na barra de status**, que fica lá o
+  // tempo todo.
+  //
+  // Nesse estado o navegador ainda devolve `NotAllowedError`, o MESMO erro de
+  // um site bloqueado. Foi por isso que o diagnóstico anterior apontou o lugar
+  // errado com toda a confiança do mundo.
+  if (tipo === 'geral') {
+    return [
+      'Olha a barra de status do celular: se tiver um ícone de microfone CORTADO, é isto.',
+      'Puxa a barra de cima e procura o botão "Acesso ao microfone" — se estiver desligado, liga.',
+      'Ou: Ajustes → Segurança e privacidade → Controles de privacidade → Acesso ao microfone.',
+      'Essa chave vale pro aparelho inteiro: enquanto estiver desligada, NENHUM app e nenhum navegador gravam, e ajuste de site não resolve.',
+      'Depois volta aqui e toca em "Liberar o microfone".',
+    ]
+  }
+
+  // ------------------------------------------- A PERMISSÃO DO APP DO NAVEGADOR
+  //
+  // O segundo andar, e o segundo que atravessa navegador: o Samsung Internet e
+  // o Chrome são dois aplicativos Android, cada um com a própria permissão de
+  // microfone. Um site só consegue o microfone se o navegador dele tiver.
+  if (tipo === 'app') {
+    const app = onde.apk ? 'Nosso app' : onde.navegador
+    return [
+      `Ajustes do Android → Apps (ou "Aplicativos") → ${app} → Permissões → Microfone.`,
+      'Marca "Permitir". É a MESMA lista onde ficam a câmera e as notificações.',
+      'Esta é a permissão do aplicativo, e vale pra todos os sites que ele abre — é diferente da permissão do site.',
+      'Volta e toca em "Liberar o microfone".',
+    ]
+  }
+
   if (onde.apk) {
     return [
       'Sai do app.',
       'Ajustes do Android → Apps → Nosso app → Permissões → Microfone.',
       'Marca "Permitir".',
-      'Abre o app de novo e toca em "Testar o microfone".',
+      'Abre o app de novo e toca em "Liberar o microfone".',
     ]
   }
   if (onde.iOS) {
@@ -88,62 +160,48 @@ export function comoLiberar(onde = ondeRoda()) {
       'Ajustes do iPhone → Safari → Microfone.',
       'Deixa este site em "Perguntar" (ou "Permitir").',
       'Fecha o app de vez e abre de novo — o atalho da tela de início só relê isso ao reabrir.',
-      'Toca em "Testar o microfone" e responde "Permitir".',
+      'Toca em "Liberar o microfone" e responde "Permitir".',
     ]
   }
   if (onde.instalado && onde.android) {
-    // ATENÇÃO À ORDEM AQUI — a primeira versão mandou pro lugar errado.
-    //
-    // O atalho instalado no Android não é um favorito: o Chrome o transforma
-    // num aplicativo de verdade (WebAPK) e, quando faz isso, ele **delega o
-    // microfone, a câmera e a localização às permissões do APLICATIVO**. Ou
-    // seja: nesse caso o microfone NÃO mora no cadeado do endereço — mora nos
-    // Ajustes do Android, na mesma lista em que ficam a câmera e os avisos.
-    //
-    // E como o atalho abre sem barra de endereço, não existe cadeado pra tocar:
-    // era literalmente "não tem onde dar essa permissão". O caminho do
-    // navegador continua listado abaixo, mas como segunda opção — ele só vale
-    // se o atalho não tiver virado aplicativo.
+    // O atalho instalado no Android vira aplicativo (WebAPK), e o Chrome delega
+    // microfone, câmera e localização às permissões do APLICATIVO. Além de não
+    // existir barra de endereço ali pra ter cadeado.
     return [
       'Ajustes do Android → Apps (ou "Aplicativos") → Nosso app → Permissões.',
       'É a MESMA lista onde ficam a câmera e as notificações. Toca em Microfone e marca "Permitir".',
-      'Se não houver "Microfone" nessa lista, o atalho não virou aplicativo: aí é pelo navegador — abre o mesmo endereço no ' + onde.navegador + ', toca no cadeado 🔒 → Permissões → Microfone → "Perguntar" (ou "Redefinir permissões").',
+      'O atalho não tem barra de endereço, então não existe cadeado pra tocar: é por aqui mesmo.',
       'Volta pelo atalho e toca em "Liberar o microfone".',
     ]
   }
-  if (onde.instalado) {
+  // O caminho do SITE, por navegador — e ele é diferente em cada um.
+  //
+  // A versão anterior mandava "toca no cadeado → Permissões" pra todo mundo.
+  // No Samsung Internet o cadeado abre "Informações de privacidade", que mostra
+  // conexão, rastreadores e cookies — e **não tem permissões**. Mandar alguém
+  // pra uma tela que não existe é pior do que não dizer nada.
+  if (onde.navegador === 'Samsung Internet') {
     return [
-      'O atalho na tela de início usa a permissão do SITE, e ela está com "Bloquear" guardado.',
-      `Abre o mesmo endereço no ${onde.navegador}, numa aba normal.`,
-      'Toca no cadeado 🔒 ao lado do endereço → Permissões → Microfone → "Perguntar". Se aparecer "Redefinir permissões", serve também.',
-      'Volta pelo atalho e toca em "Liberar o microfone".',
+      'O cadeado do Samsung Internet NÃO tem permissões (só conexão, rastreadores e cookies) — não é por lá.',
+      'Menu ☰ (as três barras embaixo à direita) → Configurações.',
+      '"Sites e downloads" → "Permissões de site" → Microfone.',
+      'Acha nossoamor.209.50.229.119.sslip.io e marca "Permitir". Se ele não estiver na lista, a trava não é do site — é a chave geral ou a permissão do app.',
+    ]
+  }
+  if (onde.navegador === 'Chrome') {
+    return [
+      'Menu ⋮ → Configurações → "Configurações do site" → Microfone.',
+      'Acha nossoamor.209.50.229.119.sslip.io na lista e troca para "Permitir".',
+      'Pelo cadeado 🔒 também dá: Permissões → Microfone (ou "Redefinir permissões").',
+      'Recarrega a página e toca em "Liberar o microfone".',
     ]
   }
   return [
-    `No ${onde.navegador}, toca no cadeado 🔒 (ou no ⚙ / ⓘ) ao lado do endereço.`,
-    'Abre "Permissões" e procura Microfone.',
-    'Troca de "Bloquear" para "Perguntar" — ou toca em "Redefinir permissões", que apaga o "não" guardado.',
-    'Recarrega a página e toca em "Liberar o microfone". Aí a pergunta volta a aparecer.',
+    `No ${onde.navegador}, abre as configurações do navegador e procura "Permissões de site" → Microfone.`,
+    'Acha nossoamor.209.50.229.119.sslip.io e permite.',
+    'Pelo cadeado 🔒 ao lado do endereço também costuma dar, quando esse navegador oferece permissões por lá.',
+    'Recarrega a página e toca em "Liberar o microfone".',
   ]
-}
-
-/**
- * O caminho mais curto que existe entre um toque e a pergunta do navegador.
- *
- * É `pedirMicrofone` com a faixa devolvida na hora: quem chama isto não quer
- * gravar nada, quer só que a pergunta APAREÇA. Existe como botão próprio no
- * Perfil porque o pedido do dono foi exatamente esse — "ao clicar em testar
- * microfone, abre o modal de permissão igual foi com a câmera e as
- * notificações" — e porque o teste dos sete passos leva dois segundos gravando,
- * o que é muito para uma coisa que ou pergunta na hora ou não pergunta nunca.
- *
- * Segurar a faixa aberta acenderia a luzinha de "gravando" do celular sem
- * ninguém estar gravando; por isso ela é fechada assim que chega.
- */
-export async function abrirPergunta() {
-  const r = await pedirMicrofone()
-  r.stream?.getTracks().forEach((t) => t.stop())
-  return r
 }
 
 /**
@@ -195,9 +253,34 @@ export async function pedirMicrofone() {
   // sim.
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    return { ok: true, bloqueado: false, motivo: '', passos: [], stream }
+    return { ok: true, bloqueado: false, erro: '', motivo: '', passos: [], stream }
   } catch (err) {
     const nome = err?.name || 'erro'
+
+    // ------------------------------------------------- DE QUAL ANDAR É A TRAVA
+    //
+    // `NotAllowedError` sai igualzinho de três coisas bem diferentes, e a versão
+    // anterior chamava as três de "bloqueado para este endereço" — com toda a
+    // confiança, e errado. Mandou o dono procurar permissões numa tela do
+    // Samsung Internet que nem tem permissões.
+    //
+    // O que separa é quantos microfones o SISTEMA entrega ao navegador. Nenhum
+    // significa que a trava está abaixo do site: ou a chave geral do aparelho,
+    // ou a permissão de app do navegador. As duas atravessam navegador — que é
+    // exatamente o que o dono observou ao testar em mais de um.
+    const entradas = await entradasDeAudio()
+    if (entradas.total === 0) {
+      return {
+        ok: false,
+        bloqueado: true,
+        erro: nome,
+        motivo: 'O aparelho não está entregando NENHUM microfone para o navegador. Isso não é permissão deste site — é a chave geral do microfone do Android, ou a permissão do próprio navegador. Por isso falha em todos os navegadores:',
+        passos: comoLiberar(onde, 'geral'),
+        depois: comoLiberar(onde, 'app'),
+        tituloDepois: 'Se a chave geral já estiver ligada, é a permissão do navegador:',
+      }
+    }
+
     if (nome === 'NotAllowedError' || nome === 'SecurityError') {
       // Reler o estado é o que separa "fechou a pergunta" de "está bloqueado":
       // o erro é o MESMO nos dois casos, e só o estado depois conta a diferença.
@@ -206,30 +289,56 @@ export async function pedirMicrofone() {
         return {
           ok: false,
           bloqueado: true,
-          motivo: 'O microfone ficou bloqueado para este endereço. Enquanto estiver assim, o navegador não pergunta de novo:',
-          passos: comoLiberar(onde),
+          erro: nome,
+          motivo: 'Existe um microfone no aparelho, mas ele está negado para ESTE endereço — e enquanto estiver, o navegador não pergunta de novo:',
+          passos: comoLiberar(onde, 'site'),
+          depois: comoLiberar(onde, 'app'),
+          tituloDepois: 'Se falhar em mais de um navegador, não é do site — é a permissão do navegador:',
         }
       }
       return {
         ok: false,
         bloqueado: false,
+        erro: nome,
         motivo: 'A pergunta do microfone foi fechada sem resposta. Toca de novo e responde "Permitir" — fechando algumas vezes seguidas, o navegador para de perguntar e aí só nos ajustes.',
         passos: [],
       }
     }
+
     const tabela = {
       NotFoundError: 'Não encontrei microfone neste aparelho.',
       DevicesNotFoundError: 'Não encontrei microfone neste aparelho.',
-      NotReadableError: 'O microfone está ocupado por outro app. Fecha a ligação ou o gravador e tenta de novo.',
-      TrackStartError: 'O microfone está ocupado por outro app. Fecha a ligação ou o gravador e tenta de novo.',
+      NotReadableError: 'O microfone existe mas ninguém conseguiu abrir: ou outro app está com ele (ligação, gravador), ou a chave geral do microfone do aparelho está desligada.',
+      TrackStartError: 'O microfone existe mas ninguém conseguiu abrir: ou outro app está com ele, ou a chave geral do microfone do aparelho está desligada.',
       AbortError: 'O aparelho interrompeu o pedido do microfone.',
       OverconstrainedError: 'Este aparelho não tem um microfone que sirva.',
     }
+    const geral = nome === 'NotReadableError' || nome === 'TrackStartError'
     return {
       ok: false,
       bloqueado: false,
+      erro: nome,
       motivo: tabela[nome] || `Não consegui acessar o microfone (${nome}).`,
-      passos: [],
+      passos: geral ? comoLiberar(onde, 'geral') : [],
     }
   }
+}
+
+/**
+ * O caminho mais curto que existe entre um toque e a pergunta do navegador.
+ *
+ * É `pedirMicrofone` com a faixa devolvida na hora: quem chama isto não quer
+ * gravar nada, quer só que a pergunta APAREÇA. Existe como botão próprio no
+ * Perfil porque o pedido do dono foi exatamente esse — "ao clicar em testar
+ * microfone, abre o modal de permissão igual foi com a câmera e as
+ * notificações" — e porque o teste dos sete passos leva dois segundos gravando,
+ * o que é muito para uma coisa que ou pergunta na hora ou não pergunta nunca.
+ *
+ * Segurar a faixa aberta acenderia a luzinha de "gravando" do celular sem
+ * ninguém estar gravando; por isso ela é fechada assim que chega.
+ */
+export async function abrirPergunta() {
+  const r = await pedirMicrofone()
+  r.stream?.getTracks().forEach((t) => t.stop())
+  return r
 }

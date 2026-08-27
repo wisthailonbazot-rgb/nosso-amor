@@ -926,3 +926,31 @@ microfone abra o modal de permissão, igual foi com a câmera e as notificaçõe
 
 Estado: **657 verificações, 0 falha**; build Vite aprovada; conferido no
 navegador. Causas no HANDOFF, seção 9.17.
+
+### 27/08/2026 — A trava do microfone tem três andares
+
+Pedido do dono: "continua não funcionando, nem pedindo a permissão, e as
+instruções não funcionam; **testei em outros navegadores**".
+
+- **[x]** **A frase que resolve: "testei em outros navegadores".** Permissão de
+      site é guardada por navegador. Se falha em mais de um, não é permissão de
+      site — só sobra o aparelho. Eu passei duas rodadas mandando você consertar
+      uma coisa que a sua própria observação já descartava.
+      - `NotAllowedError` sai igual de TRÊS coisas: a chave geral do microfone
+        do Android (aparelho inteiro), a permissão de app do navegador (todos os
+        sites dele) e a permissão do site. As duas primeiras atravessam
+        navegador.
+      - `enumerateDevices()` separa sem pedir nada: zero entrada de áudio =
+        a trava está abaixo do site. A tela agora diz o andar provável, mostra o
+        seguinte logo abaixo, e imprime o nome cru do erro.
+- **[x]** **O cadeado do Samsung Internet não tem permissões.** Seu print mostra
+      "Informações de privacidade": conexão, rastreadores, cookies. Só. Eu te
+      mandei pra uma tela que não existe nesse navegador. O caminho do site agora
+      é escrito por navegador, com o nome que cada um usa — e no Samsung Internet
+      a primeira linha avisa que o cadeado não serve.
+      - [ ] **Primeiro suspeito, e é de graça conferir:** olha a barra de status
+            do celular. Se tiver um ícone de **microfone cortado**, é a chave
+            geral do Android — nenhum app grava, e nenhum ajuste de site resolve.
+
+Estado: **662 verificações, 0 falha**; build Vite aprovada; os dois cenários
+conferidos no navegador. Causas no HANDOFF, seção 9.18.

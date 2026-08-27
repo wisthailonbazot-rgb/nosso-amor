@@ -21,7 +21,7 @@
 // `POST /api/chat/audio/teste`, que valida o arquivo igualzinho e joga fora.
 
 import { api, apiUrl, getToken } from './api'
-import { estadoDoMicrofone, ondeRoda, pedirMicrofone } from './lib/microfone'
+import { entradasDeAudio, estadoDoMicrofone, ondeRoda, pedirMicrofone } from './lib/microfone'
 
 const FORMATOS = [
   ['audio/webm;codecs=opus', 'webm'],
@@ -91,7 +91,15 @@ export async function diagnosticarAudio(aoAndar = () => {}) {
   // nos ajustes) — e devolve o caminho de volta em passos, para ESTE aparelho.
   const pedido = await pedirMicrofone()
   if (!pedido.ok) {
-    anda(passo(false, 'Permissão do microfone', pedido.motivo, pedido.passos))
+    const extra = pedido.depois?.length
+      ? [`— ${pedido.tituloDepois}`, ...pedido.depois]
+      : []
+    anda(passo(
+      false,
+      'Permissão do microfone',
+      `${pedido.motivo} (o navegador respondeu ${pedido.erro || '?'})`,
+      [...(pedido.passos || []), ...extra],
+    ))
     return linhas
   }
   const stream = pedido.stream
@@ -189,6 +197,10 @@ export async function ondeEstamos() {
     seguro: window.isSecureContext,
     temToken: !!getToken(),
     microfone: await estadoDoMicrofone(),
+    // Quantos microfones o SISTEMA entrega ao navegador. Zero aqui é a prova de
+    // que a trava está abaixo do site (chave geral do aparelho ou permissão do
+    // app do navegador) — e é o que explica falhar em vários navegadores.
+    entradasDeAudio: JSON.stringify(await entradasDeAudio()),
     rodando: onde.apk ? 'APK' : onde.instalado ? 'atalho na tela de início' : `site no ${onde.navegador}`,
     agente: navigator.userAgent.slice(0, 120),
   }

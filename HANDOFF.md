@@ -2228,3 +2228,68 @@ com o relato. Não é o caso — `nossoamor.209.50.229.119.sslip.io` tem Let's
 Encrypt válido até 09/11/2026, conferido sem `-k`.
 
 **Estado: 657 verificações, 0 falha.** Build Vite aprovada.
+
+### 9.18 A trava do microfone tem três andares, e eu insistia num só (27/08/2026)
+
+Pedido do dono: "continua não funcionando, e nem pedindo a permissão como
+deveria, e as instruções suas de como liberar não funcionam; **testei em outros
+navegadores**".
+
+Ele mandou dois prints, e os dois derrubam o que eu vinha dizendo.
+
+#### A frase que resolve o caso
+
+**"Testei em outros navegadores."** Permissão de site é guardada *por navegador*.
+Se falha em mais de um, **não é permissão de site** — só sobra o que é comum aos
+dois, que é o aparelho. Eu passei duas rodadas mandando ele consertar uma coisa
+que, pela própria observação dele, não podia ser a causa.
+
+`NotAllowedError` sai igualzinho de **três** coisas diferentes:
+
+| Andar | Alcance | Onde se mexe |
+|---|---|---|
+| Chave geral do microfone do Android | o **aparelho inteiro** | Ajustes → Segurança e privacidade → Controles de privacidade → Acesso ao microfone |
+| Permissão de app do navegador | **todos os sites** daquele navegador | Ajustes → Apps → *navegador* → Permissões → Microfone |
+| Permissão do site | **um** site num navegador | configurações do navegador |
+
+Os dois primeiros atravessam navegador. Eu chamava os três de "bloqueado para
+este endereço", com toda a confiança do mundo.
+
+**O que separa é `enumerateDevices()`**, e ele não pede nada a ninguém:
+
+- `audioinput` = **0** → o sistema não entrega microfone nenhum: a trava está
+  **abaixo** do site (chave geral ou permissão do app);
+- `audioinput` ≥ 1 **sem nome** → existe microfone, e é o site que está negado (o
+  nome só aparece depois do "permitir");
+- `audioinput` ≥ 1 **com nome** → já está liberado.
+
+Agora a tela diz o andar provável, mostra o **seguinte logo abaixo** dito como o
+que é ("se a chave geral já estiver ligada, é a permissão do navegador"), e
+imprime o nome cru do erro. Do lado de cá não dá pra ter certeza de qual andar é
+— dá pra saber o mais provável. Fingir certeza foi o erro; mostrar os dois na
+ordem é o conserto.
+
+#### O outro print: o cadeado do Samsung Internet não tem permissões
+
+Ele é usuário do **Samsung Internet**, e o print do painel do cadeado mostra
+"Informações de privacidade": conexão segura, rastreadores bloqueados, cookies,
+OK. **Não existe seção de permissões ali.** Minha instrução — "toca no cadeado 🔒
+→ Permissões → Microfone" — mandava pra uma tela que não existe naquele
+navegador.
+
+O caminho do site agora é **por navegador**, escrito com o nome que cada um usa:
+Samsung Internet vai por Menu ☰ → Configurações → Sites e downloads → Permissões
+de site → Microfone (e a primeira linha avisa que o cadeado não serve); o Chrome
+vai por Menu ⋮ → Configurações → Configurações do site.
+
+> **A lição, que é a mesma de sempre neste projeto:** instrução para o dono é
+> entrega, e entrega não conferida é chute. Eu escrevi três caminhos de
+> recuperação sem nunca ter aberto a tela de nenhum deles.
+
+**Travado no smoke:** que a medida de `enumerateDevices` exista, que os andares
+`geral` e `app` sejam apontados, que o caminho do Samsung Internet não mande pro
+cadeado, e que o nome do erro chegue à tela.
+
+**Estado: 662 verificações, 0 falha.** Build Vite aprovada; os dois cenários
+(nenhuma entrada de áudio, e entrada existindo com o site negado) conferidos no
+navegador.

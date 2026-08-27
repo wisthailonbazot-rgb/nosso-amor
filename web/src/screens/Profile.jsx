@@ -269,6 +269,27 @@ export default function Profile() {
                 {permissao.passos.map((linha, k) => <li key={k} style={{ marginBottom: 3 }}>{linha}</li>)}
               </ol>
             )}
+            {/* O SEGUNDO ANDAR.
+                A trava do microfone tem três, e do lado de cá não dá pra saber
+                qual é com certeza — só dá pra saber qual é o MAIS provável. Em
+                vez de fingir certeza (foi o que fiz antes, e mandou procurar
+                uma tela que não existe), a tela mostra o provável primeiro e o
+                seguinte logo abaixo, dito como o que é. */}
+            {!permissao.ok && permissao.depois?.length > 0 && (
+              <>
+                <p className="tiny" style={{ margin: '10px 0 0', fontWeight: 700 }}>
+                  {permissao.tituloDepois}
+                </p>
+                <ol className="tiny" style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                  {permissao.depois.map((linha, k) => <li key={k} style={{ marginBottom: 3 }}>{linha}</li>)}
+                </ol>
+              </>
+            )}
+            {!permissao.ok && permissao.erro && (
+              <p className="tiny" style={{ margin: '8px 0 0', opacity: 0.7 }}>
+                (o navegador respondeu <code>{permissao.erro}</code>)
+              </p>
+            )}
           </div>
         )}
 
