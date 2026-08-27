@@ -2386,3 +2386,74 @@ o mesmo texto, e o token não pode passar de ~3 h de vida (arredondar não pode
 virar token eterno).
 
 **Estado: 664 verificações, 0 falha.** Build Vite aprovada.
+
+### 9.20 Eu quebrei a reprodução tentando protegê-la (27/08/2026)
+
+Relato do dono: "agora diz que o aparelho não sabe tocar o áudio; o negócio tava
+funcionando, você estragou. E abri no navegador e nem no navegador envia o
+áudio, nada a ver com o atalho."
+
+Ele está certo nas duas, e a primeira é minha, da 9.19.
+
+#### A tentativa de conserto que virou o defeito
+
+Junto com o conserto de raiz da 9.19 (o token de mídia arredondado, que é bom e
+fica) eu enfiei um **plano B** no caminho da reprodução: se o primeiro
+`el.play()` falhasse, o código trocava `el.src`, chamava `el.load()` e tentava de
+novo, "caso o token tivesse vencido".
+
+Isso é a única coisa nova capaz de **criar** um estado de erro onde não havia.
+`load()` aborta um carregamento em andamento; uma recusa passageira do primeiro
+`play()` — comuníssima no Android — passava a terminar num elemento em erro. E
+o texto que eu escrevi pra esse caso culpava o aparelho pelo formato:
+
+> "Este aparelho não sabe tocar o formato deste áudio."
+
+Ou seja: eu transformei um tropeço transitório numa acusação, e a acusação estava
+errada. **O plano B foi removido inteiro.**
+
+Também tirei o `estado + efeito` que fixava a URL e pus um `ref` decidido **no
+render**: estado atualizado por efeito tem uma janela em que o elemento já está
+na tela com o valor velho. Agora não há janela.
+
+#### E a mensagem de erro não chuta mais
+
+O `<audio>` é péssima testemunha: ele reduz "não achei o arquivo", "não posso ler
+o arquivo" e "não sei tocar esse formato" ao **mesmo** `NotSupportedError`. Então,
+quando falha, a tela agora **lê o endereço** e diz o que voltou:
+
+| O que a busca responde | O que a tela diz |
+|---|---|
+| 401 / 403 | "O endereço deste áudio venceu. Puxa a conversa pra baixo." |
+| 404 | "Este áudio não está mais no servidor." |
+| 0 byte | "Este áudio foi gravado vazio — não há som nele." |
+| 200, com tamanho | "O arquivo chegou inteiro (tipo, KB), mas este navegador não sabe tocar esse formato." |
+
+Só no último caso o formato é acusado — e com o tipo e o tamanho na mão.
+
+> **Conferido com áudio de verdade, no botão de verdade** — que foi o teste que
+> faltou na 9.19. Um webm/opus real de 30 KB, gravado no navegador por
+> `MediaRecorder`, enviado pela rota do chat e tocado pelo ▶: **1,86 s de um
+> arquivo de 2 s, sem erro**. E o arquivo propositalmente quebrado dá a mensagem
+> nova, correta: "O arquivo chegou inteiro (video/webm, 5 KB), mas este navegador
+> não sabe tocar esse formato."
+
+#### O envio: parei de responder com palpite
+
+"Não envia áudio" chegou até mim três rodadas seguidas como três palavras, e três
+vezes eu respondi com hipótese. Agora **toda recusa carrega uma linha com tudo**,
+e ela aparece no chat — onde a pessoa está quando o problema acontece — e não só
+no diagnóstico do Perfil:
+
+```
+[NotFoundError · permissão: denied · microfones: 0 · Chrome]
+```
+
+Erro cru, estado guardado da permissão, quantos microfones o sistema entrega e
+onde o app está rodando. Uma foto da tela passa a bastar.
+
+**Uma hipótese conferida e descartada de saída:** o servidor não reconhecer o
+formato do Samsung Internet. `_detect_audio` já trata `ftyp` (MP4/AAC) além de
+webm, ogg, mp3 e wav — o envio não é recusado por formato.
+
+**Estado: 664 verificações, 0 falha.** Build Vite aprovada.

@@ -96,9 +96,18 @@ function useRecorder() {
 
     const pedido = await pedirMicrofone()
     if (!pedido.ok) {
-      // `passos` só vem preenchido quando o conserto está fora do app (a
-      // permissão bloqueada na origem, em que o navegador não pergunta mais).
-      return { ok: false, reason: pedido.motivo, passos: pedido.passos }
+      // O NOME CRU DO ERRO VAI JUNTO, sempre.
+      //
+      // Sem ele, "não envia áudio" chega até mim como três palavras e eu
+      // respondo com palpite — foi o que aconteceu três rodadas seguidas. Com
+      // ele, uma foto da tela já diz qual das cinco causas é.
+      const cru = pedido.resumo ? ` [${pedido.resumo}]` : ''
+      return {
+        ok: false,
+        reason: `${pedido.motivo}${cru}`,
+        passos: [...(pedido.passos || []),
+          ...(pedido.depois?.length ? [`— ${pedido.tituloDepois}`, ...pedido.depois] : [])],
+      }
     }
     const stream = pedido.stream
 
@@ -215,26 +224,21 @@ function Audio({ src, duration }) {
   //
   // A URL da mídia é DUAS coisas de uma vez: a identidade do arquivo (o caminho)
   // e a credencial pra abrir (o `?token=`). Enquanto o token era cunhado com
-  // "agora + 2h", ele mudava a cada segundo — e a conversa se re-sincroniza a
-  // cada evento do WebSocket, a cada volta pro app e a cada reconexão. Cada
-  // sincronização entregava um `src` novo pra MESMA mensagem, e trocar o `src`
-  // faz o navegador ABORTAR e recarregar o elemento: o áudio da outra pessoa
-  // parava no meio, ou nem começava.
+  // "agora + 2h" ele mudava a cada segundo, e a conversa se re-sincroniza a cada
+  // evento do WebSocket. Cada sincronização entregava um `src` novo pra MESMA
+  // mensagem — e trocar o `src` faz o navegador ABORTAR e recarregar o elemento.
   //
-  // O vencimento passou a ser arredondado no servidor (`create_media_token`), o
-  // que já estabiliza a URL. Este cinto de segurança fica aqui de qualquer
-  // forma, porque a regra vale sozinha: **quem manda no elemento é o CAMINHO**.
-  // Token novo do mesmo arquivo não é motivo pra recarregar nada.
+  // A raiz foi corrigida no servidor (`create_media_token` arredonda o
+  // vencimento). Aqui fica a regra que vale sozinha: **quem manda no elemento é
+  // o CAMINHO**. Token novo do mesmo arquivo não recarrega nada.
+  //
+  // Isto é feito com um `ref` decidido NO RENDER, e não com estado + efeito, de
+  // propósito: estado atualizado por efeito tem uma janela em que o elemento já
+  // está na tela com o valor velho. Aqui não há janela nenhuma.
   const caminho = (src || '').split('?')[0]
-  // O endereço completo mais recente, guardado FORA do React: ele serve pra uma
-  // coisa só — se o token tiver vencido na hora de tocar, dá pra tentar de novo
-  // com o mais novo em vez de falhar.
-  const maisNovo = useRef(src)
-  maisNovo.current = src
-  const [fixo, setFixo] = useState(src)
-  useEffect(() => {
-    setFixo(maisNovo.current)
-  }, [caminho])
+  const guardado = useRef({ caminho, url: src })
+  if (guardado.current.caminho !== caminho) guardado.current = { caminho, url: src }
+  const fixo = guardado.current.url
 
   async function alternar() {
     const el = ref.current
@@ -248,32 +252,19 @@ function Audio({ src, duration }) {
     try {
       await el.play()
       setTocando(true)
-      return
-    } catch {
-      /* cai pra tentativa com o endereço mais novo, logo abaixo */
-    }
-    // SEGUNDA E ÚLTIMA TENTATIVA, com o token mais recente.
-    //
-    // O caso real: a tela ficou aberta além da validade do token e o arquivo
-    // responde 401. Recarregar com o endereço novo resolve sem a pessoa
-    // precisar saber que existe token.
-    try {
-      if (maisNovo.current && maisNovo.current !== fixo) setFixo(maisNovo.current)
-      el.src = maisNovo.current
-      el.load()
-      await el.play()
-      setTocando(true)
     } catch (e) {
-      // E AQUI ESTAVA O OUTRO DEFEITO: `el.play()` devolve uma Promise, e a
+      // AQUI ESTAVA UMA FALHA CALADA: `el.play()` devolve uma Promise, e a
       // recusa dela nunca era lida. O botão virava ❚❚, nada tocava e nada
-      // aparecia na tela — "não funciona", sem uma palavra de explicação. É a
-      // mesma falha calada que este projeto já pagou várias vezes.
+      // aparecia na tela.
+      //
+      // E não basta traduzir o nome do erro. `NotSupportedError` sai igual
+      // de "este formato não toca aqui" e de "o arquivo não veio" (um 401 ou
+      // um 404 chegam no elemento como o MESMO erro) — culpar o formato do
+      // aparelho sem saber é exatamente o tipo de chute que já custou caro
+      // nesta rodada. Então a tela vai LER o endereço e dizer o que voltou.
       setTocando(false)
-      setErro(
-        e?.name === 'NotSupportedError'
-          ? 'Este aparelho não sabe tocar o formato deste áudio.'
-          : 'Não consegui tocar este áudio. Puxe a conversa pra baixo pra recarregar.'
-      )
+      setErro('Não consegui tocar. Conferindo o porquê…')
+      setErro(await porQueNaoTocou(el, fixo, e))
     }
   }
 
@@ -299,13 +290,41 @@ function Audio({ src, duration }) {
           ref={ref}
           src={fixo}
           onEnded={() => setTocando(false)}
-          onPause={() => setTocando(false)}
           preload="none"
         />
       </div>
       {erro && <div className="tiny" style={{ marginTop: 4, opacity: 0.85 }}>{erro}</div>}
     </div>
   )
+}
+
+/**
+ * Por que o áudio não tocou — perguntando ao servidor, em vez de adivinhando.
+ *
+ * O elemento `<audio>` é péssimo testemunha: ele reduz "não achei o arquivo",
+ * "não tenho permissão de ler o arquivo" e "não sei tocar este formato" ao mesmo
+ * `NotSupportedError` / `MEDIA_ERR_SRC_NOT_SUPPORTED`. Uma busca no endereço
+ * resolve a dúvida em uma linha, e é o que separa uma mensagem verdadeira de uma
+ * acusação errada ao aparelho da pessoa.
+ */
+async function porQueNaoTocou(el, url, erro) {
+  const codigo = el?.error?.code
+  if (codigo === 2) return 'A internet caiu no meio do áudio. Tenta de novo.'
+  if (codigo === 3) return 'O arquivo deste áudio chegou corrompido.'
+  try {
+    const r = await fetch(url, { cache: 'no-store' })
+    if (r.status === 401 || r.status === 403) {
+      return 'O endereço deste áudio venceu. Puxa a conversa pra baixo pra recarregar.'
+    }
+    if (r.status === 404) return 'Este áudio não está mais no servidor.'
+    if (!r.ok) return `O servidor recusou o áudio (${r.status}).`
+    const bytes = Number(r.headers.get('content-length') || 0)
+    if (bytes === 0) return 'Este áudio foi gravado vazio (0 byte) — não há som nele.'
+    const tipo = r.headers.get('content-type') || '?'
+    return `O arquivo chegou inteiro (${tipo}, ${(bytes / 1024).toFixed(0)} KB), mas este navegador não sabe tocar esse formato.`
+  } catch {
+    return `Não consegui tocar este áudio (${erro?.name || 'motivo desconhecido'}).`
+  }
 }
 
 /**

@@ -996,3 +996,31 @@ conferidos no navegador. Causas no HANDOFF, seção 9.18.
 
 Estado: **664 verificações, 0 falha**; build Vite aprovada; conferido no
 navegador. Causas no HANDOFF, seção 9.19.
+
+### 27/08/2026 — Eu quebrei a reprodução; desfeito
+
+- **[x]** **"Você estragou" — sim, estraguei, e desfiz.** Junto com o conserto do
+      token (que é bom e fica), eu enfiei um plano B no caminho da reprodução:
+      se o `play()` falhasse, trocava o `src`, dava `load()` e tentava de novo.
+      Isso é a única coisa nova capaz de CRIAR erro onde não havia — `load()`
+      aborta um carregamento em andamento, e uma falha passageira virava
+      elemento em erro. Pior: o texto que escrevi pra esse caso acusava o teu
+      aparelho de não saber tocar o formato. Removido inteiro.
+- **[x]** **A mensagem de erro não chuta mais.** O `<audio>` reduz "não achei o
+      arquivo", "não posso ler" e "não sei tocar" ao mesmo erro. Agora, quando
+      falha, a tela LÊ o endereço e diz o que voltou: 401 (venceu), 404 (sumiu),
+      0 byte (gravado vazio) ou — só aí — "chegou inteiro (tipo, KB), mas este
+      navegador não sabe tocar".
+      - Conferido com áudio DE VERDADE no botão de verdade, que foi o teste que
+        faltou: webm/opus real de 30 KB tocou 1,86 s de 2 s, sem erro.
+- **[x]** **O envio: parei de responder com palpite.** Toda recusa agora carrega
+      uma linha com tudo, e ela aparece no CHAT, não só no Perfil:
+      `[NotFoundError · permissão: denied · microfones: 0 · Chrome]` — erro cru,
+      estado da permissão, quantos microfones o sistema entrega e onde o app
+      está rodando.
+      - [ ] **Me manda a foto dessa linha.** Com ela eu paro de ter que adivinhar.
+- **[x]** Descartado: o servidor recusar o formato do Samsung Internet.
+      `_detect_audio` já trata `ftyp` (MP4/AAC) além de webm, ogg, mp3 e wav.
+
+Estado: **664 verificações, 0 falha**; build Vite aprovada. Causas no HANDOFF,
+seção 9.20.

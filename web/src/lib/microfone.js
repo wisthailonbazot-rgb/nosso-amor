@@ -302,6 +302,17 @@ export async function pedirMicrofone() {
     // ou a permissão de app do navegador. As duas atravessam navegador — que é
     // exatamente o que o dono observou ao testar em mais de um.
     const entradas = await entradasDeAudio()
+    // UMA LINHA COM TUDO O QUE IMPORTA.
+    //
+    // Três rodadas seguidas eu respondi "não envia áudio" com palpite, porque
+    // três palavras é o que chegava até mim. Esta linha vai junto de toda recusa
+    // — no chat, onde a pessoa está quando o problema acontece — e uma foto da
+    // tela passa a dizer qual das causas é, sem ninguém ter que navegar até o
+    // diagnóstico do Perfil.
+    const estado = await estadoDoMicrofone()
+    const resumo = `${nome} · permissão: ${estado} · microfones: ${entradas.total} · ${
+      onde.apk ? 'APK' : onde.instalado ? 'atalho' : onde.navegador
+    }`
 
     // A ORDEM IMPORTA: o atalho instalado vem antes da chave geral.
     //
@@ -316,6 +327,7 @@ export async function pedirMicrofone() {
         ok: false,
         bloqueado: true,
         erro: nome,
+        resumo,
         abrirNoChrome: true,
         motivo: 'O atalho instalado na tela de início não tem permissão de microfone — e não é que foi negada: ela não existe na lista dele.',
         passos: comoLiberar(onde, 'atalho-sem-microfone'),
@@ -329,6 +341,7 @@ export async function pedirMicrofone() {
         ok: false,
         bloqueado: true,
         erro: nome,
+        resumo,
         motivo: 'O aparelho não está entregando NENHUM microfone para o navegador. Isso não é permissão deste site — é a chave geral do microfone do Android, ou a permissão do próprio navegador. Por isso falha em todos os navegadores:',
         passos: comoLiberar(onde, 'geral'),
         depois: comoLiberar(onde, 'app'),
@@ -337,14 +350,16 @@ export async function pedirMicrofone() {
     }
 
     if (nome === 'NotAllowedError' || nome === 'SecurityError') {
-      // Reler o estado é o que separa "fechou a pergunta" de "está bloqueado":
-      // o erro é o MESMO nos dois casos, e só o estado depois conta a diferença.
-      const depois = await estadoDoMicrofone()
-      if (depois === 'denied') {
+      // O estado guardado é o que separa "fechou a pergunta" de "está
+      // bloqueado": o erro é o MESMO nos dois casos. Ele já foi lido acima,
+      // junto com o resumo — perguntar de novo seria uma segunda fonte pro
+      // mesmo fato, e num arquivo que existe justamente pra acabar com isso.
+      if (estado === 'denied') {
         return {
           ok: false,
           bloqueado: true,
           erro: nome,
+          resumo,
           motivo: 'Existe um microfone no aparelho, mas ele está negado para ESTE endereço — e enquanto estiver, o navegador não pergunta de novo:',
           passos: comoLiberar(onde, 'site'),
           depois: comoLiberar(onde, 'app'),
@@ -355,6 +370,7 @@ export async function pedirMicrofone() {
         ok: false,
         bloqueado: false,
         erro: nome,
+        resumo,
         motivo: 'A pergunta do microfone foi fechada sem resposta. Toca de novo e responde "Permitir" — fechando algumas vezes seguidas, o navegador para de perguntar e aí só nos ajustes.',
         passos: [],
       }
@@ -373,6 +389,7 @@ export async function pedirMicrofone() {
       ok: false,
       bloqueado: false,
       erro: nome,
+      resumo,
       motivo: tabela[nome] || `Não consegui acessar o microfone (${nome}).`,
       passos: geral ? comoLiberar(onde, 'geral') : [],
     }

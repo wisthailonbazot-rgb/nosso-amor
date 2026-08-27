@@ -315,7 +315,7 @@ export default function Profile() {
             )}
             {!permissao.ok && permissao.erro && (
               <p className="tiny" style={{ margin: '8px 0 0', opacity: 0.7 }}>
-                (o navegador respondeu <code>{permissao.erro}</code>)
+                <code>{permissao.resumo || permissao.erro}</code>
               </p>
             )}
           </div>
