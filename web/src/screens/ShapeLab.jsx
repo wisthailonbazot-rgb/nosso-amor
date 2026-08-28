@@ -12,6 +12,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { Painter } from '../render/pixel'
+import { auditarTudo } from '../render/furnitureAudit'
 import { SHAPES, drawItem } from '../render/furniture'
 import { roomMetrics } from '../render/iso'
 import { drawScene, FLOOR_STYLES, WALL_STYLES } from '../render/room'
@@ -870,6 +871,28 @@ const BASE_AVATAR = {
   shoes: 'tenis', shoes_color: '#f0f0f0', head: '', extra: '', blush: false,
 }
 
+/** O que está enterrado dentro de quê — ver `furnitureAudit.js`. */
+function AuditoriaMoveis() {
+  const achados = auditarTudo(
+    Object.fromEntries(Object.entries(SIZES).map(([k, [w, d]]) => [k, { w, d }]))
+  )
+  if (!achados.length) {
+    return <p className="notice">Nenhuma peça enterrada dentro de outra.</p>
+  }
+  return (
+    <div className="notice error" style={{ marginBottom: 12 }}>
+      <strong>Peças enterradas uma na outra:</strong>
+      <ul className="tiny" style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+        {achados.map((x) => (
+          <li key={x.nome}>
+            {x.nome}: {x.achados.map((a) => `bloco ${a.a}+${a.b} (${Math.round(a.parte * 100)}%)`).join(', ')}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 export default function ShapeLab() {
   const [dir, setDir] = useState(0)
   const [aba, setAba] = useState('moveis')
@@ -908,6 +931,13 @@ export default function ShapeLab() {
 
       {aba === 'moveis' && (
         <>
+          {/* AUDITORIA DE SOBREPOSIÇÃO.
+              O dono viu "partes se sobrepondo" e ele estava certo — mas defeito
+              de três centésimos de célula não se enxerga numa miniatura, e são
+              30 móveis em 4 rotações. A máquina enxerga: cada peça é uma caixa,
+              e duas caixas que se cruzam nos três eixos estão uma dentro da
+              outra. Ver `furnitureAudit.js`. */}
+          <AuditoriaMoveis />
           <div className="row wrap" style={{ gap: 8, marginBottom: 12 }}>
             {[0, 1, 2, 3].map((d) => (
               <button
@@ -939,7 +969,30 @@ export default function ShapeLab() {
                         rows: cols,
                         floor: 'ceramica',
                         wall: 'padrao',
-                        items: [{ id: 1, shape, col: 1, row: 1, w, d, dir }],
+                        // A PEGADA GIRA JUNTO — e é isto que faltava aqui.
+                        //
+                        // Na casa, girar um móvel troca `w` por `d` (ver
+                        // `rotateSelected` em `House.jsx`): um sofá 2x1 vira
+                        // 1x2. A bancada girava só o `dir` e deixava a pegada
+                        // como estava, então `tools` calculava W e D ao
+                        // contrário e a peça se desenhava com as proporções
+                        // trocadas. Resultado: a bancada mostrava "bugado ao
+                        // girar" em móveis que na casa estavam certos — e
+                        // escondia os que estavam errados de verdade.
+                        //
+                        // Uma bancada que mede diferente do que roda é pior do
+                        // que não ter bancada: manda procurar defeito onde não
+                        // há. Mesmo erro que a rota de teste do áudio evita ao
+                        // validar pelo caminho real.
+                        items: [{
+                          id: 1,
+                          shape,
+                          col: 1,
+                          row: 1,
+                          w: dir % 2 ? d : w,
+                          d: dir % 2 ? w : d,
+                          dir,
+                        }],
                       },
                       {},
                       t

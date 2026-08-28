@@ -1148,3 +1148,68 @@ Estado: **673 verificações, 0 falha**; build aprovada. Causas no HANDOFF, 9.24
 - **[x]** **E o tipo do arquivo servido.** O `.ogg` chegou como `text/plain` no ar
       e como `audio/ogg` aqui — a tabela do sistema muda de máquina. Agora o tipo
       do que a gente publica é declarado, não adivinhado.
+
+### 28/08/2026 — A naval bugada no iPhone
+
+Pedido do dono, com dois prints: "no iphone tá completamente bugado a batalha
+naval". Nos prints os navios saem gigantes, atravessando o tabuleiro por cima
+dos botões e da barra de navegação.
+
+- **[x]** **O navio voltou pra dentro da casa.** Duas causas, as duas de "dois
+      donos pro mesmo fato":
+      - os navios eram desenhados numa **segunda grade sobreposta**, e como eram
+        `<img>` (que tem tamanho próprio) eles **inflavam as próprias linhas**
+        que deveriam só ocupar — medido: `37,875 … 40 40,75 37,875` numa grade de
+        8, contra 38,5 nas colunas. Agora é UMA grade só: casa e navio são
+        irmãos nas mesmas trilhas, e o navio é um `<span>` com o desenho de
+        fundo, que não tem tamanho pra oferecer;
+      - em tela cheia o tabuleiro **não saía quadrado** (355 × 511 num aparelho
+        de 375): a linha ficava de 59,5px com a casa de 40px dentro, e o navio
+        ocupa a LINHA. Agora ele sai quadrado pelo lado que faltar, e a casa
+        perdeu a proporção própria — quem manda é a trilha.
+- **[x]** **A bancada passou a medir o ENCAIXE, não só o desenho.** A arte
+      estava certa e passava em tudo (proporção, emenda, desenho vazio) — o
+      defeito era de layout. A aba Naval do `/lab` agora monta o `Tabuleiro` de
+      verdade e pergunta se a caixa do navio bate com a união das casas.
+      **Ela roda no iPhone também**, que é onde eu não consigo medir daqui.
+- **[x]** Medido com a partida rodando, desvio **0 px** em 375×812 normal,
+      390×844 tela cheia, 740×380 deitado e no minimapa de 92px.
+- **[x]** Smoke trava as seis causas; as três reintroduções foram testadas de
+      propósito e ficaram vermelhas.
+
+Estado: **679 verificações, 0 falha**; build aprovada; publicado em produção
+(volume de mídia conferido antes, como manda a regra da 9.21). Causas no
+HANDOFF, seção 9.25.
+
+### 27/08/2026 — O sofá, o caça-sobreposição e 96px
+
+- **[x]** **A bancada estava mentindo.** Ela girava o móvel sem girar a pegada
+      (na casa, girar troca `w` por `d`; lá não trocava). Resultado: mostrava
+      "bugado ao girar" em móveis que na casa estavam certos, e escondia os
+      errados de verdade. Corrigido — e é a causa de eu ter perseguido defeito
+      que não existia.
+- **[x]** **O sofá tinha três peças se atravessando** (o assento entrava no
+      encosto, os braços também, e as duas almofadas ficavam uma dentro da outra
+      e sobravam pra fora da base). Refeito com as faixas calculadas, e o número
+      de almofadas sai da largura.
+- **[x]** **Caça-sobreposição automático.** 30 móveis em 4 rotações são 120
+      telas, e invasão de 3 centésimos não se vê em miniatura. Agora o código lê
+      a descrição das peças e acha as que se cruzam. Acusou 16 móveis; todos
+      corrigidos. **A bancada agora diz "nenhuma peça enterrada dentro de
+      outra".**
+      - A regra que saiu: afundar é a técnica (almofada, cone de alto-falante),
+        o defeito é a peça INTEIRAMENTE dentro de outra — as duas faces caem no
+        mesmo plano e viram um risco atravessado. Todo detalhe tem que SAIR da
+        face do pai.
+- **[x]** **Mais pixel de novo: 64 → 96.** Uma prateleira que tinha 3 px no
+      começo agora tem 6. O cômodo foi pra 866x578 e rola pro lado, como jogo de
+      decoração.
+- **[x]** **A opção dos modelos prontos, conferida.** O Furniture Kit do Kenney
+      tem 120 objetos CC0 com render isométrico em 4 ângulos — resolveria
+      rotação e acabamento de uma vez. O problema é estilo: é render 3D liso, e
+      o bichinho, o avatar e as figurinhas são pixel art no mesmo cômodo.
+      Trocar só os móveis quebra a unidade; trocar tudo é refazer o app.
+      - [ ] **Sua decisão.** Se quiser ver, eu monto um cômodo de teste com o kit
+            pra comparar lado a lado antes de decidir.
+
+Estado: **679 verificações, 0 falha**. Causas no HANDOFF, seção 9.25.

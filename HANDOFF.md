@@ -2762,3 +2762,223 @@ Como o app busca o arquivo e decodifica na mão, ele tocaria assim mesmo; mas um
 `<audio src>` não tocaria, e a próxima pessoa perderia horas. Agora o tipo do
 que **nós** publicamos é declarado em `TIPOS` (`app/main.py`), e o palpite do
 sistema fica só pro resto. Travado no smoke.
+
+### 9.25 O navio saía da casa, e o tabuleiro não era quadrado (28/08/2026)
+
+Pedido do dono, com dois prints: "no iphone tá completamente bugado a batalha
+naval". Nos prints, os navios saem **gigantes** — atravessam o tabuleiro, passam
+por cima dos botões, um deles cruza a barra de navegação e some pra fora da tela.
+
+**A arte estava certa, e é por isso que ninguém tinha pegado.** A aba Naval da
+bancada media a proporção de cada navio (os seis batiam), a emenda do mar (2,4
+com limite 18) e o desenho vazio. Tudo verde. O defeito nunca esteve no desenho:
+estava em **onde** o desenho era colocado — e isso a bancada não olhava.
+
+Reproduzi no Chrome a 375 de largura, na primeira tentativa. São **duas** causas,
+e as duas são a mesma frase que este projeto já escreveu quatro vezes: **dois
+donos para o mesmo fato.**
+
+#### 1. Duas grades para o mesmo tabuleiro
+
+Os navios eram desenhados numa **segunda grade sobreposta** (`.naval-frota`),
+com as medidas do tabuleiro repetidas — a 9.14 até já tinha corrigido um desvio
+de 1 a 2 px ali, trocando os números na mão por `padding: inherit` e
+`gap: inherit`. O conserto foi no lugar errado: o problema não era o número
+copiado, era **haver uma segunda grade**.
+
+E ela discordava da primeira por uma razão que nenhum ajuste de `inherit`
+alcança: o navio era um `<img>`. Uma imagem é um **elemento substituído** — tem
+tamanho próprio, e esse tamanho entra na conta do tamanho da trilha da grade.
+Medido no navegador, com o código antigo, numa grade de 8:
+
+```
+linhas:  37,875  37,875  37,875  37,875  37,875  40  40,75  37,875
+colunas: 38,5    38,5    38,5    38,5    38,5    38,5  38,5  38,5
+```
+
+As linhas estavam infladas **pelos próprios navios que deveriam apenas ocupá-las**.
+Zerando o mínimo automático (`min-height: 0`) as oito voltavam a 38,5 na hora — é
+essa a prova de que a causa era o tamanho intrínseco da imagem, e não outra coisa.
+
+No Chrome isso custava 1 a 3 px. O Safari resolve o mesmo cálculo de outro jeito,
+e lá custava a tela inteira.
+
+#### 2. Em tela cheia o tabuleiro não era quadrado
+
+A regra era `height: 100%` com `width: auto`: a altura virava a sobra do casco, a
+largura saía dela pela proporção — e aí `max-width: 100%` cortava a largura **sem
+recalcular a altura**. Medido num aparelho de 375:
+
+| | antes | depois |
+|---|---|---|
+| tabuleiro | 355 × **511** | 355 × **355** |
+| linha | **59,5 px** | 40 px |
+| casa | **40 px** | 40 px |
+
+Oito linhas dividindo 511 enquanto oito colunas dividiam 355. A casa tinha
+proporção **própria** (`aspect-ratio: 1`) e ficava com 40 px dentro de uma linha
+de 59,5 — mais dois donos, e o navio ocupa a **linha**. Saía uma vez e meia mais
+alto que a casa que ele marca.
+
+#### O conserto: uma grade só
+
+Casas e navios agora são **irmãos na mesma grade**, colocados nas mesmas trilhas
+por `grid-column` / `grid-row`. Não há mais o que discordar. Três detalhes que
+essa escolha obriga:
+
+- **o navio é um `<span>` com o desenho de fundo**, nunca um `<img>`. Um `<span>`
+  não tem tamanho próprio pra oferecer: ele só pode ocupar a área que a grade
+  der, e `background-size: 100% 100%` se ajusta ao que sobrar;
+- **as casas ganharam posição explícita**, senão um navio de posição explícita no
+  meio empurraria o preenchimento automático das casas seguintes;
+- **a casa perdeu a proporção própria.** Quem diz o tamanho dela é a trilha — a
+  mesma trilha do navio.
+
+E o tabuleiro passou a sair quadrado **pelo lado que faltar**. Nenhuma das duas
+formas ingênuas faz isso: `height: 100%` + `width: auto` é certo deitado e
+errado em pé; `width: 100%` + `height: auto` é o espelho (medido: 720 × 123 numa
+tela baixa). Quem sabe o menor dos dois lados é o próprio espaço disponível, e a
+forma de perguntar isso é a **unidade de container** — `min(100cqw, 100cqh)`, com
+`width: 100%` ficando como degrau pra quem não entende a unidade. O container é
+uma caixa nova, `.naval-campo`, e não `.naval-mar` inteiro: `.naval-mar` inclui a
+linha do título, e com o título na conta o tabuleiro saía 147,5 × 123,5.
+
+> **Duas armadilhas medidas no caminho, e as duas do mesmo tipo:** um container
+> de tamanho **não pode medir o próprio conteúdo**. Centralizado por
+> `align-items: center`, ele saiu com 0 de largura e levou o tabuleiro junto
+> (14 × 14); com `flex-basis: auto`, a mesma coisa. `align-self: stretch` e
+> `flex: 1 1 0` resolvem as duas.
+
+#### A bancada passou a medir o encaixe, e não só o desenho
+
+A aba Naval do `/lab` agora monta o **`Tabuleiro` de verdade**, com o CSS de
+verdade, e faz uma pergunta só: *a caixa de cada navio bate com a união das casas
+que ele ocupa?* É a lição da 9.10 ("a bancada conferia a arte que o app não
+usa"), aplicada ao layout.
+
+Conferido reintroduzindo o defeito de propósito: a aba fica vermelha e diz
+`navio fora da casa por 14,63px, tabuleiro 343×460 (não é quadrado)`. E ela roda
+em qualquer navegador que abrir o `/lab` — **inclusive no iPhone**, que é onde o
+defeito aparecia e onde eu não tenho como medir daqui.
+
+**Medido nos três tamanhos, com a partida de verdade rodando:**
+
+| tela | tabuleiro | casa | desvio navio/casa |
+|---|---|---|---|
+| 375 × 812, normal | 343 × 343 | 38,5 | **0 px** |
+| 390 × 844, tela cheia | 370 × 370 | 41,88 | **0 px** |
+| 740 × 380 (deitado) | 123,5 × 123,5 | 11,06 | **0 px** |
+| minimapa (vão e margem menores) | 92 × 92 | 9,63 | **0 px** |
+
+O toque continua sendo do `<button>` (conferido: no centro de uma casa com navio,
+quem responde é `naval-casa navio`), e o tabuleiro do adversário continua com
+**zero** navios desenhados — a posição dele não chega neste app.
+
+**Travado no smoke:** o navio não pode voltar a ser imagem, a segunda grade não
+pode voltar, as casas têm que ter posição explícita, a grade tem que declarar as
+linhas, a casa não pode ter proporção própria e a receita de tela cheia não pode
+voltar. As três reintroduções foram testadas de propósito e as três ficaram
+vermelhas.
+
+**Estado: 679 verificações, 0 falha.** Build Vite aprovada. Publicado em produção
+— e o volume de mídia foi conferido antes (`/data/casal-media → /app/media`),
+como manda a regra da 9.21.
+
+**Próximo passo:** continua sendo a seção 8.1 — mapa navegável do bairro.
+
+### 9.25 A bancada estava medindo errado, e o sofá se atravessava (27/08/2026)
+
+Pedido do dono: "o áudio ficou bom, mas os objetos ainda estão bugados com
+partes se sobrepondo, e ainda tem poucos pixels — o sofá mesmo nem parece um
+sofá. Talvez já existam modelos prontos na internet, em 3D; veja essa opção."
+
+#### 1. A bancada girava o móvel sem girar a pegada
+
+Este é o achado da rodada, e é constrangedor: **a `/lab` estava mentindo**.
+
+Na casa, girar um móvel troca `w` por `d` — um sofá 2x1 vira 1x2
+(`rotateSelected`, em `House.jsx`). A bancada girava só o `dir` e deixava a
+pegada como estava. Com isso `tools` calculava `W` e `D` ao contrário, e a peça
+se desenhava com as proporções trocadas.
+
+Ou seja: a bancada **mostrava "bugado ao girar" em móveis que na casa estavam
+certos, e escondia os que estavam errados de verdade**. Eu persegui defeitos que
+só existiam ali. É o mesmo princípio que a rota de teste do áudio já respeita —
+**bancada que valida diferente do que roda é pior do que não ter bancada**,
+porque manda procurar no lugar errado.
+
+#### 2. O sofá: três peças se atravessando
+
+Com a bancada dizendo a verdade, o sofá continuou errado — e a conta explicou:
+
+- o encosto ia até 0,65 de profundidade e o assento começava em **0,62**: o
+  assento entrava dentro do encosto;
+- os braços iam de 0,60 a 0,90 e também pegavam o encosto;
+- as duas almofadas iam de 0,60 a 1,10 e de 0,90 a 1,40 — **uma dentro da
+  outra**, por 0,20;
+- e as duas passavam de 0,85, onde a base termina: **sobravam pra fora**,
+  boiando na frente do sofá.
+
+Refeito com as faixas calculadas, cada peça começando onde a anterior termina, e
+o número de almofadas saindo da largura (sofá maior ganha almofada, não almofada
+esticada). As medidas viraram variáveis porque com número solto mexer numa
+quebra a vizinha em silêncio — que foi exatamente o que aconteceu.
+
+#### 3. O caça-sobreposição: 30 móveis conferidos por conta, não por olho
+
+Olhar 30 móveis em 4 rotações é 120 telas, e invasão de 3 centésimos de célula
+não aparece em miniatura. Então `furnitureAudit.js` lê a descrição das peças
+(cada `k.box` é uma caixa) e acha as que se cruzam nos três eixos.
+
+A primeira rodada acusou 16 móveis — e ensinou a distinção que importa:
+
+> **Afundar é a técnica, não o defeito.** Almofada meio enterrada no assento é o
+> que dá volume; cone afundado na caixa é o que faz o cone. O defeito é a peça
+> **inteiramente dentro** de outra: ela não some (o desenho é por cima), mas as
+> duas faces caem no MESMO plano — e duas faces coplanares com contorno viram um
+> **risco atravessado** em vez de um relevo. Era isso na porta da geladeira.
+
+Daí saiu a regra que vale pra todo móvel novo: **todo detalhe tem que SAIR da
+face do pai**, nem que seja por 0,04 de célula — aí ele ganha sombra própria e o
+contorno tem onde encostar.
+
+Corrigidos por essa regra: guarda-roupa, geladeira, mesa, fogão, comedouro,
+caixa de som, velas, churrasqueira (a cuba era funda e a grelha morava DENTRO
+dela, invisível), quadro e quadro do casal (viraram **aro** em vez de bloco
+cheio — no do casal eram quinze peças enterradas, o pior da lista).
+
+**Agora a bancada diz: "Nenhuma peça enterrada dentro de outra."**
+
+#### 4. Mais pixel, segunda subida: 64 → 96
+
+A área por face dobrou de novo. Uma prateleira de 0,06 de célula tinha 3 px no
+começo, 4 com 64 e agora tem **6** — e é a partir de 5 ou 6 que um detalhe deixa
+de ser um risco e vira peça com sombra. Vários itens "sem leitura" só passaram a
+existir de verdade aqui.
+
+O custo por quadro não dobrou junto porque o fundo saiu da conta na 9.24 (piso e
+paredes viraram desenho colado). O cômodo foi de 578x386 para **866x578** e rola
+pro lado — escolha, não efeito colateral: é o que jogo de decoração faz, e
+encolher a arte pra caber desfaria o ganho.
+
+#### 5. A opção dos modelos prontos
+
+Existe e é boa: o **Furniture Kit do Kenney** tem 120 objetos, **CC0** (sem
+obrigação nenhuma), com render isométrico em **4 ângulos** já prontos. Não é
+conversa fiada — resolveria rotação e acabamento de uma vez.
+
+O que ele custaria, e por isso não foi feito sem perguntar:
+
+| | hoje (desenhado por código) | com o kit pronto |
+|---|---|---|
+| Estilo | pixel art, igual ao bichinho, ao avatar, às figurinhas e à naval | render 3D liso — **destoa de tudo o mais na tela** |
+| Cor por item | a loja vende o mesmo móvel em cores; a cor é um parâmetro | fixa no PNG; acabaria a variação |
+| Móvel novo | uma função | achar/renderizar 4 ângulos |
+| Peso | zero arquivo | ~480 PNGs |
+| O bichinho | é desenhado no MESMO plano de pixel do móvel | ficaria pixelado ao lado de um sofá liso |
+
+O nó é o quinto: o bichinho e o avatar são pixel art e vivem dentro do cômodo.
+Trocar só os móveis quebra a unidade; trocar tudo é refazer o app inteiro.
+
+**Estado: 679 verificações, 0 falha.** Build Vite aprovada; auditoria limpa;
+sofá conferido nas rotações com a bancada já corrigida.

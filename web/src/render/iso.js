@@ -34,9 +34,24 @@
 // (piso e paredes) passou a ser desenhado UMA vez e colado — ver `fundoDoComodo`
 // em `room.js`. Com as duas mudanças juntas, o custo por quadro CAIU mesmo com
 // a arte maior.
-export const TW = 64 // largura do losango de uma célula
-export const TH = 32 // altura do losango
-export const TZ = 32 // altura de uma "unidade" vertical
+// SEGUNDA SUBIDA, a pedido do dono ("ainda tem poucos pixels"): 64 -> 96.
+//
+// A área por face dobrou de novo. Uma prateleira de 0,06 de célula, que tinha
+// 3 px no começo e 4 com 64, agora tem 6 — e é a partir de 5 ou 6 que um
+// detalhe deixa de ser um risco e vira uma peça com sombra própria. É por isso
+// que várias coisas "sem leitura" (o cone da caixa de som, o puxador da
+// geladeira, o botão do fogão) só passaram a existir de verdade aqui.
+//
+// O custo por quadro NÃO dobrou junto, porque o fundo saiu da conta (piso e
+// paredes viraram um desenho colado, ver `fundoDoComodo`). O que sobrou por
+// quadro é polígono de móvel, que é barato, mais o bichinho.
+//
+// O cômodo passa a ser mais largo que a tela do celular e ROLA pro lado. Isso é
+// escolha, não efeito colateral: é o que jogo de decoração faz, e encolher a
+// arte pra caber seria desfazer justamente o que se está ganhando aqui.
+export const TW = 96 // largura do losango de uma célula
+export const TH = 48 // altura do losango
+export const TZ = 48 // altura de uma "unidade" vertical
 
 /** Célula (col, row) na altura z -> ponto na tela. */
 export function project(col, row, z, origin) {
