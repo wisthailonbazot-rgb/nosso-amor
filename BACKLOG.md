@@ -1082,3 +1082,27 @@ Estado: **667 verificações, 0 falha**. Causas no HANDOFF, seção 9.21.
 
 Estado: **667 verificações, 0 falha**; build aprovada; conferido no navegador.
 Causas no HANDOFF, seção 9.22.
+
+### 27/08/2026 — ACHEI: o app proibia o próprio microfone
+
+- **[x]** **A causa, enfim.** O nosso servidor mandava
+      `Permissions-Policy: geolocation=(), microphone=(), camera=()`. Lista vazia
+      não é "sem restrição extra": é **nenhuma origem pode**, e a própria página
+      está incluída. Com isso o navegador recusa o microfone na hora e **nunca
+      mostra a pergunta** — exatamente o que você descreveu desde o começo.
+      - Custou um dia porque **todo lugar onde se procura diz "liberado"**: o
+        Chrome não lista bloqueio nenhum (não é decisão do site, é a política da
+        página), a permissão do app está concedida, a chave do aparelho está
+        ligada e o diagnóstico acha 1 microfone. Você chegou a fotografar a tela
+        do Chrome pra provar que não havia bloqueio — e não havia mesmo.
+      - **Explica o iPhone dela gravar e o seu Android não:** o Safari não aplica
+        esse cabeçalho ao microfone em página de topo; o Chrome aplica.
+      - **E explica a câmera.** `camera=()` bloqueia tirar foto na hora — era por
+        isso que abria só a galeria. As duas entradas (câmera/galeria) que fiz
+        continuam certas, mas o que destravava era o cabeçalho.
+      - Conserto: `microphone=(self), camera=(self)` — a página pode pedir (e o
+        navegador ainda pergunta a você), e nenhum terceiro herda nada.
+      - Medido na produção antes: `allowsFeature('microphone')` = **false**.
+        Depois, local: **true**. Travado no smoke.
+
+Estado: **670 verificações, 0 falha**. Causa no HANDOFF, seção 9.23.

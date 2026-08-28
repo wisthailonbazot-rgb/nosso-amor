@@ -40,7 +40,37 @@ async def security_headers(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
-    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    # ------------------------------------------------ Permissions-Policy
+    #
+    # ESTE CABEÇALHO PROIBIA O MICROFONE DO PRÓPRIO APP. Foi a causa de "não
+    # envia áudio", que custou um dia inteiro de caça.
+    #
+    # A lista vazia `microphone=()` NÃO quer dizer "sem restrição extra": quer
+    # dizer **nenhuma origem pode**, e a própria página está incluída nisso. Com
+    # ela, `getUserMedia` é recusado na hora com `NotAllowedError`, sem NUNCA
+    # mostrar a pergunta, e `navigator.permissions.query` responde `denied`.
+    #
+    # E o rastro apontava pro lugar errado de um jeito quase perfeito:
+    #
+    #   * o Chrome não lista nada em "Configurações do site → Microfone", porque
+    #     não é uma decisão do site — é a política que a PÁGINA declarou;
+    #   * a permissão do app do navegador continua concedida;
+    #   * a chave geral do aparelho continua ligada;
+    #   * `enumerateDevices` ainda devolve 1 microfone.
+    #
+    # Ou seja: todo lugar onde se procura mostra "está liberado", e mesmo assim
+    # é negado. O dono chegou a abrir a tela do Chrome pra provar que não havia
+    # bloqueio nenhum — e não havia mesmo.
+    #
+    # E explica a assimetria que parecia impossível: no iPhone dela gravava. O
+    # Safari não aplica Permissions-Policy a `getUserMedia` em documento de topo;
+    # o Chrome aplica. Mesmo site, mesma conta, resultados opostos por navegador.
+    #
+    # `self` é o valor certo aqui: a PÁGINA pode pedir (e o navegador ainda
+    # pergunta ao dono do aparelho, que é a trava que importa), e ninguém mais —
+    # nenhum iframe de terceiro herda nada. Câmera junto, pela mesma razão: é ela
+    # que tira foto na hora no chat e no mural.
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(self), camera=(self)"
     # o service worker so pode ser servido da raiz, senao nao controla o app inteiro
     if request.url.path.endswith("sw.js"):
         response.headers["Cache-Control"] = "no-cache"

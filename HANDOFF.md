@@ -2596,3 +2596,70 @@ foto" e "galeria".
 **Estado: 667 verificações, 0 falha.** Build Vite aprovada; menu conferido no
 navegador (as duas entradas existem, uma com `capture="environment"` e outra
 sem).
+
+### 9.23 A CAUSA: o app proibia o próprio microfone (27/08/2026)
+
+```
+Permissions-Policy: geolocation=(), microphone=(), camera=()
+```
+
+Esse cabeçalho é do **nosso servidor** (`app/main.py`, middleware
+`security_headers`). Uma lista vazia em Permissions-Policy **não** quer dizer
+"sem restrição extra": quer dizer **nenhuma origem pode** — e a própria página
+está incluída nisso.
+
+Com ele, `getUserMedia` é recusado na hora, com `NotAllowedError`, **sem nunca
+mostrar a pergunta**. E `navigator.permissions.query` responde `denied`.
+
+#### Por que custou um dia inteiro
+
+Porque **todo lugar onde se procura mostra "está liberado"**:
+
+| Onde eu (e o dono) olhamos | O que dizia |
+|---|---|
+| Chrome → Configurações do site → Microfone | "Os sites podem pedir acesso" — e **nenhum site bloqueado na lista** |
+| Ajustes → Apps → Chrome → Permissões | Microfone **concedido** |
+| Chave geral do microfone do Android | ligada |
+| `enumerateDevices()` | devolve **1** microfone |
+
+Nada disso é o dono da decisão. Quem nega é a **política que a própria página
+declara**, e ela não aparece em ajuste nenhum — o dono chegou a fotografar a
+tela do Chrome pra provar que não havia bloqueio. E não havia mesmo.
+
+**E explica a assimetria que parecia impossível:** no iPhone dela gravava, no
+Android dele não. O Safari **não aplica** Permissions-Policy a `getUserMedia` em
+documento de topo; o Chrome aplica. Mesmo site, mesma conta, resultados opostos
+só por causa do navegador. Eu passei rodadas procurando diferença de formato e de
+permissão por causa disso.
+
+**E a câmera também era isto.** `camera=()` bloqueia o caminho de tirar foto na
+hora — por isso "abre só a galeria". Eu tinha atribuído à mudança do seletor de
+fotos do Android 13, que é real, mas não era a causa aqui. As duas entradas
+separadas (câmera / galeria) continuam certas e ficam; o que destrava é o
+cabeçalho.
+
+#### O conserto
+
+```python
+response.headers["Permissions-Policy"] = "geolocation=(), microphone=(self), camera=(self)"
+```
+
+`self` é o valor certo: a **página** pode pedir — e o navegador ainda pergunta ao
+dono do aparelho, que é a trava que importa — e **ninguém mais**: nenhum iframe
+de terceiro herda nada. Geolocalização continua fechada, porque o app não usa.
+
+> **Medido, antes e depois.** Na produção, com o cabeçalho velho:
+> `document.featurePolicy.allowsFeature('microphone')` → **false**, e `camera`
+> → **false**. Local, com o novo: **true**.
+
+**Travado no smoke:** o cabeçalho tem que trazer `microphone=(self)` e
+`camera=(self)`, e não pode virar `*`.
+
+> **A lição, e ela é cara:** um cabeçalho de segurança copiado sem ler o que a
+> lista vazia significa desligou uma função inteira do produto, e o rastro
+> apontava pra todo lado menos pra ele. Quando o navegador nega **sem
+> perguntar** e todos os ajustes dizem "liberado", suspeite do que a **página**
+> declara — `Permissions-Policy`, `Content-Security-Policy`, atributo `allow` de
+> iframe — antes de suspeitar do aparelho de quem está usando.
+
+**Estado: 670 verificações, 0 falha.**
