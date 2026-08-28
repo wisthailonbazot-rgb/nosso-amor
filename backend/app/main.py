@@ -192,6 +192,41 @@ def media(name: str, token: str = "", db: Session = Depends(get_db)):
     return FileResponse(candidate)
 
 
+# ------------------------------------------------- o tipo do arquivo servido
+#
+# NAO deixar o `FileResponse` adivinhar sozinho. A tabela de tipos do sistema
+# muda de maquina pra maquina — aqui no Windows o `.ogg` sai como `audio/ogg`, e
+# no container Linux o mesmo arquivo saiu como `text/plain`. Isso e exatamente a
+# forma de defeito que custou o dia de hoje: funciona na bancada, quebra no ar,
+# e o rastro nao explica.
+#
+# Entao o tipo do que a gente mesmo publica e declarado aqui, e o palpite do
+# sistema fica so pro resto.
+TIPOS = {
+    ".ogg": "audio/ogg",
+    ".oga": "audio/ogg",
+    ".mp3": "audio/mpeg",
+    ".m4a": "audio/mp4",
+    ".wav": "audio/wav",
+    ".webm": "audio/webm",
+    ".webp": "image/webp",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".svg": "image/svg+xml",
+    ".woff2": "font/woff2",
+    ".js": "text/javascript",
+    ".css": "text/css",
+    ".json": "application/json",
+    ".webmanifest": "application/manifest+json",
+}
+
+
+def _tipo_do_arquivo(caminho: str) -> str | None:
+    """O tipo declarado por nos; `None` deixa o FastAPI adivinhar."""
+    return TIPOS.get(os.path.splitext(caminho)[1].lower())
+
+
 # ------------------------------------------------------------------ o app
 # O mesmo build roda no navegador e dentro do APK.
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
@@ -214,5 +249,5 @@ if os.path.isdir(STATIC_DIR):
 
         candidate = os.path.normpath(os.path.join(STATIC_DIR, full_path))
         if full_path and candidate.startswith(STATIC_DIR) and os.path.isfile(candidate):
-            return FileResponse(candidate)
+            return FileResponse(candidate, media_type=_tipo_do_arquivo(candidate))
         return FileResponse(os.path.join(STATIC_DIR, "index.html"))

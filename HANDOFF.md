@@ -2750,3 +2750,15 @@ mono**, e toca pelo caminho real do app (`casalSound('pet','gato:feliz')`) sem
 erro no console.
 
 **Estado: 670 verificações, 0 falha.** Build Vite aprovada.
+
+#### Adendo à 9.24: o tipo do arquivo servido
+
+O `.ogg` do miado subiu e o servidor entregou como **`text/plain`**, enquanto na
+bancada saía `audio/ogg`. A tabela de tipos do sistema muda de máquina — e é
+exatamente a forma de defeito que custou o dia de hoje: **funciona aqui, quebra
+no ar, e o rastro não explica**.
+
+Como o app busca o arquivo e decodifica na mão, ele tocaria assim mesmo; mas um
+`<audio src>` não tocaria, e a próxima pessoa perderia horas. Agora o tipo do
+que **nós** publicamos é declarado em `TIPOS` (`app/main.py`), e o palpite do
+sistema fica só pro resto. Travado no smoke.

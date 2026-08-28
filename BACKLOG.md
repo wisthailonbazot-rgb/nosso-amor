@@ -1143,4 +1143,8 @@ Estado: **670 verificações, 0 falha**. Causa no HANDOFF, seção 9.23.
       - [ ] **Me diz se ficou bom.** Se sim, eu busco os outros cinco bichos do
             mesmo jeito.
 
-Estado: **670 verificações, 0 falha**; build aprovada. Causas no HANDOFF, 9.24.
+Estado: **673 verificações, 0 falha**; build aprovada. Causas no HANDOFF, 9.24.
+
+- **[x]** **E o tipo do arquivo servido.** O `.ogg` chegou como `text/plain` no ar
+      e como `audio/ogg` aqui — a tabela do sistema muda de máquina. Agora o tipo
+      do que a gente publica é declarado, não adivinhado.
