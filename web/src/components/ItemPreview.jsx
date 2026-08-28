@@ -85,10 +85,12 @@ export default function ItemPreview({ item, avatarConfig, scale = 2 }) {
             dir: 0,
           },
           { x: metrics.origin.x, y: 24 },
-          0,
-          draw
+          0
         )
       }
+      // Sem o quinto argumento: ele era o aviso de "a imagem do kit terminou de
+      // baixar, redesenhe". Com o kit removido, todo móvel é desenhado na hora,
+      // e não há nada que chegue depois.
       draw()
       return
     }

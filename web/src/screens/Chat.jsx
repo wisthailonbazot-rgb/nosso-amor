@@ -77,10 +77,58 @@ function escolherFormato() {
 
 function useRecorder() {
   const [gravando, setGravando] = useState(false)
+  const [abrindo, setAbrindo] = useState(false)
   const [segundos, setSegundos] = useState(0)
-  const ref = useRef({ recorder: null, chunks: [], inicio: 0, timer: null, ext: 'webm' })
+  const ref = useRef({ recorder: null, chunks: [], inicio: 0, timer: null, ext: 'webm', abrindo: false })
 
+  /**
+   * Começa a gravar.
+   *
+   * ------------------------------------------- dois toques rápidos, dois áudios
+   *
+   * O dono relatou: "se clicar muito rápido grava dois áudios um por cima do
+   * outro e fica bugado". A causa é esta função ser `async` e não ter tranca.
+   *
+   * Entre o toque e o `setGravando(true)` do fim existe um `await` — pedir o
+   * microfone leva tempo. Nessa janela, `gravando` ainda é `false` e o botão
+   * continua valendo, então o segundo toque entrava e rodava TUDO de novo:
+   *
+   *   * dois `MediaRecorder`, em dois streams diferentes, os dois gravando;
+   *   * `ref.current.recorder` sobrescrito pelo último — o primeiro virava
+   *     órfão, **sem parar nunca** (microfone aceso à toa);
+   *   * e os dois `ondataavailable` empurrando no MESMO `ref.current.chunks`.
+   *     O arquivo final era a mistura de duas codificações — literalmente um
+   *     áudio por cima do outro, e por isso saía corrompido.
+   *
+   * O conserto tem duas partes, e as duas importam:
+   *
+   * 1. **A tranca é um `ref`, não estado.** `setState` só vale no próximo
+   *    render; um `ref` vale na linha seguinte. Como a corrida acontece dentro
+   *    de um `await`, só a marca síncrona chega a tempo. (O estado `abrindo`
+   *    existe também, mas só pra apagar o botão na tela.)
+   * 2. **Cada gravação tem o PRÓPRIO saco de pedaços.** Mesmo que um gravador
+   *    perdido sobrevivesse, ele empurraria no saco dele — não teria como
+   *    contaminar o áudio de ninguém. A tranca evita a corrida; o saco próprio
+   *    torna a mistura impossível.
+   */
   async function iniciar() {
+    // TRANCA SÍNCRONA — antes de qualquer `await`.
+    if (ref.current.abrindo || ref.current.recorder) {
+      // Não é erro: é o segundo toque do mesmo dedo. Erro na tela aqui só
+      // assustaria quem tocou rápido.
+      return { ok: false, repetido: true, reason: '' }
+    }
+    ref.current.abrindo = true
+    setAbrindo(true)
+    try {
+      return await abrirGravacao()
+    } finally {
+      ref.current.abrindo = false
+      setAbrindo(false)
+    }
+  }
+
+  async function abrirGravacao() {
     if (!navigator.mediaDevices?.getUserMedia) {
       // Isto acontece de verdade: fora de HTTPS o `mediaDevices` nem existe, e
       // antes o botao de gravar simplesmente sumia da barra sem explicacao.
@@ -121,9 +169,12 @@ function useRecorder() {
       return { ok: false, reason: `Este aparelho recusou a gravação (${err?.name || 'erro'}).` }
     }
 
-    ref.current.chunks = []
+    // O saco de pedaços é DESTA gravação, e não do componente. Ver o comentário
+    // grande em `iniciar`: é o que torna impossível dois áudios se misturarem.
+    const pedacos = []
+    ref.current.chunks = pedacos
     ref.current.ext = formato.ext
-    recorder.ondataavailable = (e) => e.data?.size && ref.current.chunks.push(e.data)
+    recorder.ondataavailable = (e) => e.data?.size && pedacos.push(e.data)
     // A FATIA DE TEMPO E O CONSERTO PRINCIPAL — ver o comentario grande acima.
     recorder.start(250)
     ref.current.recorder = recorder
@@ -140,7 +191,14 @@ function useRecorder() {
   function parar() {
     return new Promise((resolve) => {
       const { recorder, timer, inicio, ext } = ref.current
+      // O saco DESTA gravação, preso agora: se outra começar enquanto esta
+      // fecha, ela troca `ref.current.chunks` e não mexe neste.
+      const pedacos = ref.current.chunks
       clearInterval(timer)
+      // Libera a vez ANTES de fechar: quem parou já pode gravar de novo, e o
+      // fechamento (que espera evento do navegador) não segura o botão.
+      ref.current.recorder = null
+      ref.current.chunks = []
       setGravando(false)
       if (!recorder || recorder.state === 'inactive') {
         return resolve({ ok: false, reason: 'A gravação não chegou a começar.' })
@@ -157,8 +215,7 @@ function useRecorder() {
           /* ja parado */
         }
         const tipo = recorder.mimeType || 'audio/webm'
-        const blob = new Blob(ref.current.chunks, { type: tipo })
-        ref.current.chunks = []
+        const blob = new Blob(pedacos, { type: tipo })
         if (!blob.size) {
           // Continua possivel (microfone mudo, gravacao de meio segundo), mas
           // agora tem nome: antes isso virava um 400 do servidor sem contexto.
@@ -174,7 +231,7 @@ function useRecorder() {
       // `stop` muda de navegador pra navegador.
       recorder.onstop = fechar
       recorder.ondataavailable = (e) => {
-        if (e.data?.size) ref.current.chunks.push(e.data)
+        if (e.data?.size) pedacos.push(e.data)
         if (recorder.state === 'inactive') fechar()
       }
       // E um prazo, pra nunca ficar pendurado esperando um evento que nao veio.
@@ -206,6 +263,7 @@ function useRecorder() {
   // escondido, ele nao explicava nada. Agora ele aparece e o toque diz o motivo.
   return {
     gravando,
+    abrindo,
     segundos,
     iniciar,
     parar,
@@ -884,9 +942,14 @@ export default function Chat() {
               gravador.suportado && (
                 <button
                   className="btn-accent btn-sm"
+                  // Enquanto o microfone está sendo pedido o botão fica apagado.
+                  // É só a parte visível da tranca — quem garante mesmo é o
+                  // `ref` dentro de `iniciar`, porque estado chega tarde demais
+                  // pra uma corrida que acontece dentro de um `await`.
+                  disabled={gravador.abrindo}
                   onClick={async () => {
                     const r = await gravador.iniciar()
-                    if (!r.ok) setErro(r.reason, r.passos)
+                    if (!r.ok && !r.repetido) setErro(r.reason, r.passos)
                   }}
                   aria-label="Gravar áudio"
                 >

@@ -8,7 +8,6 @@
 
 import { FACE_LEFT, FACE_RIGHT, FACE_TOP, isoBox, project, groundShadow } from './iso'
 import { mix, shade } from './pixel'
-import { drawKenneyItem } from './furnitureKenney'
 
 const OUTLINE = '#33203a'
 
@@ -666,13 +665,24 @@ export const DIRECOES_DE_PAREDE = [0, 3]
 /** Formas que não são móveis: acabamento do cômodo. */
 export const FINISHES = new Set(['floor', 'wall'])
 
-export function drawItem(p, item, origin, t, onAssetReady) {
+// O KIT KENNEY FOI REMOVIDO — e a decisão é do dono, depois de ver rodando.
+//
+// Ele pediu pra experimentar, os 73 PNGs entraram, e o resultado no cômodo não
+// convenceu: "não funcionaram direito". Dá pra ver por quê sem gosto nenhum no
+// meio — os renders são de um kit genérico e o nosso catálogo não tem o mesmo
+// vocabulário. A caminha do bichinho virava um travesseiro azul comprido, o
+// quadro virava um espelho de banheiro, e o que não tinha equivalente ficava
+// desenhado por código do lado do que tinha: dois estilos na mesma sala.
+//
+// Somando: os PNGs não aceitam a cor por item (a loja vende o mesmo móvel em
+// cores), e o bichinho e o avatar são pixel art desenhados no MESMO plano —
+// um sofá liso ao lado deles destoa.
+//
+// Fica o registro pra não ser tentado de novo sem motivo novo: a alternativa foi
+// experimentada de verdade, no ar, e voltou atrás por decisão de quem usa.
+export function drawItem(p, item, origin, t) {
   const shape = SHAPES[item.shape]
   if (!shape) return false
-  // O kit Kenney e a arte principal. Se a imagem ainda estiver baixando, tiver
-  // falhado ou nao existir para este objeto, o desenho original logo abaixo
-  // continua funcionando como backup.
-  if (drawKenneyItem(p, item, origin, onAssetReady)) return true
   groundShadow(p, { col: item.col, row: item.row, w: item.w, d: item.d }, origin)
   shape(p, item, origin, t)
   return true

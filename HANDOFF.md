@@ -3086,3 +3086,90 @@ navegador com os móveis do Kenney desenhando.
 > depois. O conserto que está no ar é o da outra sessão mais o prazo folgado da
 > rede de segurança. Se voltar a acontecer, o caminho é o mesmo do microfone:
 > não adivinhar — pedir o que a tela mostra.
+
+### 9.27 O kit Kenney sai, e dois toques param de gravar dois áudios (28/08/2026)
+
+Pedido do dono: "na verdade pedi pra reverter os móveis Kenney, não funcionaram
+direito — remove e deixa apenas os nossos mesmos. Além disso o botão do áudio no
+Android, se clicar muito rápido, grava dois áudios um por cima do outro."
+
+#### 1. O kit Kenney sai — alternativa testada e descartada por quem usa
+
+Removidos `furnitureKenney.js`, os 73 PNGs de `public/kenney-furniture/` e a
+chamada em `drawItem`. A casa volta a desenhar só o que é nosso.
+
+Isto **não é recuo**: foi experimentado de verdade, publicado, visto rodando, e
+descartado por quem usa o app. Os motivos, pra ninguém ser tentado de novo sem
+motivo novo:
+
+- **o vocabulário não bate.** O kit é genérico; o nosso catálogo não é. A caminha
+  do bichinho virava um travesseiro azul comprido, o quadro virava um espelho de
+  banheiro, e o que não tinha equivalente continuava desenhado por código **ao
+  lado** do que tinha — dois estilos na mesma sala;
+- **a cor por item morre.** A loja vende o mesmo móvel em cores, e cor é
+  parâmetro no nosso desenho; num PNG ela está assada;
+- **o bichinho e o avatar são pixel art no MESMO plano.** Um sofá liso ao lado
+  deles destoa, e trocar tudo seria refazer o app.
+
+A trava do smoke voltou ao lado de origem — e as três viradas dela ficam
+registradas de propósito, porque juntas contam a história: proibia o kit → passou
+a exigir o kit com reserva → voltou a proibir. Se um dia houver motivo novo, é só
+mudar de novo, **com o porquê escrito**.
+
+#### 2. Dois toques rápidos gravavam dois áudios, misturados
+
+A causa está em `iniciar()` ser `async` e não ter tranca. Entre o toque e o
+`setGravando(true)` do fim existe um `await` — pedir o microfone demora. Nessa
+janela `gravando` ainda é `false`, o botão continua valendo, e o segundo toque
+rodava tudo de novo:
+
+- dois `MediaRecorder`, em dois streams, os dois gravando;
+- `ref.current.recorder` sobrescrito pelo último — **o primeiro virava órfão e
+  não parava nunca** (microfone aceso à toa);
+- e os dois `ondataavailable` empurrando no **mesmo** `ref.current.chunks`. O
+  arquivo final era a mistura de duas codificações: literalmente um áudio por
+  cima do outro, e por isso saía corrompido.
+
+O conserto tem duas partes, e as duas importam:
+
+1. **A tranca é um `ref`, não estado.** `setState` só vale no próximo render; um
+   `ref` vale na linha seguinte. Como a corrida acontece *dentro* de um `await`,
+   só a marca síncrona chega a tempo. (O estado existe também, mas só pra apagar
+   o botão na tela.)
+2. **Cada gravação tem o próprio saco de pedaços.** Mesmo que um gravador perdido
+   sobrevivesse, ele empurraria no saco dele. A tranca evita a corrida; o saco
+   próprio torna a mistura **impossível**.
+
+Junto: `parar()` larga o gravador antes de fechar (quem parou já pode gravar de
+novo), e `cancelar()` passou a desligar a faixa — antes ela ficava aberta, com a
+luz do microfone acesa, e a tranca nunca abria.
+
+> **Medido no navegador, com o microfone trocado por um `MediaStream` de verdade
+> e 700 ms de atraso pra abrir a janela da corrida: cinco toques em rajada →
+> UM gravador.** Antes seriam cinco. Travado no smoke, que confere que a tranca
+> vem antes do primeiro `await` e que ninguém empurra no saco compartilhado.
+> (A verificação primeiro deu falso positivo batendo na palavra "await" dentro do
+> meu próprio comentário; agora ela lê o código sem comentários.)
+
+#### 3. Achado que NÃO consertei, e por quê
+
+Enviando o áudio na bancada, a tela mostrou "Internal Server Error" — **com o
+áudio salvo e aparecendo na conversa**. O log dá o motivo:
+
+```
+sqlite3.InterfaceError: bad parameter or other API misuse
+  chat.py:243 -> _out(row, token) -> row.id
+```
+
+`sessionmaker` está com `expire_on_commit` no padrão (`True`), então depois do
+`db.commit()` o objeto é expirado e **cada campo lido dispara um SELECT novo**.
+No PostgreSQL isso funciona (só desperdiça uma consulta por mensagem enviada);
+no SQLite da bancada, estoura.
+
+**Não mexi**, e o motivo é o de hoje: `expire_on_commit=False` muda a semântica
+de sessão do app inteiro, e este projeto tem triggers que alteram dados — trocar
+isso sem poder testar cada rota é exatamente o tipo de mudança que derrubou o app
+hoje de manhã. Fica diagnosticado e escrito. **Cuidado ao ler:** é mais uma
+bancada que falha onde a produção passa, o que já foi caro uma vez.
+
+**Estado: 688 verificações, 0 falha.** Build aprovada; auditoria de móveis limpa.

@@ -1267,3 +1267,32 @@ seção 9.26.
             reproduzir a tela rosa aqui em nenhum momento.
 
 Estado: **686 verificações, 0 falha**. Causas no HANDOFF, seção 9.26.
+
+### 28/08/2026 — Kenney removido, e o toque duplo no gravador
+
+- **[x]** **Kit Kenney removido** (o `furnitureKenney.js`, os 73 PNGs e a chamada
+      no desenho). A casa volta a usar só os nossos móveis.
+      - Não é recuo: foi testado no ar e descartado por você. Ficou escrito o
+        porquê — o vocabulário do kit não bate com o nosso catálogo (caminha
+        virava travesseiro, quadro virava espelho), a cor por item morre num PNG,
+        e o bichinho/avatar são pixel art no mesmo cômodo.
+- **[x]** **Dois toques rápidos não gravam mais dois áudios.** `iniciar()` é
+      async e não tinha tranca: entre o toque e o "gravando" do fim existe um
+      `await`, e nessa janela o segundo toque criava um SEGUNDO gravador — os
+      dois empurrando no mesmo saco de pedaços, o que sai é a mistura de duas
+      codificações. Era isso o "um por cima do outro".
+      - A tranca é um `ref` (vale na linha seguinte), não estado (só vale no
+        próximo render, tarde demais). E cada gravação ganhou o próprio saco de
+        pedaços, o que torna a mistura impossível mesmo se algo escapar.
+      - Medido: cinco toques em rajada → **um** gravador. Antes, cinco.
+      - Junto: cancelar passou a desligar o microfone (a faixa ficava aberta) e
+        parar larga o gravador na hora.
+- **[ ]** **Achado que não consertei, de propósito.** Enviar áudio na bancada dá
+      "Internal Server Error" **com o áudio salvo** — é o `expire_on_commit`
+      padrão fazendo cada campo lido depois do commit virar uma consulta nova.
+      No PostgreSQL (produção) funciona e só desperdiça; no SQLite da bancada,
+      estoura. Não mexi porque mudar isso altera a semântica de sessão do app
+      inteiro, e tem trigger no banco — é o tipo de mudança que derrubou o app
+      hoje de manhã. Está diagnosticado; me diz se quer que eu encare.
+
+Estado: **688 verificações, 0 falha**. Causas no HANDOFF, seção 9.27.
