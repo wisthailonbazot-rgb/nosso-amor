@@ -13,46 +13,59 @@
     <meta name="apple-mobile-web-app-title" content="Nosso app" />
     <link rel="apple-touch-icon" href="/icon-180.png" />
     <link rel="icon" href="/icon-192.png" />
+    <!--
+      Tem que vir ANTES do modulo do app. O Vite move o bundle final para o
+      <head>; quando este detector ficava no fim do <body>, um 404 muito rapido
+      podia acontecer antes de o listener existir. O aparelho ficava apenas com
+      o fundo rosa, preso num index.html antigo que apontava para um bundle ja
+      removido pelo deploy seguinte.
+    -->
+    <script data-casal-recovery>
+      ;(function () {
+        var CHAVE = 'casal.recuperando'
+
+        function recuperar() {
+          if (sessionStorage.getItem(CHAVE)) return
+          sessionStorage.setItem(CHAVE, '1')
+          var recarregar = function () { location.reload() }
+          try {
+            Promise.all([
+              navigator.serviceWorker && navigator.serviceWorker.getRegistrations
+                ? navigator.serviceWorker.getRegistrations().then(function (rs) {
+                    return Promise.all(rs.map(function (r) { return r.unregister() }))
+                  })
+                : Promise.resolve(),
+              window.caches
+                ? caches.keys().then(function (ks) {
+                    return Promise.all(ks.map(function (k) { return caches.delete(k) }))
+                  })
+                : Promise.resolve(),
+            ]).then(recarregar, recarregar)
+          } catch (_) { recarregar() }
+        }
+
+        // Bundle ou CSS com hash antigo que ja nao existe no servidor.
+        window.addEventListener('error', function (e) {
+          var alvo = e && e.target
+          if (!alvo || alvo === window) return
+          var src = alvo.src || alvo.href || ''
+          if (src.indexOf('/assets/') !== -1) recuperar()
+        }, true)
+
+        window.addEventListener('load', function () {
+          // Segunda rede: o arquivo pode ate chegar, mas falhar antes de o
+          // React montar. ErrorBoundary nao enxerga erro de import/modulo.
+          setTimeout(function () {
+            var raiz = document.getElementById('root')
+            if (raiz && !raiz.firstElementChild) recuperar()
+            else sessionStorage.removeItem(CHAVE)
+          }, 2500)
+        })
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>
-    <!-- Rede de seguranca pro aparelho que ficou preso num index.html velho.
-         Se o arquivo do app nao carregar (o nome dele muda a cada versao, e o
-         deploy apaga os antigos), o aparelho apagaria a tela e ficaria em
-         branco pra sempre — foi o que aconteceu no iPhone. Aqui a gente
-         percebe a falha, joga fora o service worker e os caches, e recarrega
-         UMA vez. A trava no sessionStorage e o que impede isso de virar um
-         laco de recarregamento quando a falha for de internet, e nao de
-         versao. -->
-    <script>
-      window.addEventListener('error', function (e) {
-        var alvo = e && e.target
-        if (!alvo || alvo === window) return
-        var src = alvo.src || alvo.href || ''
-        if (src.indexOf('/assets/') === -1) return
-        if (sessionStorage.getItem('casal.recuperando')) return
-        sessionStorage.setItem('casal.recuperando', '1')
-        var pronto = function () { location.reload() }
-        try {
-          Promise.all([
-            navigator.serviceWorker && navigator.serviceWorker.getRegistrations
-              ? navigator.serviceWorker.getRegistrations().then(function (rs) {
-                  return Promise.all(rs.map(function (r) { return r.unregister() }))
-                })
-              : Promise.resolve(),
-            window.caches
-              ? caches.keys().then(function (ks) {
-                  return Promise.all(ks.map(function (k) { return caches.delete(k) }))
-                })
-              : Promise.resolve(),
-          ]).then(pronto, pronto)
-        } catch (_) { pronto() }
-      }, true)
-      // carregou direito: pode esquecer que houve recuperacao
-      window.addEventListener('load', function () {
-        setTimeout(function () { sessionStorage.removeItem('casal.recuperando') }, 4000)
-      })
-    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

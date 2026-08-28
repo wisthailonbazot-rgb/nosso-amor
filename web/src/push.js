@@ -87,7 +87,12 @@ export function diagnose() {
 export async function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return null
   try {
-    const registro = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
+    const registro = await navigator.serviceWorker.register('/sw.js', {
+      scope: '/',
+      // O arquivo do worker e a chave da recuperacao; nao aceite uma copia
+      // antiga dele do cache HTTP quando uma nova versao for publicada.
+      updateViaCache: 'none',
+    })
     // Pede a checagem de versao NA MAO.
     //
     // O iPhone segura o service worker com forca: uma vez instalado, ele pode

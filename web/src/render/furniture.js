@@ -8,6 +8,7 @@
 
 import { FACE_LEFT, FACE_RIGHT, FACE_TOP, isoBox, project, groundShadow } from './iso'
 import { mix, shade } from './pixel'
+import { drawKenneyItem } from './furnitureKenney'
 
 const OUTLINE = '#33203a'
 
@@ -665,9 +666,13 @@ export const DIRECOES_DE_PAREDE = [0, 3]
 /** Formas que não são móveis: acabamento do cômodo. */
 export const FINISHES = new Set(['floor', 'wall'])
 
-export function drawItem(p, item, origin, t) {
+export function drawItem(p, item, origin, t, onAssetReady) {
   const shape = SHAPES[item.shape]
   if (!shape) return false
+  // O kit Kenney e a arte principal. Se a imagem ainda estiver baixando, tiver
+  // falhado ou nao existir para este objeto, o desenho original logo abaixo
+  // continua funcionando como backup.
+  if (drawKenneyItem(p, item, origin, onAssetReady)) return true
   groundShadow(p, { col: item.col, row: item.row, w: item.w, d: item.d }, origin)
   shape(p, item, origin, t)
   return true

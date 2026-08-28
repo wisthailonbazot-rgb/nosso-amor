@@ -2982,3 +2982,34 @@ Trocar só os móveis quebra a unidade; trocar tudo é refazer o app inteiro.
 
 **Estado: 679 verificações, 0 falha.** Build Vite aprovada; auditoria limpa;
 sofá conferido nas rotações com a bancada já corrigida.
+
+### 9.26 A tela rosa era um bundle velho, e o detector chegava tarde (28/08/2026)
+
+O app e a API estavam saudáveis. Nos logs do aparelho apareceu a sequência que
+explica a tela inteira rosa: ele abriu um HTML antigo e pediu
+`/assets/index-CbUqF9D2.js`, já removido da publicação, recebendo **404**. O CSS
+antigo ainda pintava o fundo, mas sem JavaScript o React nunca montava nada.
+
+Já existia uma recuperação automática, porém ela morava no fim do `<body>`.
+Durante o build, o Vite põe o módulo principal no `<head>`; um 404 rápido podia
+acontecer antes de o detector ser instalado. A correção ficou em três camadas:
+
+- o detector agora nasce no `<head>`, antes do módulo, e captura erro de asset;
+- após o carregamento, ele também detecta `#root` ainda vazio, apaga caches e
+  service workers e recarrega uma única vez (trava em `sessionStorage` impede
+  ciclo infinito);
+- o cache do worker subiu de `casal-v5` para `casal-v6`, e o registro usa
+  `updateViaCache: 'none'`, para a correção não depender do cache HTTP antigo.
+
+O Furniture Kit 2.0 enviado pelo dono também entrou. Foram escolhidos os 18
+modelos que têm equivalência real no catálogo (sofá, cama, mesa, cadeira,
+estantes, puff, espelho, plantas, tapete, luminária, TV, caixa de som,
+geladeira, fogão, caminha e banco), cada um nas quatro vistas isométricas. Os
+PNG ficam em `web/public/kenney-furniture/`, junto da licença **CC0**. O motor
+tenta o Kenney primeiro; enquanto a imagem carrega, se faltar ou se falhar, a
+função desenhada por código continua inteira em `furniture.js` como backup.
+Objetos próprios do app sem equivalente honesto no kit — por exemplo quadro do
+casal, comedouro, arranhador, rede e churrasqueira — continuam com nossa arte.
+
+A bancada foi conferida em 0° e 90°, e a casa real em viewport de telefone
+375×812. Smoke: **687 verificações, 0 falha**; build Vite aprovada.

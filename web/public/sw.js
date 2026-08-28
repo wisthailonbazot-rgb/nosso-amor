@@ -8,7 +8,9 @@
 // "nunca cachear" pra /api. Um app de casal com chat nao pode servir mensagem
 // velha do cache achando que e a atual.
 
-const CACHE = 'casal-v5'
+// v6 invalida de proposito a casca antiga que ainda apontava para um bundle
+// removido e deixava alguns aparelhos presos apenas no fundo rosa.
+const CACHE = 'casal-v6'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', (event) => {

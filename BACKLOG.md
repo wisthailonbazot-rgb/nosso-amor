@@ -1213,3 +1213,27 @@ HANDOFF, seção 9.25.
             pra comparar lado a lado antes de decidir.
 
 Estado: **679 verificações, 0 falha**. Causas no HANDOFF, seção 9.25.
+
+### 28/08/2026 — Tela rosa e Furniture Kit do Kenney
+
+Pedidos do dono: "no telefone tá abrindo rosa e não carrega nada", depois
+"não tá abrindo em nenhum lugar"; resolvido isso, usar os objetos do arquivo
+`kenney_furniture-kit.zip` no lugar dos nossos, mantendo os nossos de backup.
+
+- **[x]** **Causa da tela rosa encontrada.** Um aparelho ainda solicitava o
+      bundle antigo `index-CbUqF9D2.js`, que já não existia e voltava 404. O
+      CSS carregava (por isso rosa), mas o React não iniciava.
+- **[x]** **Recuperação deixa de perder a corrida.** O detector passou para
+      antes do bundle, ganhou verificação de `#root` vazio e recarrega uma vez
+      após limpar caches e service workers.
+- **[x]** **Cache velho invalidado de verdade.** Service worker `casal-v6` e
+      registro com `updateViaCache: 'none'`.
+- **[x]** **Kenney substitui os móveis compatíveis.** 18 modelos, quatro
+      rotações cada, com licença CC0 no repositório. Os desenhos antigos não
+      foram apagados: são fallback automático quando não há modelo equivalente
+      ou a imagem não carrega.
+- **[x]** **Conferido no tamanho do telefone.** Casa abriu e o sofá Kenney foi
+      renderizado em 375×812; bancada conferida em 0° e 90°.
+
+Estado local: **687 verificações, 0 falha**; build aprovada. Detalhes no
+HANDOFF, seção 9.26.

@@ -70,22 +70,26 @@ export default function ItemPreview({ item, avatarConfig, scale = 2 }) {
         return
       }
       const metrics = roomMetrics(w + 1, d + 1, 0)
-      painter.resize(metrics.width, metrics.height + 26)
-      painter.clear()
-      drawItem(
-        painter,
-        {
-          id: 0,
-          shape: (meta.shape || '').split(':')[0],
-          col: 0,
-          row: 0,
-          w,
-          d,
-          dir: 0,
-        },
-        { x: metrics.origin.x, y: 24 },
-        0
-      )
+      const draw = () => {
+        painter.resize(metrics.width, metrics.height + 26)
+        painter.clear()
+        drawItem(
+          painter,
+          {
+            id: 0,
+            shape: (meta.shape || '').split(':')[0],
+            col: 0,
+            row: 0,
+            w,
+            d,
+            dir: 0,
+          },
+          { x: metrics.origin.x, y: 24 },
+          0,
+          draw
+        )
+      }
+      draw()
       return
     }
 
