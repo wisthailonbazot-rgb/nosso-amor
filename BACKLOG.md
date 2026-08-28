@@ -1235,5 +1235,6 @@ Pedidos do dono: "no telefone tá abrindo rosa e não carrega nada", depois
 - **[x]** **Conferido no tamanho do telefone.** Casa abriu e o sofá Kenney foi
       renderizado em 375×812; bancada conferida em 0° e 90°.
 
-Estado local: **687 verificações, 0 falha**; build aprovada. Detalhes no
-HANDOFF, seção 9.26.
+Estado: **687 verificações, 0 falha**; build aprovada e publicada no commit
+`3f4aa01`. Produção saudável e volume de mídia reconferido. Detalhes no HANDOFF,
+seção 9.26.

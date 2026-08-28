@@ -3012,4 +3012,6 @@ Objetos próprios do app sem equivalente honesto no kit — por exemplo quadro d
 casal, comedouro, arranhador, rede e churrasqueira — continuam com nossa arte.
 
 A bancada foi conferida em 0° e 90°, e a casa real em viewport de telefone
-375×812. Smoke: **687 verificações, 0 falha**; build Vite aprovada.
+375×812. Smoke: **687 verificações, 0 falha**; build Vite aprovada. Publicado
+no commit `3f4aa01`; produção `running:healthy`, bundle novo e PNG Kenney em
+200, e o volume `/data/casal-media → /app/media` foi reconferido antes e depois.
