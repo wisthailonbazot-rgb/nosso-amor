@@ -2663,3 +2663,90 @@ de terceiro herda nada. Geolocalização continua fechada, porque o app não usa
 > iframe — antes de suspeitar do aparelho de quem está usando.
 
 **Estado: 670 verificações, 0 falha.**
+
+### 9.24 A casa em 64px, os móveis um a um, e o miado gravado (27/08/2026)
+
+Pedido do dono: "a casa, os móveis, tá cheio de objeto bugado quando gira, além
+de tá com poucos pixels — aumenta ao máximo e melhora todos os bugados, verifica
+um por um. Além disso o miado do gato tá péssimo".
+
+#### 1. O tile foi de 48 pra 64 — e ficou mais barato
+
+`TW/TH/TZ` passaram de 48/24/24 para **64/32/32** (a proporção 2:1 é
+obrigatória; o número dentro dela é escolha). Cada face ganhou ~78% de área: uma
+prateleira de 0,06 de célula tinha 3 px e agora tem 4 — abaixo disso nenhum
+detalhe sobrevive, e era essa a razão de tanta peça virar um risco.
+
+Isso só foi possível porque **o fundo parou de ser redesenhado**. Piso e paredes
+são a maior parte dos pixels e não mudam nunca, mas eram repintados a cada
+quadro — com reticulado, pixel a pixel — enquanto o bichinho anda pelo cômodo.
+Agora `fundoDoComodo` (em `room.js`) pinta uma vez num canvas de rascunho,
+guarda por (tamanho, piso, parede) e cola. É a precaução que a seção 8.1 já
+pedia, e ela paga o aumento com sobra: **o que ficou mais caro é justamente o
+que parou de ser refeito**.
+
+> Medido: o canvas do cômodo foi de 434x290 para **578x386**.
+> **Não medi quadros por segundo** — a janela do navegador estava oculta na
+> bancada e o `requestAnimationFrame` não roda sem compor. Fica como conferência
+> pendente no aparelho.
+
+#### 2. Os móveis, um a um
+
+Olhados na bancada `/lab` nas quatro rotações, ampliados. O que estava errado:
+
+| Peça | O que havia | O que era |
+|---|---|---|
+| **TV** | ao girar, um bloco escuro solto no chão ao lado | o pé estava no meio da célula (`k.D/2`) e o corpo na beirada (`k.D-0.36`); girado, a projeção separa os dois |
+| **geladeira** | um risco cinza atravessado, sem forma de porta | as portas eram lâminas de 0,06 de célula = 3 px |
+| **quadro** e **quadro do casal** | pendurados no ar, no meio da sala | estavam na beirada da FRENTE (`k.D-0.22`); a parede é o fundo (`ly = 0`) |
+| **planta** | vaso de um lado, folhas do outro | a folha saía 0,34 do centro e o vaso tem 0,32 de raio: nascia fora dele |
+| **rede** | um pontilhado entre dois postes | o pano eram 25 retângulos em coordenada de TELA, que não giram |
+| **arranhador** | as voltas da corda não giravam com o móvel | mesma causa: `p.rect` em tela |
+| **casinha do bicho** | a porta ficava na parede errada ao girar | mesma causa |
+| **fogão, churrasqueira, caminha, comedouro, velas, caixa de som, console** | blocos sem leitura | escritos em uma linha, com detalhes de 1 a 3 px |
+
+Todos foram refeitos com **relevo de verdade** (faces afundadas, que é o que faz
+a linha de sombra aparecer sozinha) e com os detalhes em BLOCO, nunca em pixel
+de tela — porque bloco gira junto com o móvel e pixel de tela não. É essa a
+regra por trás de quase toda a lista acima.
+
+**Quadro só gira entre paredes que existem.** O cômodo mostra duas paredes (fundo
+e esquerda); as outras duas rotações penduravam o quadro no ar. Em vez de
+inventar arte para parede que não existe, `NA_PAREDE` faz o editor alternar só
+entre as duas direções com parede.
+
+> **O smoke pegou um erro meu no meio disso:** ao reescrever o bloco vizinho eu
+> apaguei a `pethouse` inteira, e a verificação "todo móvel vendido tem desenho"
+> ficou vermelha na hora. Sem ela, a casinha sumiria calada da loja de quem
+> comprou.
+
+#### 3. O miado: gravação de verdade, síntese como reserva
+
+A voz é sintetizada e foi ajustada duas vezes; passou nas medições da bancada e
+o dono continuou dizendo que está péssimo. As duas coisas são verdade: a bancada
+mede volume, agudez, movimento e corpo — e um miado real e um sintético podem
+empatar em tudo isso e ainda assim um soar como gato e o outro como brinquedo.
+
+E aqui o limite é meu: **eu não escuto**. Ajustar timbre no escuro já falhou
+duas vezes; a terceira seria chute. Uma gravação tira a decisão do meu ouvido.
+
+- `petAudio.js`: carrega, decodifica e toca a gravação da espécie. O humor mexe
+  em **duas** coisas só — altura e velocidade juntas (`playbackRate`), que é como
+  fita mais lenta fica mais grave; mexer em mais começa a soar processado.
+- **A síntese continua inteira e continua sendo o padrão de todo mundo.** Se o
+  arquivo não existir, não baixar ou não decodificar, o bicho fala como sempre.
+  Nenhum bicho fica mudo por causa de um arquivo.
+- O primeiro toque destrava o áudio e já busca as gravações, então nem o primeiro
+  carinho sai sintetizado.
+
+> **Licença, e ela é real:** o miado é de Dan Crosby, **CC BY-SA 3.0**, do
+> Wikimedia Commons. O crédito está em `public/sons/CREDITOS.md` — em arquivo, e
+> não num comentário que some. CC BY-SA pede crédito e manter o SOM sob a mesma
+> licença ao repassar; vale sobre o som, não sobre o app, e este app é privado e
+> não distribuído. Se um dia virar produto, o caminho limpo é trocar por CC0.
+
+Conferido: o arquivo chega (200, `audio/ogg`), decodifica em **0,79 s, 48 kHz,
+mono**, e toca pelo caminho real do app (`casalSound('pet','gato:feliz')`) sem
+erro no console.
+
+**Estado: 670 verificações, 0 falha.** Build Vite aprovada.

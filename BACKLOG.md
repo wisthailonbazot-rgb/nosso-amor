@@ -1106,3 +1106,41 @@ Causas no HANDOFF, seção 9.22.
         Depois, local: **true**. Travado no smoke.
 
 Estado: **670 verificações, 0 falha**. Causa no HANDOFF, seção 9.23.
+
+### 27/08/2026 — A casa em 64px, os móveis um a um, e o miado gravado
+
+- **[x]** **Mais pixel: o tile foi de 48 pra 64.** Cada face ganhou ~78% de
+      área — uma prateleira que tinha 3 px passou a ter 4, e abaixo disso nenhum
+      detalhe sobrevive (era essa a razão de tanta peça virar um risco). O
+      canvas do cômodo foi de 434x290 para 578x386.
+      - Deu pra aumentar porque o FUNDO parou de ser redesenhado: piso e paredes
+        são a maior parte dos pixels, não mudam nunca, e eram repintados a cada
+        quadro enquanto o bichinho anda. Agora são pintados uma vez e colados.
+      - [ ] **Conferir no seu celular se ficou fluido.** Não consegui medir
+            quadros por segundo aqui (a janela do navegador estava oculta na
+            bancada e a animação não roda sem ela compor).
+- **[x]** **Os móveis, um a um, nas quatro rotações.** Consertados: TV (o pé se
+      soltava ao girar), geladeira (as portas eram um risco de 3 px), quadro e
+      quadro do casal (pendurados no ar, no meio da sala), planta (vaso de um
+      lado e folhas do outro), rede (um pontilhado no lugar do pano), arranhador
+      e casinha do bicho (detalhe que não girava junto), fogão, churrasqueira,
+      caminha, comedouro, velas, caixa de som e console (blocos sem leitura).
+      - A causa se repetia: detalhe desenhado em coordenada de TELA não gira com
+        o móvel. Agora tudo é bloco, que gira junto.
+      - Quadro passou a girar só entre as duas paredes que existem — as outras
+        duas rotações penduravam ele no ar.
+      - O smoke pegou um erro meu no meio: apaguei a casinha do bicho sem querer
+        e a verificação "todo móvel vendido tem desenho" ficou vermelha na hora.
+- **[x]** **O miado agora é gravação de verdade.** Você sugeriu e é o caminho
+      certo, porque o limite aqui é meu: **eu não escuto**, e ajustar timbre no
+      escuro já falhou duas vezes.
+      - Som do Wikimedia Commons (Dan Crosby, **CC BY-SA 3.0**), creditado em
+        `public/sons/CREDITOS.md`. A licença pede crédito e vale sobre o som, não
+        sobre o app; como ele é privado, é só isso. Virando produto, troca-se por
+        CC0.
+      - A síntese continua inteira como reserva: se o arquivo falhar, o bicho
+        fala como sempre. Nenhum bicho fica mudo.
+      - [ ] **Me diz se ficou bom.** Se sim, eu busco os outros cinco bichos do
+            mesmo jeito.
+
+Estado: **670 verificações, 0 falha**; build aprovada. Causas no HANDOFF, 9.24.

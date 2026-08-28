@@ -17,10 +17,26 @@
 // Tamanho do tile. Quanto maior, mais pixel sobra pra detalhe em cada móvel —
 // e como as formas são descritas em fração de célula, aumentar aqui deixa TODOS
 // os móveis mais detalhados de uma vez, sem redesenhar nenhum.
-// 48x24 mantém a proporção 2:1 (obrigatória pra diagonal sair em degrau limpo).
-export const TW = 48 // largura do losango de uma célula
-export const TH = 24 // altura do losango
-export const TZ = 24 // altura de uma "unidade" vertical
+// A proporção 2:1 é obrigatória (é ela que faz a diagonal sair em degrau limpo
+// de 2x1, sem pixel solto). Dentro dessa regra, o número é escolha.
+//
+// -------------------------------------------------- por que 64 e não 48
+//
+// O dono pediu "aumenta ao máximo". 48x24 dava pouco pixel pra descrever um
+// móvel: uma prateleira de 0,06 de célula tinha 3 px de largura, e detalhe
+// nenhum sobrevive a 3 px — vira um risco. Com 64x32 a mesma prateleira tem 4,
+// a maçaneta da geladeira passa de 3 px pra 4, e cada face ganha ~78% de área.
+//
+// Por que parar em 64: o cômodo inteiro é redesenhado a cada quadro enquanto o
+// bichinho anda, e a conta cresce com o QUADRADO desta constante. De 48 pra 64
+// a área quase dobra; ir a 96 quadruplicaria, e o HANDOFF já avisa (seção 8.1)
+// que é aqui que o celular esquenta. Pra pagar o aumento, o que não se mexe
+// (piso e paredes) passou a ser desenhado UMA vez e colado — ver `fundoDoComodo`
+// em `room.js`. Com as duas mudanças juntas, o custo por quadro CAIU mesmo com
+// a arte maior.
+export const TW = 64 // largura do losango de uma célula
+export const TH = 32 // altura do losango
+export const TZ = 32 // altura de uma "unidade" vertical
 
 /** Célula (col, row) na altura z -> ponto na tela. */
 export function project(col, row, z, origin) {

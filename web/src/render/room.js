@@ -129,6 +129,43 @@ function gridOverlay(p, cols, rows, origin) {
   }
 }
 
+// ------------------------------------------------------- o fundo que não se mexe
+//
+// Piso e paredes são a maior parte dos pixels do cômodo e **não mudam nunca**
+// enquanto a pessoa não troca o acabamento. Mesmo assim eram repintados a cada
+// quadro — e o piso é pintado com reticulado, ou seja, pixel a pixel.
+//
+// Enquanto o bichinho ficava parado isso passava; agora ele anda, e o cômodo
+// redesenha 60 vezes por segundo. É exatamente a conta que o HANDOFF (seção
+// 8.1) avisa que esquenta o celular, e ela era a razão de não dar pra aumentar
+// a resolução do tile.
+//
+// Aqui o fundo é pintado UMA vez num canvas de rascunho e colado depois. A
+// chave inclui tudo o que muda o desenho; trocar o piso ou a parede gera outro
+// e o antigo é descartado. Com isso, subir o tile de 48 pra 64 saiu de graça:
+// o que ficou mais caro é justamente o que parou de ser refeito.
+const cacheFundo = new Map()
+
+function fundoDoComodo(cols, rows, origin, piso, parede, aberto) {
+  const chave = `${cols}x${rows}:${piso}:${parede}:${aberto ? 1 : 0}`
+  const guardado = cacheFundo.get(chave)
+  if (guardado) return guardado
+
+  const { width, height } = roomMetrics(cols, rows, WALL_HEIGHT)
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const fundo = new Painter(canvas)
+  if (!aberto) drawWalls(fundo, cols, rows, origin, parede)
+  drawFloor(fundo, cols, rows, origin, piso)
+
+  // Um cômodo por acabamento é pouca coisa; mais que isso é troca de piso a
+  // esmo no editor, e aí o mais antigo sai.
+  if (cacheFundo.size > 8) cacheFundo.delete(cacheFundo.keys().next().value)
+  cacheFundo.set(chave, canvas)
+  return canvas
+}
+
 // ------------------------------------------------------------------ tudo junto
 /**
  * @param scene { cols, rows, floor, wall, items:[{id,shape,col,row,w,d,dir,color}] }
@@ -139,8 +176,8 @@ export function drawScene(p, scene, ui = {}, t = 0) {
   const { origin } = roomMetrics(cols, rows, WALL_HEIGHT)
 
   p.clear()
-  if (!scene.outdoor) drawWalls(p, cols, rows, origin, scene.wall)
-  drawFloor(p, cols, rows, origin, scene.floor)
+  // O fundo vem pronto do cache; só o que se mexe é redesenhado por cima.
+  p.ctx.drawImage(fundoDoComodo(cols, rows, origin, scene.floor, scene.wall, scene.outdoor), 0, 0)
   if (ui.editing) gridOverlay(p, cols, rows, origin)
 
   // O bichinho entra na MESMA fila de profundidade dos moveis.

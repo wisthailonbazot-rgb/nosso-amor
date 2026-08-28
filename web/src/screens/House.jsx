@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { api } from '../api'
+import { DIRECOES_DE_PAREDE, NA_PAREDE } from '../render/furniture'
 import RoomCanvas from '../render/RoomCanvas'
 import { project, roomMetrics } from '../render/iso'
 import { WALL_HEIGHT } from '../render/room'
@@ -279,7 +280,11 @@ export default function House() {
   function rotateSelected() {
     if (!selected) return
     const spec=data.catalog.find((x)=>x.code===selected.code)
-    const dir=(selected.dir+1)%4
+    // Quadro só gira entre as paredes que EXISTEM. Ver `NA_PAREDE`.
+    const naParede=NA_PAREDE.has(spec?.shape)
+    const dir=naParede
+      ? DIRECOES_DE_PAREDE[(DIRECOES_DE_PAREDE.indexOf(selected.dir)+1)%DIRECOES_DE_PAREDE.length]
+      : (selected.dir+1)%4
     const turned={...selected,dir,w:dir%2?spec.d:spec.w,d:dir%2?spec.w:spec.d}
     const others=draft.filter((i)=>i.id!==selected.id)
     if(!fits(turned,turned.col,turned.row,room,others)) { setStatus({kind:'error',text:'Não dá para girar aqui: o móvel bateria em algo ou na parede.'}); return }
