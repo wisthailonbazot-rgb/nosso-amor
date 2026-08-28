@@ -27,7 +27,17 @@
         function recuperar() {
           if (sessionStorage.getItem(CHAVE)) return
           sessionStorage.setItem(CHAVE, '1')
-          var recarregar = function () { location.reload() }
+          // Recarregar FURANDO O CACHE HTTP.
+          //
+          // `location.reload()` nao basta, e foi por isso que a recuperacao nao
+          // salvava ninguem: `caches.delete()` limpa a Cache API, mas o cache
+          // HTTP do navegador continua guardando o 404 do bundle — e era ele que
+          // prendia o aparelho no fundo rosa. Um endereco diferente e a unica
+          // forma garantida de o navegador ir buscar de novo.
+          var recarregar = function () {
+            var u = location.pathname + '?recuperado=' + Date.now() + location.hash
+            location.replace(u)
+          }
           try {
             Promise.all([
               navigator.serviceWorker && navigator.serviceWorker.getRegistrations

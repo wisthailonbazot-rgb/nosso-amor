@@ -1296,3 +1296,23 @@ Estado: **686 verificações, 0 falha**. Causas no HANDOFF, seção 9.26.
       hoje de manhã. Está diagnosticado; me diz se quer que eu encare.
 
 Estado: **688 verificações, 0 falha**. Causas no HANDOFF, seção 9.27.
+
+### 28/08/2026 — Achei a causa da tela rosa (e consertei)
+
+- **[x]** **Reproduzida e medida.** A cadeia: publicar troca os containers em
+      rolagem → por segundos o `index.html` vem de um e o bundle do outro, e o
+      bundle dá **404** → **o navegador guarda esse 404** → o service worker
+      relia o 404 guardado pra sempre (o `fetch` dele usava o modo padrão, que
+      consulta o cache HTTP) → e a recuperação não salvava, porque
+      `caches.delete()` limpa a Cache API e **não** o cache HTTP.
+      - A prova: `curl` recebia **200** no mesmo endereço em que o navegador
+        recebia **404**, com o servidor já inteiro.
+      - Era por isso que eu não reproduzia: meu navegador não tinha o 404
+        guardado. Só reproduzi quando carreguei durante a janela de um deploy.
+- **[x]** **Dois consertos, um por ponta:** o worker busca JS/CSS furando o cache
+      HTTP (`cache: 'reload'`, igual a navegação já fazia), e a recuperação
+      recarrega num endereço novo — trocar de endereço é a única forma garantida
+      de o navegador buscar de novo.
+- **[x]** Cache do worker para `casal-v8`. As duas pontas travadas no smoke.
+
+Estado: **690 verificações, 0 falha**. Causa no HANDOFF, seção 9.28.

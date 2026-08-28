@@ -12,7 +12,7 @@
 // apaga tudo o que nao tem o nome atual, e e isso que destrava um aparelho que
 // ficou preso no fundo rosa com um index.html velho. v7: entrou o kit Kenney
 // (arquivos novos em /kenney-furniture) e a rede de seguranca do boot mudou.
-const CACHE = 'casal-v7'
+const CACHE = 'casal-v8'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', (event) => {
@@ -59,7 +59,30 @@ self.addEventListener('fetch', (event) => {
   // Rede primeiro também para JS/CSS. Cache primeiro aqui misturava módulos de
   // builds diferentes (inclusive duas cópias incompatíveis do React) e podia
   // deixar a interface quebrada até o usuário limpar os dados do navegador.
-  event.respondWith(fetch(event.request).then((res) => {
+  //
+  // ------------------------------------ `cache: 'reload'` TAMBÉM aqui, e por quê
+  //
+  // Esta é a causa da tela rosa que travou o Android do dono, e ela tem quatro
+  // passos:
+  //
+  //   1. publicar troca os containers em rolagem. Durante alguns segundos existe
+  //      uma janela em que o `index.html` vem de um e o bundle do outro — e o
+  //      pedido do bundle novo volta **404**;
+  //   2. o navegador GUARDA esse 404 no cache HTTP dele;
+  //   3. este `fetch` usava o modo padrão, que consulta esse cache — então ele
+  //      devolvia o 404 guardado **para sempre**, mesmo com o servidor já
+  //      inteiro. (Foi medido: `curl` recebia 200 no mesmo endereço em que o
+  //      navegador recebia 404.);
+  //   4. e a recuperação do `index.html` não salvava, porque `caches.delete()`
+  //      apaga a Cache API — **não apaga o cache HTTP**.
+  //
+  // Resultado: o aparelho ficava preso no fundo rosa por tempo indeterminado, e
+  // de fora tudo parecia certo. O mesmo `cache: 'reload'` que a navegação já
+  // usava logo acima resolve: força ir na rede e ignora o que estiver guardado.
+  event.respondWith(fetch(new Request(event.request.url, {
+    cache: 'reload',
+    credentials: 'same-origin',
+  })).then((res) => {
     if (res.ok && url.origin === self.location.origin) {
       const copy = res.clone()
       caches.open(CACHE).then((c) => c.put(event.request, copy))

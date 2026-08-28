@@ -3173,3 +3173,45 @@ hoje de manhã. Fica diagnosticado e escrito. **Cuidado ao ler:** é mais uma
 bancada que falha onde a produção passa, o que já foi caro uma vez.
 
 **Estado: 688 verificações, 0 falha.** Build aprovada; auditoria de móveis limpa.
+
+### 9.28 A CAUSA da tela rosa: um 404 guardado, que o app não tinha como soltar (28/08/2026)
+
+Reproduzida, medida e consertada. A cadeia tem quatro elos, e o terceiro é o que
+transformava um soluço de segundos em travamento permanente:
+
+1. **Publicar troca os containers em rolagem.** Por alguns segundos o
+   `index.html` vem de um e o bundle do outro. Nessa janela o pedido do bundle
+   novo volta **404**. Foi visto ao vivo: `index.html` pedindo
+   `index-DpPOu9UJ.js` enquanto o servidor ainda respondia pelo build anterior.
+2. **O navegador guarda esse 404** no cache HTTP dele.
+3. **O service worker relia esse 404 pra sempre.** O `fetch` dele para JS/CSS
+   usava o modo padrão, que consulta o cache HTTP. A precaução `cache: 'reload'`
+   existia **só para a navegação** — o comentário dela até explica o problema, e
+   ele valia igual para os assets.
+   > A prova: `curl` recebia **200** no mesmo endereço em que o navegador
+   > recebia **404**, com o servidor já consistente.
+4. **E a recuperação não salvava.** Ela desregistra o worker e chama
+   `caches.delete()` — que limpa a **Cache API**, e não o **cache HTTP**. Depois
+   dava `location.reload()`, que relê exatamente o mesmo 404 guardado.
+
+Resultado: o aparelho ficava preso no fundo rosa por tempo indeterminado, e de
+fora tudo parecia certo — servidor 200, build no ar, outro aparelho abrindo
+normal. É por isso que eu não reproduzia: o meu navegador não tinha o 404
+guardado. Quando finalmente reproduzi, foi porque **carreguei durante a janela de
+um deploy meu**.
+
+**Os dois consertos, um por ponta:**
+
+- o worker busca JS/CSS com `cache: 'reload'`, igual a navegação já fazia;
+- a recuperação recarrega num **endereço novo** (`?recuperado=<agora>`), porque
+  trocar de endereço é a única forma garantida de o navegador buscar de novo.
+
+Cache do worker para `casal-v8`.
+
+> **A lição, e ela é a mesma da semana inteira:** "funciona aqui e não no
+> aparelho dele" quase nunca é o aparelho. Foi o `Permissions-Policy` que a
+> própria página declarava, foi a bancada que girava sem girar a pegada, e agora
+> foi um 404 guardado que só o navegador dele tinha. **O que muda entre os dois
+> lados é onde está o estado, não a qualidade do aparelho.**
+
+**Estado: 690 verificações, 0 falha.** As duas pontas travadas no smoke.
