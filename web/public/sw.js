@@ -8,9 +8,10 @@
 // "nunca cachear" pra /api. Um app de casal com chat nao pode servir mensagem
 // velha do cache achando que e a atual.
 
-// v6 invalida de proposito a casca antiga que ainda apontava para um bundle
-// removido e deixava alguns aparelhos presos apenas no fundo rosa.
-const CACHE = 'casal-v6'
+// v7: o fundo rosa voltou no Android do dono depois da subida do tile pra 96.
+// Trocar o nome do cache faz o `activate` apagar TUDO o que ficou pra tras — e
+// custa nada pra quem esta bem, porque a estrategia ja e rede primeiro.
+const CACHE = 'casal-v7'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', (event) => {
