@@ -1238,3 +1238,32 @@ Pedidos do dono: "no telefone tá abrindo rosa e não carrega nada", depois
 Estado: **687 verificações, 0 falha**; build aprovada e publicada no commit
 `3f4aa01`. Produção saudável e volume de mídia reconferido. Detalhes no HANDOFF,
 seção 9.26.
+
+### 28/08/2026 — A tela rosa, e eu apaguei o trabalho de outra sessão
+
+- **[x]** **Restaurado o que eu apaguei.** Enquanto eu trabalhava, outra sessão
+      consertou a tela rosa e implementou o kit Kenney. Meu bloco de publicação
+      apaga o destino e copia a minha pasta por cima — e como a minha não tinha
+      os 73 PNGs nem o `furnitureKenney.js`, o meu commit **apagou tudo isso** e
+      foi pro ar. Desfeito com `git revert`, republicado, e a minha pasta
+      sincronizada a partir do repositório de deploy.
+      - Regra nova de procedimento: antes de publicar, conferir se o topo do
+        `.deploy-repo` é o meu último commit. Se não for, sincronizar de lá pra
+        cá primeiro.
+- **[x]** **Minha hipótese pra tela rosa estava errada, e eu medi.** Suspeitei do
+      tile 96 estourando memória e cheguei a reverter pra 64. Medido: o cômodo
+      usa **1,9 MB** de canvas e o modo decorar **2,7 MB**, com heap de 6 MB.
+      Não é memória. O 96 ficou.
+- **[x]** **Folguei o prazo da rede de segurança do boot** de 2,5 s para 8 s
+      depois do `load`. Com 2,5 s volta a recarga falsa em aparelho lento — que
+      é o motivo pelo qual essa checagem já tinha sido removida uma vez.
+- **[x]** **Cache do worker pra v7**, que é o que apaga a casca velha de quem
+      ficou preso no fundo rosa.
+- **[x]** **Duas travas do smoke estavam atrapalhando:** uma cravava
+      `casal-v6` (reprovava o próprio conserto) e a outra proibia o kit Kenney
+      (o oposto do que você pediu). A segunda mudou de lado: agora garante que o
+      Kenney vem primeiro **e que o nosso desenho assume quando o PNG não vem**.
+      - [ ] **Confirma pra mim que o app abre no seu Android.** Eu não consegui
+            reproduzir a tela rosa aqui em nenhum momento.
+
+Estado: **686 verificações, 0 falha**. Causas no HANDOFF, seção 9.26.

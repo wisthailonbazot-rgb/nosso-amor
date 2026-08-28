@@ -55,11 +55,21 @@
         window.addEventListener('load', function () {
           // Segunda rede: o arquivo pode ate chegar, mas falhar antes de o
           // React montar. ErrorBoundary nao enxerga erro de import/modulo.
+          //
+          // O PRAZO E O QUE SEPARA ESTA REDE DA RECARGA FALSA. Um teste de
+          // `#root` vazio ja existiu neste arquivo e foi REMOVIDO porque
+          // disparava em aparelho lento e fazia o app baixar tudo duas vezes.
+          // Com 2,5 s o risco volta: `load` diz que os arquivos chegaram, nao
+          // que o React montou, e num celular fraco a primeira renderizacao
+          // passa disso com facilidade.
+          //
+          // 8 s e folgado pra montagem legitima e ainda rapido pra quem esta
+          // travado — quem esta preso no fundo rosa ia ficar preso pra sempre.
           setTimeout(function () {
             var raiz = document.getElementById('root')
             if (raiz && !raiz.firstElementChild) recuperar()
             else sessionStorage.removeItem(CHAVE)
-          }, 2500)
+          }, 8000)
         })
       })()
     </script>

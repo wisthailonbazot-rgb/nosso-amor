@@ -8,9 +8,11 @@
 // "nunca cachear" pra /api. Um app de casal com chat nao pode servir mensagem
 // velha do cache achando que e a atual.
 
-// v6 invalida de proposito a casca antiga que ainda apontava para um bundle
-// removido e deixava alguns aparelhos presos apenas no fundo rosa.
-const CACHE = 'casal-v6'
+// A versao do cache SOBE a cada vez que a casca muda de forma. O `activate`
+// apaga tudo o que nao tem o nome atual, e e isso que destrava um aparelho que
+// ficou preso no fundo rosa com um index.html velho. v7: entrou o kit Kenney
+// (arquivos novos em /kenney-furniture) e a rede de seguranca do boot mudou.
+const CACHE = 'casal-v7'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', (event) => {

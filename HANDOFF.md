@@ -3015,3 +3015,74 @@ A bancada foi conferida em 0° e 90°, e a casa real em viewport de telefone
 375×812. Smoke: **687 verificações, 0 falha**; build Vite aprovada. Publicado
 no commit `3f4aa01`; produção `running:healthy`, bundle novo e PNG Kenney em
 200, e o volume `/data/casal-media → /app/media` foi reconferido antes e depois.
+
+### 9.26 Duas sessões no mesmo repositório, e eu apaguei o trabalho da outra (28/08/2026)
+
+O dono relatou "no Android o app tá rosa, não carrega nada" e mandou o ZIP do
+Kenney pra implementar depois de consertar.
+
+**O que aconteceu de errado, e é o mais importante desta seção:** enquanto eu
+trabalhava, **outra sessão consertou a tela rosa e implementou o kit Kenney**
+(commit `3f4aa01`, "Corrige tela rosa e adota moveis Kenney com fallback"). Eu
+não sabia, e o meu jeito de publicar é destrutivo:
+
+```
+rm -rf .deploy-repo/web/src .deploy-repo/web/public && cp -r web/src web/public ...
+```
+
+Isso apaga o destino e copia a MINHA pasta por cima. Como a minha pasta não
+tinha os 73 PNGs nem o `furnitureKenney.js`, o commit seguinte **apagou tudo o
+que a outra sessão tinha feito** — e foi publicado. Só percebi porque o
+`git status` mostrou 73 linhas começando com `D`.
+
+Desfeito com `git revert`, republicado, e a pasta de trabalho sincronizada A
+PARTIR do repositório de deploy — que era a fonte mais nova, não a minha.
+
+> **A regra que fica, e ela é do procedimento, não do código:** antes de rodar o
+> bloco de publicação, `git log` no `.deploy-repo` e conferir se o topo é o
+> commit que EU fiz por último. Se não for, alguém mexeu — sincronizar de lá
+> pra cá primeiro. O bloco de `rm -rf` + `cp` só é seguro quando a pasta de
+> trabalho é comprovadamente a versão mais nova.
+
+#### A tela rosa: minha hipótese estava errada, e medi
+
+O fundo rosa é o `--paper` do `body` com o `#root` vazio — ou seja, o
+JavaScript não montou. Eu suspeitei do tile 96 (o cômodo passou a 866x578) e
+cheguei a revertê-lo para 64 por precaução. **Medi depois, e não é isso:**
+
+| | canvases | memória |
+|---|---|---|
+| Cômodo aberto | 1 | **1,9 MB** |
+| Modo decorar | 6 | **2,7 MB** |
+
+Com um heap de 6-7 MB, memória não derruba app nenhum. A hipótese cai, e o 96
+fica (é a versão que a outra sessão publicou e que o dono já está usando).
+
+#### O que eu somei ao conserto da outra sessão
+
+1. **O prazo da rede de segurança.** A segunda rede deles olha o `#root` **2,5 s**
+   depois do `load`. Um teste de `#root` vazio já existiu neste arquivo e foi
+   removido justamente por disparar em aparelho lento e fazer o app baixar tudo
+   duas vezes. `load` diz que os arquivos chegaram, não que o React montou.
+   Subiu para **8 s** — folgado pra montagem legítima, e ainda rápido pra quem
+   está preso.
+2. **Cache do worker para `casal-v7`.** É a troca de nome que faz o `activate`
+   apagar a casca velha de quem ficou travado; entraram arquivos novos
+   (`/kenney-furniture`) e a casca mudou de forma.
+3. **Duas travas do smoke que estavam atrapalhando em vez de proteger:**
+   - `"casal-v6" in worker_source` cravava a versão do cache — ou seja,
+     **reprovava o próprio conserto**. Agora exige que exista versão e que ela
+     não ande pra trás.
+   - `"a casa usa somente nossos moveis desenhados"` proibia `drawKenneyItem`.
+     O dono pediu o contrário. A trava mudou de lado: agora confere a ORDEM —
+     tenta o Kenney primeiro e **cai no nosso desenho quando o kit não vem**
+     (imagem ainda baixando, ausente ou falhada). A checagem "todo móvel vendido
+     tem desenho" continua garantindo que a reserva existe pra todos os 30.
+
+**Estado: 686 verificações, 0 falha.** Build aprovada; cômodo conferido no
+navegador com os móveis do Kenney desenhando.
+
+> **Pendente e honesto:** eu **não reproduzi** a tela rosa aqui, nem antes nem
+> depois. O conserto que está no ar é o da outra sessão mais o prazo folgado da
+> rede de segurança. Se voltar a acontecer, o caminho é o mesmo do microfone:
+> não adivinhar — pedir o que a tela mostra.
