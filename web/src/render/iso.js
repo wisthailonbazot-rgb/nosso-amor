@@ -34,27 +34,24 @@
 // (piso e paredes) passou a ser desenhado UMA vez e colado — ver `fundoDoComodo`
 // em `room.js`. Com as duas mudanças juntas, o custo por quadro CAIU mesmo com
 // a arte maior.
-// VOLTOU PARA 64 — e o motivo está registrado porque é uma reversão, não um
-// recuo de gosto.
+// SEGUNDA SUBIDA, a pedido do dono ("ainda tem poucos pixels"): 64 -> 96.
 //
-// A subida para 96 foi publicada e o app parou de abrir no Android do dono:
-// fundo rosa (que é o `--paper` do `body`) e nada em cima. CSS carregado e
-// `#root` vazio significa uma coisa só: **o JavaScript não montou**.
+// A área por face dobrou de novo. Uma prateleira de 0,06 de célula, que tinha
+// 3 px no começo e 4 com 64, agora tem 6 — e é a partir de 5 ou 6 que um
+// detalhe deixa de ser um risco e vira uma peça com sombra própria. É por isso
+// que várias coisas "sem leitura" (o cone da caixa de som, o puxador da
+// geladeira, o botão do fogão) só passaram a existir de verdade aqui.
 //
-// Não deu pra reproduzir aqui — a mesma versão abre no navegador desta bancada
-// e no celular emulado. Sem reprodução, subir teoria é chute, e chute foi o que
-// já custou caro esta semana. Então o serviço volta primeiro: 64 é a última
-// configuração que rodou no aparelho dele (foi com ela que ele viu os móveis
-// consertados e pediu "ainda mais pixel").
+// O custo por quadro NÃO dobrou junto, porque o fundo saiu da conta (piso e
+// paredes viraram um desenho colado, ver `fundoDoComodo`). O que sobrou por
+// quadro é polígono de móvel, que é barato, mais o bichinho.
 //
-// O que 96 mexe e 64 não: o cômodo passa de 578x386 para 866x578, e cada fundo
-// guardado em `fundoDoComodo` vira ~2 MB — com oito no cache, 16 MB só de
-// bitmap, além de um canvas de pré-visualização por item da loja. Num Android
-// apertado isso é candidato a estourar antes de o app montar. É a hipótese mais
-// forte, e ela fica pra investigar COM medição, não no ar.
-export const TW = 64 // largura do losango de uma célula
-export const TH = 32 // altura do losango
-export const TZ = 32 // altura de uma "unidade" vertical
+// O cômodo passa a ser mais largo que a tela do celular e ROLA pro lado. Isso é
+// escolha, não efeito colateral: é o que jogo de decoração faz, e encolher a
+// arte pra caber seria desfazer justamente o que se está ganhando aqui.
+export const TW = 96 // largura do losango de uma célula
+export const TH = 48 // altura do losango
+export const TZ = 48 // altura de uma "unidade" vertical
 
 /** Célula (col, row) na altura z -> ponto na tela. */
 export function project(col, row, z, origin) {

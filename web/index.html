@@ -52,32 +52,14 @@
           if (src.indexOf('/assets/') !== -1) recuperar()
         }, true)
 
-        // O APP NAO MONTOU: a outra metade da rede, que faltava.
-        //
-        // O detector acima so ve arquivo que faltou (404 em /assets/). Mas o
-        // app tambem pode nao montar com todos os arquivos presentes: um erro
-        // durante a avaliacao do modulo mata o boot ANTES de qualquer React, e
-        // o ErrorBoundary nem chega a existir pra pegar. O que se ve e o fundo
-        // rosa do `body` com o `#root` vazio — foi exatamente o relato do dono.
-        //
-        // O teste de `#root` vazio ja existiu e foi removido por provocar
-        // recarga falsa em aparelho lento. A diferenca agora e o PRAZO: 12
-        // segundos depois do `load` (nao do inicio), que e muito mais do que
-        // qualquer montagem legitima leva, mesmo em 3G ruim. E e uma vez por
-        // sessao, pela mesma chave.
-        //
-        // Isto e recuperacao, nao conserto: se o app voltar a nao montar depois
-        // de limpar tudo, o defeito e do codigo e tem que ser corrigido no
-        // codigo. O que isto evita e o aparelho ficar preso pra sempre.
         window.addEventListener('load', function () {
+          // Segunda rede: o arquivo pode ate chegar, mas falhar antes de o
+          // React montar. ErrorBoundary nao enxerga erro de import/modulo.
           setTimeout(function () {
             var raiz = document.getElementById('root')
-            if (raiz && raiz.childElementCount === 0) {
-              recuperar()
-              return
-            }
-            sessionStorage.removeItem(CHAVE)
-          }, 12000)
+            if (raiz && !raiz.firstElementChild) recuperar()
+            else sessionStorage.removeItem(CHAVE)
+          }, 2500)
         })
       })()
     </script>
