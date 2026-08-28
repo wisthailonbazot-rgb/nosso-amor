@@ -26,6 +26,7 @@ import { VOZES, nomeDaVoz, vocalizar } from '../petVoz'
 import { criarPalco, enquadrar } from '../render/petPalco'
 import { desenharLambida } from '../render/petCena'
 import { ladrilhoDoMar, navio, navioEmPe } from '../render/naval'
+import { Tabuleiro } from './GameNaval'
 
 // As seis espécies, os três estágios e os humores que MUDAM o desenho.
 // Estão aqui porque o bichinho é desenhado por espécie: um `if` esquecido numa
@@ -685,6 +686,133 @@ function AbaNaval() {
             </span>
           </div>
         ))}
+      </div>
+      <AbaNavalEncaixe />
+    </>
+  )
+}
+
+/**
+ * O ENCAIXE do navio na casa — e não mais só o desenho dele.
+ *
+ * Esta é a conferência que faltava, e a falta dela custou caro: a arte dos
+ * navios estava certa (proporção exata, emenda invisível — é o que as medidas
+ * acima já diziam) e mesmo assim, no iPhone do dono, os navios saíam gigantes,
+ * atravessando o tabuleiro por cima dos botões. O defeito nunca esteve no
+ * desenho: estava em ONDE o desenho era colocado.
+ *
+ * É a mesma lição da 9.10 ("a bancada conferia a arte que o app não usa"): aqui
+ * quem é montado é o `Tabuleiro` DE VERDADE, o mesmo componente que a tela do
+ * jogo usa, com o CSS de verdade. O que se mede é uma pergunta só, e ela não
+ * depende de olhar:
+ *
+ *   a caixa do navio bate com a união das casas que ele ocupa?
+ *
+ * Se bater, ele está encaixado, seja qual for o navegador. Se não bater, esta
+ * aba fica vermelha e diz de quantos pixels foi o desvio — inclusive se alguém
+ * abrir o `/lab` no próprio iPhone, que é onde o defeito aparecia.
+ *
+ * As duas variantes entram porque elas têm medidas diferentes (o tabuleiro
+ * grande tem vão de 3px e margem de 5px; o minimapa, 1px e 3px), e já houve
+ * defeito que acertava numa e errava na outra.
+ */
+const FROTA_LAB = [
+  { tamanho: 4, atingidas: [], casas: [[0, 1], [0, 2], [0, 3], [0, 4]] },
+  { tamanho: 3, atingidas: [[2, 6]], casas: [[2, 6], [3, 6], [4, 6]] },
+  { tamanho: 3, atingidas: [], casas: [[5, 0], [5, 1], [5, 2]] },
+  { tamanho: 2, atingidas: [[7, 4], [7, 5]], casas: [[7, 4], [7, 5]] },
+]
+
+function AbaNavalEncaixe() {
+  const caixa = useRef(null)
+  const [medida, setMedida] = useState(null)
+
+  useEffect(() => {
+    let vivo = true
+    // Dois quadros: o primeiro fecha o layout, o segundo garante que as fontes
+    // e o `background-size` já entraram. Medir cedo demais devolve zero e um
+    // zero desses viraria um verde falso.
+    const id = requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (!vivo || !caixa.current) return
+        const linhas = []
+        for (const grade of caixa.current.querySelectorAll('.naval-grade')) {
+          const lado = +getComputedStyle(grade).getPropertyValue('--lado')
+          const casas = [...grade.querySelectorAll('.naval-casa')]
+          const g = grade.getBoundingClientRect()
+          const c0 = casas[0].getBoundingClientRect()
+          let pior = 0
+          for (const n of grade.querySelectorAll('.naval-navio')) {
+            const st = getComputedStyle(n)
+            const mc = st.gridColumn.match(/(\d+)\s*\/\s*span\s*(\d+)/)
+            const mr = st.gridRow.match(/(\d+)\s*\/\s*span\s*(\d+)/)
+            if (!mc || !mr) { pior = 999; break }
+            const col = +mc[1] - 1
+            const nc = +mc[2]
+            const lin = +mr[1] - 1
+            const nl = +mr[2]
+            const primeira = casas[lin * lado + col].getBoundingClientRect()
+            const ultima = casas[(lin + nl - 1) * lado + (col + nc - 1)].getBoundingClientRect()
+            const b = n.getBoundingClientRect()
+            pior = Math.max(
+              pior,
+              Math.abs(b.x - primeira.x),
+              Math.abs(b.y - primeira.y),
+              Math.abs(b.right - ultima.right),
+              Math.abs(b.bottom - ultima.bottom),
+            )
+          }
+          linhas.push({
+            nome: grade.closest('.naval-mini') ? 'minimapa' : 'tabuleiro grande',
+            lado: `${g.width.toFixed(0)}×${g.height.toFixed(0)}`,
+            // O tabuleiro tem que ser quadrado: quando ele não é, as linhas
+            // dividem uma altura diferente da largura que as colunas dividem, e
+            // o navio (que ocupa a LINHA) fica mais alto que a casa que marca.
+            fora: +Math.abs(g.width - g.height).toFixed(2),
+            casa: `${c0.width.toFixed(1)}×${c0.height.toFixed(1)}`,
+            casaFora: +Math.abs(c0.width - c0.height).toFixed(2),
+            pior: +pior.toFixed(2),
+          })
+        }
+        setMedida(linhas)
+      }),
+    )
+    return () => { vivo = false; cancelAnimationFrame(id) }
+  }, [])
+
+  // 1px de folga é arredondamento de subpixel; acima disso o navio começa a
+  // cobrir uma casa que não é dele, e é isso que se enxerga na tela.
+  const ruins = (medida || []).filter((m) => m.pior > 1 || m.fora > 1 || m.casaFora > 1)
+
+  return (
+    <>
+      <h2>O navio encaixa na casa?</h2>
+      <p className="muted small">
+        Aqui não é a arte, é o ENCAIXE: o <code>Tabuleiro</code> de verdade, com o
+        CSS de verdade, e a pergunta é se a caixa de cada navio bate com a união
+        das casas que ele ocupa. Foi este defeito que deixou a naval impossível
+        de jogar no iPhone, com a arte passando em tudo aqui em cima.
+      </p>
+      {medida && (ruins.length > 0 ? (
+        <p className="notice error">
+          {ruins.map((m) => (
+            `${m.nome}: navio fora da casa por ${m.pior}px`
+            + (m.fora > 1 ? `, tabuleiro ${m.lado} (não é quadrado)` : '')
+            + (m.casaFora > 1 ? `, casa ${m.casa} (não é quadrada)` : '')
+          )).join(' · ')}
+        </p>
+      ) : (
+        <p className="notice ok">
+          Encaixe exato nas duas variantes:{' '}
+          {medida.map((m) => `${m.nome} ${m.lado}, casa ${m.casa}, desvio ${m.pior}px`).join(' · ')}
+        </p>
+      ))}
+      <div ref={caixa} className="naval" style={{ maxWidth: 380 }}>
+        <Tabuleiro lado={8} marcas={{}} variante="mar" navios={FROTA_LAB} titulo="tabuleiro grande" />
+        <div className="naval-rodape">
+          <Tabuleiro lado={8} marcas={{}} variante="mini" navios={FROTA_LAB} />
+          <span className="muted small">minimapa (vão e margem menores)</span>
+        </div>
       </div>
     </>
   )

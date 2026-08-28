@@ -62,57 +62,73 @@ function sortearFrota(lado, modelo) {
  * minimapa (só de olhar, nunca recebe toque) e `frota` é o tamanho normal, que
  * só aparece na hora de esconder os navios — ali não existe segundo tabuleiro
  * disputando a tela.
+ *
+ * ------------------------------------------------ UMA grade, e só uma
+ *
+ * A casa e o navio que passa por cima dela são o MESMO fato geométrico, e por
+ * isso saem da mesma grade: os `<button>` e os navios são irmãos aqui dentro,
+ * colocados por `grid-column` / `grid-row` nas mesmas trilhas.
+ *
+ * A versão anterior desenhava os navios numa SEGUNDA grade sobreposta, com as
+ * mesmas medidas repetidas — e duas grades podem discordar, que foi
+ * exatamente o que aconteceu (ver HANDOFF 9.25). É a mesma família de defeito
+ * que este projeto já pagou três vezes: o prompt com dois donos, o chão do
+ * bichinho com dois números, o fundo do palco com dois donos.
+ *
+ * Dois cuidados que essa escolha obriga, e os dois estão no CSS:
+ *
+ *  - **as casas ganham posição explícita.** Com um item de posição explícita no
+ *    meio (o navio), o preenchimento automático empurraria as casas seguintes
+ *    pra outro lugar. Dizendo linha e coluna de cada casa, não existe
+ *    preenchimento automático pra atrapalhar.
+ *  - **o navio é um `<span>` com o desenho de FUNDO, nunca um `<img>`.** Uma
+ *    imagem tem tamanho próprio, e esse tamanho entra na conta do tamanho da
+ *    trilha — foi isso que inchava as linhas e esticava o navio pra fora das
+ *    casas. Um `<span>` não tem tamanho nenhum: ele só pode ocupar a área que a
+ *    grade der.
+ *
+ * O navio nunca recebe toque (`pointer-events: none`): quem responde ao dedo
+ * continua sendo o `<button>` de cada casa, que é o que faz o toque cair certo
+ * e o leitor de tela conseguir ler o tabuleiro.
+ *
+ * E ele só existe no SEU tabuleiro. A posição da frota do outro não chega neste
+ * app (ver `routers/games.py`), então não há o que desenhar lá — e é isso que
+ * impede o truque de abrir o painel do navegador e ver onde atirar.
  */
-function Tabuleiro({ lado, marcas, aoTocar, titulo, ativo, variante = 'frota', navios = null }) {
+export function Tabuleiro({ lado, marcas, aoTocar, titulo, ativo, variante = 'frota', navios = null }) {
   const arte = arteDaNaval()
   return (
     <div className={`naval-tab naval-${variante} ${ativo ? 'ativo' : ''}`}>
       {titulo && <div className="naval-titulo">{titulo}</div>}
+      {/* `naval-campo` e o espaco que sobra depois do titulo, e e ele quem diz
+          ao tabuleiro qual e o menor lado disponivel — ver o CSS. */}
+      <div className="naval-campo">
       <div
         className="naval-grade"
         style={{ '--lado': lado, backgroundImage: `url(${arte.mar})` }}
       >
-        {/* -------------------------------------------------- os navios
-            Uma camada que é uma grade IDÊNTICA à de baixo, sobreposta. Assim o
-            navio é posicionado com `grid-column: span N` e quem faz a conta do
-            tamanho da casa, do vão e da margem é o navegador — não uma conta
-            de porcentagem escrita aqui, que erraria por alguns pixels em toda
-            largura de tela e desalinharia o navio das casas.
-
-            Ela nunca recebe toque (`pointer-events: none`): quem responde ao
-            dedo continua sendo o `<button>` de cada casa, que é o que faz o
-            toque cair certo e o leitor de tela conseguir ler o tabuleiro.
-
-            Só existe no SEU tabuleiro. A posição da frota do outro não chega
-            neste app (ver `routers/games.py`), então não há o que desenhar lá —
-            e é isso que impede o truque de abrir o painel do navegador e ver
-            onde atirar. */}
-        {navios && navios.length > 0 && (
-          <div className="naval-frota" style={{ '--lado': lado }} aria-hidden="true">
-            {navios.map((n, i) => {
-              const linhas = n.casas.map((c) => c[0])
-              const colunas = n.casas.map((c) => c[1])
-              const l0 = Math.min(...linhas)
-              const c0 = Math.min(...colunas)
-              const deitado = Math.max(...linhas) === l0
-              const fonte = deitado ? arte.navios.h : arte.navios.v
-              const src = fonte[n.tamanho] || fonte[3]
-              const afundado = n.atingidas.length >= n.tamanho
-              return (
-                <img
-                  key={i}
-                  className={`naval-navio ${afundado ? 'afundado' : ''}`}
-                  src={src}
-                  alt=""
-                  style={{
-                    gridColumn: `${c0 + 1} / span ${deitado ? n.tamanho : 1}`,
-                    gridRow: `${l0 + 1} / span ${deitado ? 1 : n.tamanho}`,
-                  }}
-                />
-              )
-            })}
-          </div>
-        )}
+        {(navios || []).map((n, i) => {
+          const linhas = n.casas.map((c) => c[0])
+          const colunas = n.casas.map((c) => c[1])
+          const l0 = Math.min(...linhas)
+          const c0 = Math.min(...colunas)
+          const deitado = Math.max(...linhas) === l0
+          const fonte = deitado ? arte.navios.h : arte.navios.v
+          const src = fonte[n.tamanho] || fonte[3]
+          const afundado = n.atingidas.length >= n.tamanho
+          return (
+            <span
+              key={`n${i}`}
+              className={`naval-navio ${afundado ? 'afundado' : ''}`}
+              aria-hidden="true"
+              style={{
+                gridColumn: `${c0 + 1} / span ${deitado ? n.tamanho : 1}`,
+                gridRow: `${l0 + 1} / span ${deitado ? 1 : n.tamanho}`,
+                backgroundImage: `url(${src})`,
+              }}
+            />
+          )
+        })}
         {Array.from({ length: lado * lado }).map((_, i) => {
           const l = Math.floor(i / lado)
           const c = i % lado
@@ -129,12 +145,14 @@ function Tabuleiro({ lado, marcas, aoTocar, titulo, ativo, variante = 'frota', n
               key={i}
               type="button"
               className={classes}
+              style={{ gridColumn: c + 1, gridRow: l + 1 }}
               disabled={!aoTocar || m.acerto || m.agua}
               onClick={aoTocar ? () => aoTocar(l, c) : undefined}
               aria-label={`linha ${l + 1}, coluna ${c + 1}`}
             />
           )
         })}
+      </div>
       </div>
     </div>
   )
