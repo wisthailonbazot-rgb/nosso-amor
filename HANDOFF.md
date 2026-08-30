@@ -37,7 +37,7 @@ convite, sem pareamento, sem cobrança.
 | Toques de saudade, datas importantes, mural de momentos | pronto |
 | Motor de pixel isométrico + casa editável | pronto; vários cômodos, terreno e rua frontal |
 | Bichinho | pronto; cuidados, casa e um jogo |
-| Minigames | Bolinha, corrida, **memória** e **batalha naval a dois** prontos |
+| Minigames | Bolinha, corrida, memória, **batalha naval** e **Cozinha do Amor** (sozinho ou a dois) |
 | Mapa do bairro | não começou; terreno da casa e rua frontal já prontos |
 
 ---
@@ -3215,3 +3215,320 @@ Cache do worker para `casal-v8`.
 > lados é onde está o estado, não a qualidade do aparelho.**
 
 **Estado: 690 verificações, 0 falha.** As duas pontas travadas no smoke.
+
+### 9.29 A tela de fim da naval existia e era inalcançável, e o pacote de sons (30/08/2026)
+
+Pedido do dono: "nosso jogo de batalha naval não tem uma finalização indicando
+quem ganhou e quem perdeu, além disso não dá corações pra quem ganha... encontre
+um pacote de sons, pra quando acerta o navio e quando acerta a água, além de uma
+musiquinha de fundo."
+
+#### 1. A CAUSA: a partida deixava de existir no instante em que acabava
+
+A tela de fim **já estava escrita** — `naval-fim`, com ilustração, placar e o
+"+30 Corações" — e os Corações **sempre** foram creditados. As duas coisas são
+verdadeiras ao mesmo tempo, e a explicação é uma linha só:
+
+`GET /api/games/naval` respondia por `_partida_aberta`, que filtra
+`status != "finished"`.
+
+Esse filtro é o certo pra decidir "posso abrir outra partida?". Mas ele era
+também quem respondia a tela. Então, no instante do último tiro:
+
+- **quem ganhou** via o resultado por uma fração de segundo. O próprio tiro da
+  vitória dispara o evento de tempo real, o app volta a buscar (é o desenho
+  correto: o evento diz "mexeu, vem buscar") e a busca voltava vazia. A tela
+  caía no cartão de "Abrir partida";
+- **quem perdeu nunca via nada.** A resposta do POST é de quem atirou; o único
+  caminho dele era o evento → GET → nulo. A partida sumia da tela dele sem uma
+  palavra, e ele não tinha como saber que tinha perdido.
+
+E o "+30" existia **só** na resposta daquele POST que ninguém chegava a ver — por
+isso, de fora, parecia que a vitória não pagava. O extrato sempre discordou.
+
+> **Medido antes de mexer em nada**, com a partida jogada até o fim:
+>
+> | | resposta |
+> |---|---|
+> | POST do tiro final | `venceu: True`, `coins: 30`, `status: finished` |
+> | GET do VENCEDOR, logo depois | `partida: None` |
+> | GET do PERDEDOR, logo depois | `partida: None` |
+
+**O conserto é a ORDEM**, e não um filtro a mais: `naval_atual` procura primeiro
+um *resultado ainda não lido* (`_resultado_pendente`) e só depois a partida em
+andamento. Quem tira o resultado da tela é o jogador, tocando "Fechar"
+(`POST /naval/{id}/visto`) — nunca o servidor.
+
+Três detalhes que essa escolha obriga, e os três estão travados no smoke:
+
+- **fechar é por LADO.** Os dois chegam nessa tela em momentos diferentes; um
+  "fechar" que valesse pros dois apagaria o resultado de quem ainda não olhou —
+  o defeito de origem voltando por outra porta;
+- **"Revanche" conta como ter lido** (`_fechar_resultado` em `naval_nova`), senão
+  a partida nova nasceria e o GET continuaria devolvendo o fim da anterior;
+- **o resultado pendente passa na frente da partida nova.** Sem isso, o outro
+  tocar "Revanche" enquanto este ainda lê arrancaria o resultado da tela dele.
+  Há uma janela de 6 h (`RESULTADO_VALE_POR`): resultado de ontem não é notícia,
+  e as partidas que já existiam no banco não têm a marca de "visto" — sem a
+  janela, todas voltariam à tela de uma vez na estreia.
+
+**O prêmio passou a ser gravado na partida** (`estado["premio_p1"/"premio_p2"]`),
+e não só na resposta do tiro. Agora ele sobrevive a recarregar a tela — o
+comentário antigo dizia que a alternativa era "chutar um número ou não mostrar
+nenhum", e essa escolha falsa deixou de existir.
+
+**A frota do outro é revelada no fim.** É a única exceção à regra do vazamento, e
+ela é segura porque não há mais tiro pra dar (`naval_tiro` recusa fora de
+`in_progress`). Com a partida correndo o campo vem nulo — conferido tanto pela
+varredura genérica quanto por um caso explícito, porque a varredura pega o
+vazamento mas não diz o *porquê* da exceção.
+
+Vitória por desistência não paga, e a tela diz isso em vez de comemorar navios
+que ninguém afundou.
+
+#### 2. O pacote de sons — e por que gravado
+
+Os efeitos são **gravações CC0**, com crédito em `public/sons/CREDITOS.md`. A
+regra é a mesma que o miado do gato ensinou (9.13): **eu não escuto.** Explosão,
+água e afundamento são timbre puro, e não existe número que diga se um ruído soa
+como onda ou como chiado.
+
+O que dava pra medir, foi medido. O pacote da Kenney traz 85 jingles com nome
+numerado, e nenhum diz "vitória". Escolher no escuro seria chute, então os dois
+saíram do **contorno de altura** (centroide espectral por Goertzel, 24 faixas
+log-espaçadas de 150 Hz a 3 kHz, quadros de 100 ms, silêncio descartado),
+comparando o primeiro terço com o último — vitória sobe de tom, derrota desce:
+
+| | escolhido | começo → fim | variação |
+|---|---|---|---|
+| vitória | `jingles_HIT15` | 557 → 771 Hz | **+214 Hz** |
+| derrota | `jingles_STEEL07` | 719 → 442 Hz | **−277 Hz** |
+
+Foram os extremos entre os 85. **Se algum som não agradar, a troca é o arquivo** —
+os nomes em `jogoAudio.js` não mudam.
+
+O som de jogo mora em `web/src/jogoAudio.js`, separado de `sound.js` porque tem
+download, cache e (a música) ciclo de vida. A síntese continua sendo a reserva de
+tudo: arquivo que não vem vira bipe, e ninguém fica mudo esperando rede.
+
+> **Nota que vai ser perguntada de novo:** o kit de MÓVEIS do Kenney saiu em 28/08
+> e o smoke proíbe a volta. Aquilo era **desenho**, e o motivo era estilo (PNG
+> genérico ao lado da nossa pixel art, cor assada no arquivo em vez de parâmetro,
+> vocabulário que não batia com o catálogo). Nada disso vale pra som: som não tem
+> cor, não gira, e não fica ao lado de outro som destoando. A trava é nominal
+> (`furnitureKenney`, `drawKenneyItem`, `public/kenney-furniture/`) e não encosta
+> nestes arquivos.
+
+#### 3. Um defeito que só apareceu no navegador: a pré-carga desistia calada
+
+Com tudo pronto, **nenhum arquivo de som era pedido**. O `AudioContext` só nasce
+no primeiro toque de verdade (regra do Safari/iOS), e a tela pede
+`prepararEfeitos` ao *montar*. Quando a montagem vem antes do toque, `carregar`
+não tinha onde decodificar, devolvia nulo **e ia embora** — nenhum arquivo
+pedido, nada no console, e o pacote de sons simplesmente não existia naquela
+sessão.
+
+Falha calada e permanente, escondida pela própria rede de segurança: o jogo
+continuava tocando os bipes de reserva, então de fora parecia certo. É a mesma
+família da tela de fim que não aparecia — o defeito sumindo atrás do plano B.
+
+Agora o pedido fica numa fila e é atendido no instante em que o contexto chega
+(`naFila` / `usarContexto`). A música tem a mesma correção: sem ela a partida
+começaria em silêncio pra sempre por ter pedido um instante cedo demais.
+
+> **Medido depois:** com um `pointerdown` de verdade, os cinco arquivos da naval
+> aparecem em `performance.getEntriesByType('resource')` com os bytes exatos do
+> disco, e o tema (109.825 B) entra ao começar a partida.
+
+#### 4. Um ciclo de import que eu criei e desfiz
+
+A primeira versão tinha `sound.js` → `jogoAudio.js` **e a volta**. Ciclo de módulo
+não estoura na hora: funciona até o empacotador mudar a ordem de avaliação, e aí
+um lado nasce indefinido e o som some **sem erro nenhum na tela**. O contexto
+passou a ser **entregue** (`usarContexto`), e a seta aponta pra um lado só.
+Travado no smoke.
+
+#### 5. Uma medição minha que estava errada, e a correção
+
+Cheguei a escrever que a página "não rolava" e que os botões eram inalcançáveis,
+com base em `document.documentElement.scrollHeight === innerHeight`. **Estava
+errado:** quem rola nesta rota é `main.app-main` (`overflow-y: auto`, 798 contra
+640 de tela, com 96 px de folga pra barra). Rolando, os dois botões ficam
+inteiros acima da barra, e `elementFromPoint` no centro devolve o próprio botão.
+
+A tela de fim foi compactada assim mesmo (arte 148 → 112 px, botões lado a lado
+em vez de empilhados), e isso continua valendo — no tamanho do iPhone dele
+(375×812, medido) ela agora cabe **inteira, sem rolar**, com 50 px de folga. Mas
+é polimento, e não conserto de botão quebrado. Fica escrito porque medir o
+elemento errado é fácil e a conclusão parecia sólida.
+
+**Medido com a partida de verdade rodando, nos dois papéis:**
+
+| | classe | arte | prêmio | mapa revelado | confete | desvio navio/casa |
+|---|---|---|---|---|---|---|
+| quem perdeu (só pelo evento) | `naval-fim perdi` | `naval-derrota.webp` | — | 4 navios | 0 | 0 px |
+| quem venceu | `naval-fim venci` | `naval-vitoria.webp` | **+30 Corações** | 4 navios | 18 | 0 px |
+
+**Estado: 718 verificações, 0 falha.** Build Vite aprovada.
+
+### 9.30 O 5º jogo: Cozinha do Amor, sozinho ou a dois (30/08/2026)
+
+Pedido do dono: *"pesquise e projete um jogo de cozinhar tipo Overcooked...
+quero algo bom e completo, com animações funcionais, com mecânicas bem feitas e
+pensadas. Use o que achar na internet pra te ajudar a decidir qual caminho tomar.
+Será o 5º jogo, e quero que ele seja pra jogar de dois ou sozinho."*
+
+**O projeto está escrito por extenso em [docs/jogo-cozinha.md](docs/jogo-cozinha.md)**,
+com as fontes da pesquisa. Aqui fica o resumo e — o que importa mais — o que deu
+errado no caminho.
+
+#### 1. O que a pesquisa decidiu
+
+Fontes: o *Deep Dive* dos próprios criadores do Overcooked (Game Developer), a
+análise da SUPERJUMP e a decomposição do Mechanics of Magic. Cinco decisões deles
+entraram, e uma ficou de fora:
+
+| Deles | Aqui |
+|---|---|
+| **A bancada compartilhada é "a ideia número um"** — deixar o ingrediente no balcão pro outro é o que obriga a cooperar | Existe uma bancada-ilha no meio, com três acessos por célula |
+| **Sempre mais tarefa do que mão** | Os pedidos apertam com o tempo, e os pratos acabam |
+| **Limite de tempo, não vidas** — errar tira ponto, não encerra | Rodada de 3 min; pedido perdido custa pontos; nunca "game over" |
+| **Interface por ícone, sem palavra** | Pedido é nome + bolinhas coloridas; o preparo muda a FORMA da bolinha, porque cor sozinha não serve pra quem não distingue bem |
+| **No modo sozinho você controla DOIS cozinheiros** | Igual — é o que mantém o jogo sendo sobre dividir tarefa |
+| Obstáculo móvel no meio do nível (terremoto, ratos) | **Fora** desta versão: é conteúdo de nível, e conteúdo sem jogo base pronto é enfeite |
+
+#### 2. A decisão técnica, e por que ela não é preguiça
+
+O caminho "óbvio" — laço de tempo real a 20 quadros/s mandando posição — foi
+**descartado por três motivos**: é outra arquitetura (tudo aqui é
+pedido/resposta + "mexeu, vem buscar", num container com limite de memória fixo);
+na rede de celular ele fica *ruim*, não difícil; e não caberia na bateria de
+testes, que é síncrona.
+
+O caminho escolhido: **ação discreta com relógio de parede.** Toca-se numa
+estação, e o cozinheiro vai até lá e age. Assim toda mudança de estado é um
+evento com **hora marcada**, e disso saem três consequências:
+
+- **o app não sabe nenhuma regra.** Ele desenha uma barra andando entre duas
+  horas conhecidas. Quem decide que a panela queimou é o servidor, e só ele —
+  senão seriam dois donos pro mesmo fato, que é o defeito mais caro deste
+  projeto;
+- **o app sabe o futuro**, então agenda UMA busca pro instante do próximo prazo,
+  em vez de perguntar de segundo em segundo. Entre dois prazos nada muda sozinho;
+- **a simulação é preguiçosa**, exatamente como o decaimento do bichinho: nada
+  roda em segundo plano, e `avancar(estado, agora)` aplica de uma vez tudo o que
+  venceu. Pedido vence e panela queima com o celular no bolso porque a conta é
+  feita na hora de olhar.
+
+E continua sendo um jogo de espaço: **andar leva tempo de verdade**, proporcional
+à distância. A habilidade cobrada é planejar, não apertar rápido — o que também é
+mais justo num celular.
+
+#### 3. Os cinco defeitos que apareceram construindo
+
+Vale a lista, porque quatro deles **falhavam calados**.
+
+**a) Duas estações inalcançáveis, e o jogo não avisava.** A primeira planta pôs
+as despensas nos cantos, encostadas em outras estações dos dois lados: sem célula
+livre vizinha, elas eram impossíveis de usar — e o toque simplesmente não fazia
+nada. Corrigido, e **travado**: o smoke varre toda planta atrás de estação sem
+acesso. A bancada tem regra própria (mais de um acesso): ela é a estação
+*compartilhada*, e com um acesso só um cozinheiro parado trancava o outro fora
+justamente da peça que existe pra eles se encontrarem.
+
+**b) `avancar` não encadeava, e ficar longe PROTEGIA a comida.** A primeira
+versão varria os prazos uma vez, comparando com `agora`. Duas consequências, as
+duas só visíveis com o celular largado:
+
+- a panela que terminava de cozinhar marcava o prazo de queimar a partir de
+  `agora`, e não da hora em que ela de fato ficou pronta — voltar depois de um
+  minuto encontrava a comida cozida e o cronômetro do estrago **recomeçando**;
+- os pedidos criados no fim da varredura não passavam pela conferência de
+  vencimento, que já tinha rodado. Eram cobrados só na chamada seguinte, então o
+  placar dependia de **quantas vezes** alguém olhou. Medido: duas chamadas com o
+  mesmo `agora` davam 0 e depois −100 pontos.
+
+Agora ela caminha pelos acontecimentos **em ordem de hora**. `avancar` ficou
+idempotente no tempo, e o resultado passou a depender só do relógio.
+
+**c) NADA era gravado, e a resposta dizia que sim.** O pior dos cinco. O estado
+era lido com `dict(partida.state)` — cópia **rasa**, então os dicionários de
+dentro continuavam sendo os mesmos objetos que o ORM carregou. Mexer neles mexia
+no valor carregado também, o SQLAlchemy não via mudança, e o `commit` não gravava
+nada.
+
+E falhava do jeito mais enganoso possível: a resposta daquele pedido saía certa
+(ela é montada do estado em memória), então na tela o cozinheiro pegava a alface.
+No pedido seguinte a partida voltava do banco como estava antes. **A rodada
+inteira reiniciava a cada toque.**
+
+> **Medido:** três toques seguidos na despensa. Nos três a resposta trouxe
+> `mao = alface`; nas três o banco trouxe `mao = None`. Foi a recusa por "mão
+> cheia" que **não veio** que entregou o defeito.
+
+Corrigido com cópia funda (`copy.deepcopy`) e `flag_modified`. E a lição virou
+teste: **pra saber se gravou, leia do banco** — nenhum teste que olhasse a
+resposta veria isso, e todos os meus olhavam.
+
+**d) A escolha do cozinheiro não podia morar na tela.** No modo sozinho, a tela
+escolhia "o livre mais perto". Parece razoável e está errado: com um cozinheiro
+segurando a alface, tocar na bancada mandava o **outro**, que chegava de mão
+vazia e **pegava o prato**. A salada nunca era montada.
+
+O motivo é fundo: escolher certo exige saber o que cada gesto FAZ, e isso é regra
+do jogo. A tela não sabe as regras de propósito — então também não tem como
+escolher. A escolha foi pro servidor (`mandar_auto`), que decide
+**experimentando**: para cada cozinheiro, a jogada é simulada numa cópia, e o
+primeiro que consegue é quem vai. Quem julga continua sendo a `mandar` de sempre,
+então nada é duplicado. A ordem de tentativa põe **quem está carregando na
+frente** — um item na mão é uma intenção já em andamento.
+
+**e) A MESMA armadilha da batalha naval, no mesmo dia.** Encerrar o expediente
+voltava direto pro cartão de começar, sem mostrar o resultado. Causa idêntica à
+da seção 9.29: `_partida_aberta` filtra `status != "finished"`, que é o filtro
+certo pra "posso abrir outra?" e o errado pra "o que eu mostro". O evento de
+tempo real mandava o app buscar, a busca voltava vazia, e a tela de resultado
+sumia antes de ser lida. Medido: encerrar com 73 pontos não mostrava nada.
+
+> **A lição, agora escrita nos dois lugares:** *"o filtro de abrir" e "o filtro de
+> mostrar" são perguntas diferentes.* Usar um pelo outro apaga o fim do jogo.
+> Quem tira o resultado da tela tem que ser o jogador (`/visto`).
+
+E dois enganos de montagem no navegador: o canvas ficava com os **300×150 de
+fábrica** esticados até 578×386, porque os efeitos que o preparam rodavam na
+primeira renderização — quando a tela ainda mostra o carregador e o `<canvas>`
+não existe — e depois nunca mais, já que as dependências não mudavam. Resolvido
+extraindo o palco pra um componente próprio, que **monta junto com o canvas**.
+
+#### 4. Medido no navegador, jogando de verdade
+
+Toques reais na tela, coordenadas convertidas de pixel de tela pra pixel de arte:
+
+| | resultado |
+|---|---|
+| canvas | 578×386 de arte, 339×226 na tela (escala 0,586) — **cabe inteiro**, sem rolar |
+| toque → estação | acerta (pegar alface, tomate, massa, carne) |
+| escolha do cozinheiro | o livre mais perto pega o tomate enquanto o outro pica |
+| picar | alface/picado + tomate/picado nas duas tábuas |
+| cozinhar e **queimar** | massa deixada na panela virou `massa/queimado` |
+| queimado | recusado no prato, aceito no lixo |
+| montar e entregar | salada montada → **+73 pontos**, "entregues: 1" |
+| o prato volta sujo | 3 limpos → 2 → pia com 1 sujo → lavado → 3 limpos |
+| fim de rodada | tela com pontos, placar e os dois botões; sobreviveu a reiniciar o servidor |
+| fechar | some da tela **e não volta ao recarregar** (o "visto" fica gravado) |
+
+#### 5. O som
+
+Nove efeitos CC0 novos, do mesmo pacote da naval. O vocabulário do RPG Audio da
+Kenney caiu bem demais pra ser coincidência: `chop`, `knifeSlice` e `metalPot`
+são exatamente os gestos deste jogo. Os quatro jingles seguiram o mesmo critério
+**medido** — o de entregar é dos que mais sobem de tom (+243 Hz), os de errar e
+queimar dos que mais descem (−355 e −370 Hz). Crédito e licença em
+`public/sons/CREDITOS.md`.
+
+**Estado: 814 verificações, 0 falha.** Build Vite aprovada.
+
+**O que ficou de fora, de propósito:** obstáculo móvel, mais de dois cozinheiros,
+plantas de nível diferentes (a planta é **dado**, então acrescentar é barato) e
+ranking histórico. E o **próximo passo grande continua sendo a seção 8.1** — o
+mapa navegável do bairro.

@@ -77,6 +77,20 @@ const PATHS = {
       <path d="M10.2 19.5a2 2 0 0 0 3.6 0" />
     </>
   ),
+  // O par do som. Os dois compartilham o mesmo alto-falante de propósito: só o
+  // que está à direita muda, então o botão não "pula" ao alternar.
+  som: (
+    <>
+      <path d="M4 9.5h3l4.5-3.8v12.6L7 14.5H4z" />
+      <path d="M15 9.6a3.4 3.4 0 0 1 0 4.8M17.8 7.2a7 7 0 0 1 0 9.6" />
+    </>
+  ),
+  mudo: (
+    <>
+      <path d="M4 9.5h3l4.5-3.8v12.6L7 14.5H4z" />
+      <path d="m15.5 10 5 4M20.5 10l-5 4" />
+    </>
+  ),
   gear: (
     <>
       <circle cx="12" cy="12" r="3" />

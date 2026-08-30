@@ -12,7 +12,9 @@ from .config import CORS_ORIGINS, EXPOSE_DOCS, STORAGE_DIR
 from .db import Base, SessionLocal, engine, get_db
 from .realtime import hub
 from .routers import auth as auth_router
-from .routers import avatar, chat, couple, cycle, games, house, pet, push_routes, shop, tasks, wallet
+from .routers import (
+    avatar, chat, couple, cozinha, cycle, games, house, pet, push_routes, shop, tasks, wallet,
+)
 from .security import user_from_token
 
 app = FastAPI(
@@ -105,7 +107,7 @@ async def security_headers(request: Request, call_next):
     return response
 
 
-for module in (auth_router, push_routes, wallet, tasks, shop, avatar, cycle, chat, couple, pet, house, games):
+for module in (auth_router, push_routes, wallet, tasks, shop, avatar, cycle, chat, couple, pet, house, games, cozinha):
     app.include_router(module.router)
 app.include_router(push_routes.avisos)
 

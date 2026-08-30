@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import hashlib
 import random
+from datetime import timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -277,6 +278,89 @@ def _partida_aberta(db: Session) -> MinigameMatch | None:
     )
 
 
+# ------------------------------------------------------- ONDE MORAVA O DEFEITO
+#
+# `_partida_aberta` filtra `status != "finished"`, e é o filtro certo pra decidir
+# "posso abrir outra?". Mas ele era também quem respondia o `GET /naval` — e aí,
+# no instante em que a partida acabava, ela **deixava de existir pros dois apps**:
+#
+#   - quem ganhou via a tela de fim por uma fração de segundo. O próprio tiro da
+#     vitória dispara o evento de tempo real, o app volta a buscar, recebe
+#     `{partida: null}` e cai no cartão de "Abrir partida";
+#   - quem perdeu nunca chegava a ver nada. A resposta do POST é de quem atirou;
+#     o único caminho dele era o evento → GET → `null`. A partida sumia da tela
+#     sem uma palavra, e ele não tinha como saber que tinha perdido.
+#
+# Os Corações sempre entraram na carteira (o crédito é no `naval_tiro`, e o
+# extrato prova). O que nunca aparecia era o **aviso** deles, porque o "+30" só
+# existia na resposta daquele POST que ninguém via — e é por isso que de fora
+# parecia que a vitória não pagava.
+#
+# Medido em 30/08/2026, com a partida jogada até o fim: o POST voltava
+# `venceu=True, coins=30`, e o GET logo em seguida voltava `{'partida': None}`
+# pros DOIS.
+#
+# O conserto é a ORDEM em `naval_atual`: primeiro o resultado que ainda não foi
+# lido, depois a partida em andamento. E quem tira o resultado da tela é o
+# jogador, tocando "Fechar" (`/visto`) — não um filtro que o apaga antes de
+# alguém ler.
+
+# Por quanto tempo um resultado ainda espera ser lido.
+#
+# Existe por dois motivos. Um é de gente: resultado de partida de ontem não é
+# notícia, e abrir o jogo pra ver o fim de uma partida velha é confuso. O outro é
+# de estreia: as partidas que já existem no banco não têm a marca de "visto"
+# (ela nasceu hoje), e sem esta janela todas elas voltariam à tela de uma vez.
+RESULTADO_VALE_POR = timedelta(hours=6)
+
+
+def _resultado_pendente(db: Session, user: User) -> MinigameMatch | None:
+    """A última partida que ACABOU e que este jogador ainda não fechou.
+
+    Ela tem prioridade sobre uma partida nova, e a razão é a mesma que criou este
+    conserto: quem perdeu chega na tela de resultado depois: quando o evento
+    avisa. Se nesse meio-tempo o outro tocar "Revanche", a partida nova passaria
+    na frente e o resultado sumiria de novo, sem ser lido — exatamente o defeito
+    que estamos consertando, só que por outra porta.
+
+    Então primeiro ele lê o que aconteceu; ao tocar "Fechar", cai na revanche que
+    já está esperando.
+    """
+    ultima = (
+        db.query(MinigameMatch)
+        .filter(MinigameMatch.game_type == "naval", MinigameMatch.status == "finished")
+        .order_by(MinigameMatch.id.desc())
+        .first()
+    )
+    if ultima is None or user.id not in (ultima.player1_id, ultima.player2_id):
+        return None
+    if (ultima.state or {}).get(f"visto_{_lado(ultima, user.id)}"):
+        return None
+    # `finished_at` volta do banco SEM fuso (a coluna é `DateTime` simples), e
+    # `utcnow()` tem fuso. Subtrair um do outro estoura — foi o que aconteceu na
+    # primeira execução deste bloco. A convenção do projeto já está escrita em
+    # `clock.to_brt`: instante do banco é UTC, só que sem a etiqueta. Então a
+    # etiqueta é colocada aqui, e a conta é entre iguais.
+    fim = ultima.finished_at
+    if fim is not None:
+        if fim.tzinfo is None:
+            fim = fim.replace(tzinfo=timezone.utc)
+        if utcnow() - fim > RESULTADO_VALE_POR:
+            return None
+    return ultima
+
+
+def _fechar_resultado(db: Session, user: User) -> None:
+    """Marca como lido o resultado pendente. Tocar "Revanche" é ter lido."""
+    pendente = _resultado_pendente(db, user)
+    if pendente is None:
+        return
+    estado = dict(pendente.state or {})
+    estado[f"visto_{_lado(pendente, user.id)}"] = True
+    pendente.state = estado
+    db.commit()
+
+
 def _lado(partida: MinigameMatch, user_id: int) -> str:
     return "p1" if partida.player1_id == user_id else "p2"
 
@@ -313,6 +397,19 @@ def _vista(partida: MinigameMatch, user: User, db: Session) -> dict:
         )
 
     parceiro = partner_of(db, user)
+    acabou = partida.status == "finished"
+    # A frota dele só é revelada com a partida ACABADA — nunca antes.
+    #
+    # Esta é a única exceção à regra do vazamento, e ela é segura porque não
+    # existe mais tiro pra dar: `naval_tiro` recusa qualquer coisa fora de
+    # `in_progress`. Enquanto a partida corre, este campo é `None` e a posição
+    # dele continua sem sair do servidor — que é o que o teste de vazamento
+    # confere. Ver o mapa no fim é metade da graça de uma batalha naval.
+    revelacao = (
+        [{"tamanho": n["tamanho"], "casas": n["casas"], "atingidas": n["atingidas"]} for n in frota_dele]
+        if acabou
+        else None
+    )
     return {
         "id": partida.id,
         # A REVISAO VIAJA PRA TELA (26/08). Cada jogada incrementa este contador,
@@ -349,6 +446,21 @@ def _vista(partida: MinigameMatch, user: User, db: Session) -> dict:
             1 for n in frota_dele if len(n["atingidas"]) >= n["tamanho"]
         ),
         "premio": PREMIO_NAVAL,
+        # ---------------------------------------------------------- o fim
+        # Quanto ESTE jogador ganhou nesta partida. Fica no estado da partida, e
+        # não só na resposta do tiro que venceu: assim o número sobrevive a
+        # recarregar a tela, a trocar de aba e ao evento de tempo real que chega
+        # logo atrás. Antes ele só existia de passagem, e a tela tinha que
+        # escolher entre chutar um valor ou não mostrar nenhum.
+        "premio_ganho": estado.get(f"premio_{meu}") or 0,
+        # Onde os navios dele estavam. Só depois do fim (ver acima).
+        "revelacao": revelacao,
+        # Se este jogador já fechou a tela de fim. Quem tira a partida da tela é
+        # ele, tocando "Fechar" — não um filtro que a apaga sozinho.
+        "ja_vi": bool(estado.get(f"visto_{meu}")),
+        # Vitória por desistência não é vitória jogada, e a tela diz isso em vez
+        # de comemorar um afundamento que não houve.
+        "por_desistencia": bool(acabou and estado.get("desistiu")),
     }
 
 
@@ -366,6 +478,11 @@ def _avisar(partida: MinigameMatch, db: Session) -> None:
 
 @router.get("/naval")
 def naval_atual(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    # PRIMEIRO o resultado que ainda não foi lido, e só depois a partida em
+    # andamento. A ordem é o conserto: era ela que faltava (ver `_ultima_partida`).
+    pendente = _resultado_pendente(db, user)
+    if pendente is not None:
+        return {"partida": _vista(pendente, user, db)}
     partida = _partida_aberta(db)
     if partida is None:
         return {"partida": None}
@@ -391,6 +508,10 @@ def naval_nova(user: User = Depends(current_user), db: Session = Depends(get_db)
     um num tabuleiro diferente, esperando um adversário que está do outro lado
     fazendo o mesmo.
     """
+    # Tocar "Revanche" é ter lido o resultado — senão a partida nova nasceria e o
+    # `GET` continuaria devolvendo o fim da anterior, e o jogo pareceria travado
+    # no resultado velho.
+    _fechar_resultado(db, user)
     aberta = _partida_aberta(db)
     if aberta is not None:
         if aberta.player2_id is None and aberta.player1_id != user.id:
@@ -526,6 +647,10 @@ def naval_tiro(
                 dedupe_key=f"naval-extra:{user.id}:{partida.id}",
             )
             ganhou_coracoes = PREMIO_REPETIDO
+        # O valor fica GRAVADO na partida, não só na resposta deste POST. É o que
+        # faz a tela de fim continuar dizendo "+30 Corações" depois de recarregar,
+        # e o que permite ao outro lado saber quanto o vencedor levou.
+        estado[f"premio_{meu}"] = ganhou_coracoes
         publish("wallet", {"balance": economy.balance(db, user.id)}, to_user=user.id)
         missions.record(db, "pet_game")
     elif not acertou:
@@ -568,11 +693,52 @@ def naval_desistir(
         partida.turn_user_id = None
         # Desistir no meio entrega a vitória pro outro; desistir antes de
         # começar não dá vitória a ninguém (não houve jogo).
-        if partida.state and partida.state.get("frota_p1") and partida.state.get("frota_p2"):
+        estado = dict(partida.state or {})
+        if estado.get("frota_p1") and estado.get("frota_p2"):
             partida.winner_id = (
                 partida.player2_id if partida.player1_id == user.id else partida.player1_id
             )
+            # Marca a diferença: ganhar porque o outro largou não é ganhar
+            # afundando. A tela de fim diz isso em vez de comemorar navios que
+            # ninguém afundou.
+            estado["desistiu"] = _lado(partida, user.id)
+        # Quem desistiu já sabe o que aconteceu — ele acabou de tocar o botão. A
+        # tela de fim é pro OUTRO, que precisa entender por que a partida sumiu.
+        estado[f"visto_{_lado(partida, user.id)}"] = True
+        partida.state = estado
         partida.revision += 1
         db.commit()
         _avisar(partida, db)
     return {"partida": _vista(partida, user, db)}
+
+
+@router.post("/naval/{partida_id}/visto")
+def naval_visto(
+    partida_id: int,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """"Já li o resultado, pode tirar da tela."
+
+    Existe porque quem fecha a tela de fim tem que ser o jogador, e não o
+    servidor. A versão anterior escondia a partida assim que ela terminava, e com
+    isso o resultado ia embora antes de qualquer um dos dois ler (ver
+    `_ultima_partida`).
+
+    É por LADO, e essa é a parte que importa: os dois chegam nessa tela em
+    momentos diferentes — quem venceu chega no próprio tiro, quem perdeu chega
+    quando o evento avisa. Um "fechar" que valesse pros dois apagaria o resultado
+    da tela de quem ainda não tinha olhado.
+    """
+    partida = db.get(MinigameMatch, partida_id)
+    if partida is None or partida.game_type != "naval":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Essa partida não existe")
+    if user.id not in (partida.player1_id, partida.player2_id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Essa partida não é sua")
+    if partida.status != "finished":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Essa partida ainda não acabou")
+    estado = dict(partida.state or {})
+    estado[f"visto_{_lado(partida, user.id)}"] = True
+    partida.state = estado
+    db.commit()
+    return {"partida": None}

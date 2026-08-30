@@ -4,6 +4,8 @@ import { api } from '../api'
 import Icon from '../components/Icon'
 import PetCanvas from '../render/PetCanvas'
 import PetRunner from '../render/PetRunner'
+import { definirMudo, estaMudo } from '../jogoAudio'
+import GameCozinha from './GameCozinha'
 import GameMemoria from './GameMemoria'
 import GameNaval from './GameNaval'
 
@@ -35,6 +37,10 @@ export default function Games() {
   const [sending, setSending] = useState(false)
   const [jogo, setJogo] = useState('corrida')
   const [cheia, setCheia] = useState(false)
+  // O mudo vale pro app todo e vive no aparelho (ver `jogoAudio.js`). O estado
+  // aqui existe só pra redesenhar o botão: quem guarda é o `localStorage`, senão
+  // sair da tela de jogos esqueceria a escolha.
+  const [mudo, setMudo] = useState(estaMudo)
   const casco = useRef(null)
 
   // bolinha
@@ -177,9 +183,13 @@ export default function Games() {
   // Os dois primeiros sao do bichinho e precisam dele; os dois ultimos, nao.
   const abas = [
     ['corrida', 'Corrida'], ['bolinha', 'Bolinha'],
-    ['memoria', 'Memória'], ['naval', 'A dois'],
+    ['memoria', 'Memória'], ['naval', 'Naval'],
+    ['cozinha', 'Cozinha'],
   ]
-  const titulos = { corrida: 'Corrida', bolinha: 'Bolinha', memoria: 'Memória', naval: 'Batalha naval' }
+  const titulos = {
+    corrida: 'Corrida', bolinha: 'Bolinha', memoria: 'Memória',
+    naval: 'Batalha naval', cozinha: 'Cozinha do Amor',
+  }
 
   const corrida = pet && (cansado
     ? (
@@ -265,6 +275,7 @@ export default function Games() {
       )
     }
     if (jogo === 'memoria') return <GameMemoria telaCheia={cheia} />
+    if (jogo === 'cozinha') return <GameCozinha telaCheia={cheia} />
     return <GameNaval telaCheia={cheia} />
   }
 
@@ -279,10 +290,21 @@ export default function Games() {
         {/* A naval voltou pra tela cheia como os outros: agora e UM tabuleiro
             grande por vez (o mar do outro) com a sua frota de minimapa, entao
             ela cabe na sobreposicao e nao depende mais de rolar a pagina. */}
-        <button className="btn btn-sm btn-ghost" onClick={alternarCheia}>
-          <Icon name={cheia ? 'check' : 'game'} size={15} />
-          {cheia ? 'Sair' : 'Tela cheia'}
-        </button>
+        <div className="row" style={{ gap: 6 }}>
+          <button
+            className="btn btn-sm btn-ghost"
+            onClick={() => { const novo = !mudo; setMudo(novo); definirMudo(novo) }}
+            aria-pressed={mudo}
+            title={mudo ? 'Ligar o som' : 'Desligar o som'}
+            aria-label={mudo ? 'Ligar o som' : 'Desligar o som'}
+          >
+            <Icon name={mudo ? 'mudo' : 'som'} size={16} />
+          </button>
+          <button className="btn btn-sm btn-ghost" onClick={alternarCheia}>
+            <Icon name={cheia ? 'check' : 'game'} size={15} />
+            {cheia ? 'Sair' : 'Tela cheia'}
+          </button>
+        </div>
       </div>
 
       {!cheia && (

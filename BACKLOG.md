@@ -198,6 +198,9 @@ Três defeitos reais que a bateria e a bancada pegaram, com a causa corrigida:
 
 - [x] Um jogo simples de brincar com o bichinho: **Pega a bolinha**, com energia,
       alegria, XP, pontuação limitada e descanso de dois minutos
+- [x] **Batalha naval a dois**, com tela de finalização e pacote de sons (30/08)
+- [x] **Cozinha do Amor** (30/08) — o 5º jogo, tipo Overcooked, sozinho ou a
+      dois. Projeto em `docs/jogo-cozinha.md`
 - [ ] Velha · forca colaborativa · quiz "quem conhece melhor" · memória · damas —
       **adiados por decisão de 23/08/2026**, depois da casa e do mapa do bairro
 - [ ] Truco/UNO simplificado (por último)
@@ -1316,3 +1319,91 @@ Estado: **688 verificações, 0 falha**. Causas no HANDOFF, seção 9.27.
 - **[x]** Cache do worker para `casal-v8`. As duas pontas travadas no smoke.
 
 Estado: **690 verificações, 0 falha**. Causa no HANDOFF, seção 9.28.
+
+### 30/08/2026 — Fim de partida na naval, pacote de sons e o 5º jogo
+
+Pedido do dono, em três partes: *"nosso jogo de batalha naval não tem uma
+finalização indicando quem ganhou e quem perdeu, além disso não dá corações pra
+quem ganha. Crie uma tela de finalização bonitinha. Além disso encontre um pacote
+de sons, pra quando acerta o navio e quando acerta a água, além de uma musiquinha
+de fundo. Dito isso, quero que pesquise e projete um jogo de cozinhar tipo
+Overcooked... será o 5º jogo, e quero que ele seja para jogar de dois ou
+sozinho."*
+
+#### Batalha naval — a finalização
+
+- **[x]** A tela de fim **já existia e era inalcançável**. `GET /naval` filtrava
+      `status != "finished"`, então a partida deixava de existir no instante em
+      que acabava: quem ganhou via o resultado por uma fração de segundo, e quem
+      **perdeu nunca via nada**. Medido antes de mexer: o POST do tiro final
+      voltava `venceu: True, coins: 30` e o GET seguinte voltava vazio pros dois.
+- **[x]** Os Corações **sempre foram creditados** — o que faltava era o aviso.
+      O "+30" só existia na resposta daquele POST que ninguém via.
+- **[x]** Tela de fim de verdade: confete só na vitória, ilustração que respira,
+      prêmio entrando depois do resto, placar, e **o mapa revelado** de onde o
+      outro escondeu a frota (só depois do fim — durante a partida o campo vem
+      vazio, conferido no teste).
+- **[x]** Quem fecha o resultado é o **jogador** (botão Fechar), e a marca é por
+      lado: os dois chegam nessa tela em momentos diferentes.
+- **[x]** Vitória por desistência não paga, e a tela diz isso.
+- **[x]** O prêmio passou a ser gravado na partida, então sobrevive a recarregar.
+
+#### O pacote de sons
+
+- **[x]** Nove efeitos CC0 na naval e na cozinha + duas músicas de fundo em laço,
+      todos com crédito e licença em `web/public/sons/CREDITOS.md`.
+- **[x]** Acertou o navio, acertou a água, afundou, venceu, perdeu — cada um com
+      som próprio. Música de fundo que entra em rampa e para no fim da partida.
+- **[x]** Botão de **mudo** na tela de Jogos, guardado no aparelho.
+- **[x]** A síntese continua como reserva: arquivo que não vem vira bipe, e
+      ninguém fica mudo esperando rede.
+- **[ ]** **Ouvir e dizer se algum som não combina.** Quem escreve o app não
+      escuta: explosão e água são timbre, e timbre não tem número. Os dois
+      jingles foram escolhidos por medição (o contorno de altura: vitória sobe,
+      derrota desce), mas o resto é aposta informada. **Trocar um som é trocar um
+      arquivo** — os nomes no código não mudam.
+
+#### O 5º jogo — Cozinha do Amor
+
+- **[x]** Pesquisado antes de projetar (Deep Dive dos criadores do Overcooked,
+      SUPERJUMP, Mechanics of Magic) e **projetado por escrito** em
+      `docs/jogo-cozinha.md` antes de qualquer código.
+- **[x]** **Sozinho e a dois**, como pedido. Sozinho os dois cozinheiros são
+      seus — foi assim que o próprio Overcooked resolveu o modo de um jogador, e
+      é o que mantém o jogo sendo sobre dividir tarefa.
+- **[x]** Mecânicas: 5 ingredientes, 4 receitas, 8 tipos de estação, uma coisa
+      por vez na mão, bancada compartilhada, panela que **queima** se for
+      esquecida, pratos que acabam e obrigam alguém a ir lavar, pedidos que
+      apertam com o tempo, e pontuação que vale mais quanto mais tempo sobrou.
+- **[x]** Cozinha isométrica no mesmo motor da casa, com fundo em cache (o
+      HANDOFF avisa que redesenhar tudo a cada quadro esquenta o celular).
+- **[x]** Animações: cozinheiro que caminha e gingando, curva o corpo quando está
+      picando ou lavando, seta que marca qual é o seu, barras de progresso que
+      esquentam conforme a comida se aproxima de queimar, fumaça no queimado,
+      pedidos que balançam quando estão acabando.
+- **[x]** Paga Corações: 35 na primeira rodada do dia, 8 nas seguintes, e nada
+      numa rodada sem ponto.
+- **[x]** Tela de fim com pontos, placar e os Corações ganhos.
+- **[ ]** **Jogar a dois de verdade, um celular em cada mão.** Aqui só dá pra
+      testar um lado por vez; o modo a dois está coberto por teste (cada um só
+      manda no seu, os dois veem a mesma cozinha), mas nunca rodou com duas
+      pessoas ao mesmo tempo.
+- **[ ]** Equilíbrio: os tempos (picar 2,6 s, cozinhar 7 s, queimar 6,5 s, andar
+      0,26 s por casa) são o lugar de mexer quando disser "está fácil" ou "está
+      impossível". Estão todos juntos no topo de `app/cozinha.py`.
+- **[ ]** Mais níveis com plantas diferentes — a planta é **dado**, então é
+      barato. Ficou de fora agora pra não empurrar conteúdo antes do jogo base
+      estar aprovado por quem joga.
+- **[ ]** Obstáculo móvel no meio da rodada (o "terremoto" do original): fica
+      pra depois, pelo mesmo motivo.
+
+#### Achados registrados
+
+- **[x]** A mesma armadilha derrubou os **dois** jogos no mesmo dia: usar o
+      filtro de "posso abrir outra partida?" pra responder "o que eu mostro?".
+      Está escrita nos dois arquivos e travada nos dois testes.
+- **[x]** Um defeito que reiniciava a rodada de cozinha **a cada toque** sem dar
+      erro nenhum (cópia rasa do JSON e o ORM não vendo a mudança). A resposta
+      saía certa e o banco continuava vazio. Virou teste que **lê do banco**.
+- **[x]** A pré-carga dos sons desistia calada quando a tela montava antes do
+      primeiro toque, e o pacote inteiro nunca tocava naquela sessão.

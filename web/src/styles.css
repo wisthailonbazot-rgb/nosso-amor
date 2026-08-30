@@ -2252,8 +2252,8 @@ button:disabled,
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 22px 16px 16px;
+  gap: 6px;
+  padding: 14px 14px 12px;
   border: 2px solid var(--ink);
   border-radius: 18px 14px 20px 15px;
   background: var(--paper);
@@ -2263,33 +2263,112 @@ button:disabled,
    andam juntos: sem a medida no HTML a tela PULA quando a imagem carrega, e
    pular bem na hora em que a pessoa esta lendo quem ganhou e quanto ganhou e
    justamente o pior momento pra isso acontecer. */
+/* 112 px, e nao 148.
+   MEDIDO em 375x812, com a tela de fim inteira montada: a pagina desta rota NAO
+   ROLA (812 de conteudo em 812 de tela), entao tudo o que passa da barra de
+   navegacao fica inalcancavel — nao "meio escondido", inalcancavel mesmo. Com a
+   arte em 148 e os dois botoes empilhados, "Revanche" nascia embaixo da barra
+   (topo 712, barra em 738) e "Fechar" terminava em 820, fora da tela.
+   Ver tambem `.naval-fim-botoes`, que passou a ser lado a lado pelo mesmo motivo. */
 .naval-fim-arte {
-  width: 148px;
-  height: 148px;
+  width: 112px;
+  height: 112px;
   object-fit: contain;
   margin-bottom: 2px;
   filter: drop-shadow(0 3px 6px rgba(51, 32, 58, .18));
 }
-.naval-fim-titulo { font: 800 24px 'Baloo 2', sans-serif; }
+.naval-fim-titulo { font: 800 22px 'Baloo 2', sans-serif; }
 .naval-fim-nome { font: 700 15px 'Baloo 2', sans-serif; color: var(--muted); }
 .naval-fim-premio {
   display: flex;
   align-items: baseline;
   gap: 6px;
-  padding: 8px 18px;
+  padding: 5px 16px;
   border: 2px solid var(--ink);
   border-radius: 14px 10px 15px 11px;
   background: var(--rose);
   color: #fff;
 }
-.naval-fim-premio strong { font: 800 30px 'Baloo 2', sans-serif; }
+.naval-fim-premio strong { font: 800 26px 'Baloo 2', sans-serif; }
 .naval-fim-premio span { font: 700 13px 'Baloo 2', sans-serif; }
-.naval-fim-nota { margin: 0; max-width: 30ch; }
+.naval-fim-nota { margin: 0; max-width: 32ch; }
 .naval-fim-placar {
   display: flex;
   gap: 14px;
   font: 700 12px 'Baloo 2', sans-serif;
   color: var(--muted);
+}
+.naval-fim-placar strong { font-size: 15px; color: var(--ink); }
+
+/* A entrada da tela: ela sobe e cresce um tico. E o unico movimento da tela
+   inteira, e serve pra marcar que ALGO ACONTECEU — antes o jogo trocava de
+   estado sem transicao nenhuma e parecia que a tela tinha se perdido. */
+.naval-fim { animation: naval-fim-entra .34s cubic-bezier(.2, 1.3, .5, 1) both; }
+@keyframes naval-fim-entra {
+  from { opacity: 0; transform: translateY(14px) scale(.94); }
+  to { opacity: 1; transform: none; }
+}
+/* A ilustracao respira depois de entrar. Duas voltas e para: animacao que nao
+   para vira distracao, e aqui embaixo tem botao pra ler. */
+.naval-fim-arte { animation: naval-fim-arte 1.1s ease-in-out 2 .3s both; }
+@keyframes naval-fim-arte {
+  50% { transform: scale(1.045) rotate(-1.5deg); }
+}
+/* O premio chega DEPOIS do resto (.5s), pra ser lido como consequencia e nao
+   como mais um pedaco do cartao. */
+.naval-fim-premio { animation: naval-fim-premio .5s cubic-bezier(.2, 1.5, .4, 1) .5s both; }
+@keyframes naval-fim-premio {
+  from { opacity: 0; transform: scale(.5) rotate(-8deg); }
+  to { opacity: 1; transform: none; }
+}
+
+.naval-fim-mapa { width: min(150px, 52vw); margin-top: 0; }
+/* Lado a lado, e nao empilhados: um botao a menos na vertical devolve 57 px, e
+   eram esses 57 px que jogavam "Fechar" pra fora da tela (ver `.naval-fim-arte`).
+   Os dois cabem: sao duas palavras curtas. */
+.naval-fim-botoes { display: flex; gap: 6px; width: 100%; max-width: 300px; margin-top: 2px; }
+.naval-fim-botoes .btn { flex: 1 1 0; min-width: 0; }
+
+/* ------------------------------------------------------------------ confete
+   So na vitoria. Dezoito pedacos, cada um com atraso, cor, tamanho e desvio
+   proprios, calculados a partir do indice `--i` — assim nao ha dezoito regras
+   escritas na mao, e nenhum pedaco cai igual ao vizinho.
+
+   `pointer-events: none` importa: a chuva cobre o cartao inteiro, e sem isso
+   ela engoliria o toque nos botoes de Revanche e Fechar. */
+.naval-confete {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.naval-fim { position: relative; overflow: hidden; }
+.naval-confete span {
+  position: absolute;
+  top: -12px;
+  left: calc((var(--i) * 6.1%) + 2%);
+  width: calc(5px + (var(--i) % 3) * 2px);
+  height: calc(8px + (var(--i) % 4) * 2px);
+  border-radius: 2px;
+  background: var(--rose);
+  opacity: 0;
+  animation: naval-confete 2.6s linear both;
+  animation-delay: calc(var(--i) * 90ms);
+}
+.naval-confete span:nth-child(3n) { background: var(--gold, #f3b64a); }
+.naval-confete span:nth-child(3n + 1) { background: var(--mint, #7fd1b9); }
+@keyframes naval-confete {
+  0% { opacity: 0; transform: translateY(0) rotate(0deg); }
+  8% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(420px) translateX(calc((var(--i) % 5 - 2) * 26px)) rotate(560deg); }
+}
+/* Quem pediu menos movimento no sistema nao leva chuva de papel na cara. */
+@media (prefers-reduced-motion: reduce) {
+  .naval-confete { display: none; }
+  .naval-fim,
+  .naval-fim-arte,
+  .naval-fim-premio { animation: none; }
 }
 
 /* O rotulo da peca na bancada. Existe porque a aba de figurinhas deixou de usar
@@ -2343,3 +2422,135 @@ button:disabled,
   white-space: nowrap;
 }
 .foto-menu label:active { background: rgba(51, 32, 58, 0.09); }
+
+
+/* ==================================================== Cozinha do Amor (5o jogo)
+   O projeto esta em docs/jogo-cozinha.md. Aqui, so o que a tela precisa.
+
+   A regra de ouro do layout: a cozinha inteira TEM que caber de uma vez. Na casa
+   o comodo pode rolar pro lado, porque quem decora tem tempo; numa rodada de 3
+   minutos, rolar a tela pra achar a panela e perder a rodada. */
+.cozinha { display: flex; flex-direction: column; gap: 8px; }
+
+/* -------------------------------------------------------------- os pedidos
+   Em cima, sempre visiveis. Rolam pro lado quando sao quatro — nunca quebram
+   linha, senao a altura da fila mudaria e o palco pularia junto. */
+.cozinha-pedidos {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+.cozinha-pedidos::-webkit-scrollbar { display: none; }
+.cozinha-pedido {
+  flex: 0 0 auto;
+  min-width: 84px;
+  padding: 5px 8px 6px;
+  border: 2px solid var(--ink);
+  border-radius: 12px 9px 13px 10px;
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.cozinha-pedido.vazio { border-style: dashed; opacity: .6; justify-content: center; }
+.cozinha-pedido strong { font: 800 12px 'Baloo 2', sans-serif; white-space: nowrap; }
+.cozinha-pedido-itens { display: flex; gap: 3px; }
+
+/* O ingrediente como BOLINHA colorida, e o preparo como FORMA.
+   Cor sozinha nao basta: quem nao distingue bem vermelho de marrom ficaria sem
+   saber se o pedido quer tomate ou carne. Entao o preparo muda o contorno —
+   picado e quadrado, cozido tem um anel. E a interface por icone do genero. */
+.cozinha-bolinha {
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+  display: inline-block;
+}
+.cozinha-bolinha.picado { border-radius: 2px; }
+.cozinha-bolinha.cozido { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .85); }
+
+.cozinha-pedido-barra {
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(51, 32, 58, .14);
+  overflow: hidden;
+}
+.cozinha-pedido-barra span {
+  display: block;
+  height: 100%;
+  background: var(--mint, #7fd6b0);
+  transition: width .25s linear;
+}
+/* Quando esta acabando, o pedido inteiro avisa — nao so a barra. No meio da
+   correria ninguem olha uma barra de 5 px. */
+.cozinha-pedido.apertado { border-color: #e0432c; animation: cozinha-urgente .7s ease-in-out infinite; }
+.cozinha-pedido.apertado .cozinha-pedido-barra span { background: #e0432c; }
+@keyframes cozinha-urgente {
+  50% { transform: translateY(-2px) rotate(-.6deg); }
+}
+
+/* ------------------------------------------------------------------- o HUD */
+.cozinha-hud {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.cozinha-relogio { font: 800 20px 'Baloo 2', sans-serif; }
+.cozinha-pontos { font: 800 16px 'Baloo 2', sans-serif; color: var(--rose); }
+.cozinha-aviso { margin: 0; }
+
+/* ------------------------------------------------------------------ o palco */
+.cozinha-palco {
+  display: flex;
+  justify-content: center;
+  border: 2px solid var(--ink);
+  border-radius: 16px 12px 18px 13px;
+  background: #cfe3e6;
+  overflow: hidden;
+  padding: 2px;
+}
+/* `pixelated` e o que faz a arte continuar com borda dura ao ser ampliada.
+   `touch-action: manipulation` tira o atraso de 300 ms do toque que alguns
+   navegadores ainda aplicam esperando um duplo-toque — num jogo de tempo, 300 ms
+   por acao e a rodada inteira. */
+.cozinha-canvas {
+  image-rendering: pixelated;
+  touch-action: manipulation;
+  display: block;
+}
+
+/* ------------------------------------------------------------ fim de rodada
+   Reaproveita o premio e os botoes da naval (`.naval-fim-premio`,
+   `.naval-fim-botoes`): e o mesmo fato na tela, e duplicar o estilo faria os
+   dois envelhecerem em direcoes diferentes. */
+.cozinha-fim {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 14px 14px;
+  border: 2px solid var(--ink);
+  border-radius: 18px 14px 20px 15px;
+  background: var(--paper);
+  text-align: center;
+  animation: naval-fim-entra .34s cubic-bezier(.2, 1.3, .5, 1) both;
+}
+.cozinha-fim-titulo { font: 800 22px 'Baloo 2', sans-serif; }
+.cozinha-fim-pontos { font: 800 44px 'Baloo 2', sans-serif; line-height: 1; color: var(--rose); }
+.cozinha-fim.bom .cozinha-fim-pontos { animation: naval-fim-premio .5s cubic-bezier(.2, 1.5, .4, 1) .25s both; }
+.cozinha-fim-placar {
+  display: flex;
+  gap: 12px;
+  font: 700 12px 'Baloo 2', sans-serif;
+  color: var(--muted);
+}
+.cozinha-fim-placar strong { font-size: 15px; color: var(--ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  .cozinha-pedido.apertado,
+  .cozinha-fim,
+  .cozinha-fim.bom .cozinha-fim-pontos { animation: none; }
+}

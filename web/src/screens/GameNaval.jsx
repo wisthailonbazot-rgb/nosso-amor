@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import Icon from '../components/Icon'
 import { subscribe, useStore } from '../store'
+import { pararMusica, prepararEfeitos, tocarMusica } from '../jogoAudio'
 import { arteDaNaval } from '../render/naval'
 
 /**
@@ -165,14 +166,6 @@ export default function GameNaval({ telaCheia = false }) {
   const [rascunho, setRascunho] = useState(null) // frota antes de confirmar
   const [aviso, setAviso] = useState(null)
   const [erro, setErro] = useState('')
-  // Quantos Corações o tiro da vitória pagou.
-  //
-  // Isto NÃO está na vista da partida: o valor só existe na resposta do POST do
-  // tiro que venceu (o prêmio é por dia e travado por `dedupe_key`, então a vista
-  // não teria como dizer "quanto" sem inventar). Por isso ele é guardado aqui na
-  // hora em que chega — e quem PERDEU nunca recebe esse campo: a tela de fim dele
-  // fica sem número nenhum, que é o certo, em vez de mostrar um valor chutado.
-  const [premio, setPremio] = useState(null)
   const ocupado = useRef(false)
 
   // A revisão da última vista aplicada. Fica FORA do estado do React de
@@ -251,13 +244,49 @@ export default function GameNaval({ telaCheia = false }) {
     return () => clearInterval(timer)
   }, [esperandoOOutro, buscar])
 
+  // Os arquivos começam a baixar quando a tela abre, e não no primeiro tiro.
+  //
+  // `tocarEfeito` nunca espera a rede — se o arquivo não chegou, ele devolve
+  // `false` e o bipe sintetizado assume. Isso salva o jogo de ficar mudo, mas o
+  // PRIMEIRO tiro de toda partida sairia com o som de reserva, sempre. Pedindo
+  // aqui, os arquivos já estão prontos quando a frota termina de ser posicionada.
+  useEffect(() => { prepararEfeitos('naval-') }, [])
+
+  /**
+   * A música toca enquanto a partida corre, e para no fim.
+   *
+   * Parar no fim é de propósito: o jingle de vitória (ou de derrota) é o som que
+   * importa naquele instante, e ele se perde por baixo do tema. Ao sair da tela
+   * ela também para — sem isso a música seguiria tocando no chat, e o React
+   * desmonta esta tela DEPOIS de montar a próxima em algumas transições.
+   */
+  const tocando = !!partida && partida.status !== 'finished'
+  useEffect(() => {
+    if (tocando) tocarMusica('naval')
+    else pararMusica()
+  }, [tocando])
+  useEffect(() => pararMusica, [])
+
+  // O som do fim toca uma vez por partida, aqui, e não em `atirar`.
+  //
+  // Precisa ser aqui porque quem PERDE nunca passa por `atirar`: pra ele o fim
+  // chega pelo evento de tempo real. Uma partida acabada é um fato da vista, e é
+  // dela que o som sai — assim os dois lados ouvem o resultado, cada um o seu.
+  // A gaveta guarda o id já anunciado pra que o próximo `buscar()` (o poller, o
+  // "voltei pro app") não repita a fanfarra a cada 5 segundos.
+  const anunciada = useRef(null)
+  useEffect(() => {
+    if (partida?.status !== 'finished' || anunciada.current === partida.id) return
+    anunciada.current = partida.id
+    window.casalSound?.(partida.sou_o_vencedor ? 'naval-vitoria' : 'naval-derrota')
+  }, [partida?.status, partida?.id, partida?.sou_o_vencedor])
+
   const lado = partida?.lado_do_tamanho || 8
   const modelo = partida?.frota_modelo || [4, 3, 3, 2]
 
   async function abrir() {
     setErro(''); setCarregando(true)
-    // Revanche: o prêmio da partida anterior não pode aparecer na próxima.
-    setPremio(null); setAviso(null)
+    setAviso(null)
     try {
       const r = await api.post('/api/games/naval/nova')
       aplicar(r.partida)
@@ -292,9 +321,11 @@ export default function GameNaval({ telaCheia = false }) {
     setErro('')
     try {
       const r = await api.post(`/api/games/naval/${partida.id}/tiro`, { linha, coluna })
-      if (r.venceu) setPremio(typeof r.coins === 'number' ? r.coins : null)
       aplicar(r.partida)
-      window.casalSound?.(r.acertou ? 'success' : 'nav')
+      // O som conta o que aconteceu antes de qualquer texto: explosão quando o
+      // tiro pega no casco, água quando cai no mar. É a resposta mais rápida que
+      // o jogo dá, e no celular ela chega antes do olho achar a casa.
+      window.casalSound?.(r.venceu ? 'naval-vitoria' : r.afundou ? 'naval-afunda' : r.acertou ? 'naval-acerto' : 'naval-agua')
       setAviso(
         r.venceu
           ? { tipo: 'ok', texto: r.coins ? `Você ganhou! +${r.coins} Corações` : 'Você ganhou!' }
@@ -317,6 +348,18 @@ export default function GameNaval({ telaCheia = false }) {
     } catch (e) { setErro(e.message) }
   }
 
+  /** "Já li o resultado." Quem tira o fim da tela é o jogador, não o servidor. */
+  async function fechar() {
+    setAviso(null)
+    try {
+      await api.post(`/api/games/naval/${partida.id}/visto`)
+      aplicar(null)
+      // Pode haver uma revanche esperando: o outro toca "Revanche" enquanto este
+      // ainda está lendo o resultado. Buscar de novo cai direto nela.
+      buscar()
+    } catch (e) { setErro(e.message) }
+  }
+
   if (carregando) return <div className="full-center"><div className="spinner" /></div>
 
   // -------------------------------------------------------- fim de partida
@@ -329,16 +372,41 @@ export default function GameNaval({ telaCheia = false }) {
     const nome = ganhei
       ? (user?.name || 'Você')
       : (partida.parceiro?.name || 'Seu amor')
+    // O prêmio vem da PARTIDA, e não mais de uma lembrança guardada na tela.
+    //
+    // Antes ele só existia na resposta do POST do tiro que venceu: recarregar a
+    // tela entre o tiro e este momento perdia o número, e quem perdeu nunca
+    // recebia campo nenhum. Agora o valor está gravado no estado da partida
+    // (ver `games.py`), então ele sobrevive a recarregar — e os dois lados
+    // veem a mesma coisa.
+    const premio = partida.premio_ganho || 0
+    // A frota dele, revelada só agora. Enquanto a partida corria este campo veio
+    // `null` do servidor: a posição dele nunca chegou neste app.
+    const revelado = {}
+    for (const n of partida.revelacao || []) {
+      const afundado = n.atingidas.length >= n.tamanho
+      for (const [l, c] of n.casas) revelado[`${l},${c}`] = { navio: true, afundado }
+    }
+    for (const t of partida.meus_tiros) {
+      const chave = `${t.linha},${t.coluna}`
+      revelado[chave] = t.acertou
+        ? { ...revelado[chave], acerto: true, afundado: t.afundou }
+        : { agua: true }
+    }
     return (
-      <div className={`naval-fim ${ganhei ? 'venci' : 'perdi'}`}>
+      <div className={`naval-fim ${ganhei ? 'venci' : 'perdi'} ${telaCheia ? 'cheia' : ''}`}>
+        {/* A chuva de confete só existe na vitória, e é CSS puro: 18 pedaços com
+            atraso, cor e trajeto próprios. Um canvas aqui só cobriria os botões. */}
+        {ganhei && (
+          <div className="naval-confete" aria-hidden="true">
+            {Array.from({ length: 18 }).map((_, i) => <span key={i} style={{ '--i': i }} />)}
+          </div>
+        )}
         {/* A ILUSTRAÇÃO É GERADA POR IA, e este é o lugar certo pra ela.
             Aqui a imagem É a arte: não tem estado, não gira, não precisa
             encaixar em grade nenhuma — o mesmo caso das 14 cartas da memória.
             (O mar e os navios ficaram de fora por causa disso mesmo, e o motivo
-            está escrito por extenso em `render/naval.js`.)
-            Escolhidas olhando, 3 sementes por assunto, como manda o precedente:
-            uma das opções do troféu veio com uma MÃO de gente na imagem e foi
-            descartada — o mesmo defeito que já tinha aparecido nas cartas. */}
+            está escrito por extenso em `render/naval.js`.) */}
         <img
           className="naval-fim-arte"
           src={ganhei ? '/naval-vitoria.webp' : '/naval-derrota.webp'}
@@ -347,32 +415,57 @@ export default function GameNaval({ telaCheia = false }) {
           height="256"
         />
         <div className="naval-fim-titulo">{ganhei ? 'Vitória!' : 'Fim de partida'}</div>
-        <div className="naval-fim-nome">{nome} venceu</div>
-        {/* Sem número quando não houve número. Duas situações diferentes:
-            quem PERDEU nunca recebe `coins`, e quem ganhou pode ter recarregado
-            a tela entre o tiro final e este momento — aí o valor se perdeu no
-            caminho e chutar um número seria pior do que não mostrar nenhum.
-            (Toda vitória paga desde 26/08; o que muda é o valor cair depois da
-            primeira do dia.) */}
-        {ganhei && premio ? (
+        <div className="naval-fim-nome">
+          {partida.por_desistencia
+            ? (ganhei
+              ? `${partida.parceiro?.name || 'Seu amor'} desistiu`
+              : 'Você desistiu da partida')
+            : `${nome} venceu`}
+        </div>
+
+        {/* O número só aparece quando houve número. Vitória por desistência não
+            paga (não houve partida jogada até o fim) e quem perdeu não recebe
+            prêmio: nesses dois casos entra a frase, e nunca um zero. */}
+        {premio > 0 ? (
           <div className="naval-fim-premio">
             <strong>+{premio}</strong>
-            <span>Corações</span>
+            <span>{premio === 1 ? 'Coração' : 'Corações'}</span>
           </div>
         ) : (
           <p className="muted small naval-fim-nota">
             {ganhei
-              ? 'Os Corações já entraram na sua carteira.'
+              ? 'A partida acabou antes do último navio, então não houve prêmio.'
               : 'A sua frota foi afundada primeiro. Vai que a revanche é sua.'}
           </p>
         )}
+
         <div className="naval-fim-placar">
-          <span>{partida.afundados_dele}/{modelo.length} afundados</span>
-          <span>{partida.afundados_meus}/{modelo.length} perdidos</span>
+          <span><strong>{partida.afundados_dele}</strong>/{modelo.length} afundados</span>
+          <span><strong>{partida.afundados_meus}</strong>/{modelo.length} perdidos</span>
         </div>
-        <button className="btn btn-primary btn-block" onClick={abrir}>
-          <Icon name="game" size={17} /> Revanche
-        </button>
+
+        {/* Onde a frota dele estava. Metade da graça de uma batalha naval é ver o
+            mapa no fim — e agora dá, porque não há mais tiro pra dar. */}
+        {partida.revelacao?.length > 0 && (
+          <div className="naval-fim-mapa">
+            <Tabuleiro
+              lado={lado}
+              marcas={revelado}
+              variante="mini"
+              titulo={`Onde ${partida.parceiro?.name || 'seu amor'} escondeu a frota`}
+              navios={partida.revelacao}
+            />
+          </div>
+        )}
+
+        <div className="naval-fim-botoes">
+          <button className="btn btn-primary btn-block" onClick={abrir}>
+            <Icon name="game" size={17} /> Revanche
+          </button>
+          <button className="btn btn-ghost btn-block" onClick={fechar}>
+            <Icon name="check" size={16} /> Fechar
+          </button>
+        </div>
         {erro && <p className="notice error">{erro}</p>}
       </div>
     )
