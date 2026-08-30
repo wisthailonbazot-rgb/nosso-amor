@@ -3532,3 +3532,131 @@ queimar dos que mais descem (−355 e −370 Hz). Crédito e licença em
 plantas de nível diferentes (a planta é **dado**, então acrescentar é barato) e
 ranking histórico. E o **próximo passo grande continua sendo a seção 8.1** — o
 mapa navegável do bairro.
+
+### 9.31 A cozinha era ilegível, e a causa era eu ter usado COR pra distinguir (30/08/2026)
+
+Pedido do dono, depois de tentar jogar: *"não consegui jogar, porque não deu pra
+entender o que é pra fazer. Visualmente os negócios são tudo iguais, só muda a
+cor; é extremamente difícil identificar onde fazer o quê. Melhore isso... faça
+cada objeto e ferramenta de um jeito melhor."*
+
+Ele está certo, e são **dois problemas diferentes** que eu tinha juntado num só.
+
+#### 1. "Os negócios são tudo iguais" — cor era o único canal
+
+Todas as oito estações eram a **mesma caixa** de 0,56 a 0,66 de altura, mudando
+só o tom. Isso não é detalhe de acabamento: é o erro de leitura mais básico que
+existe, e cor é o pior canal possível pra distinguir peça num jogo de correria.
+
+- **Não sobrevive ao tamanho.** No celular a cozinha inteira sai a 0,586 de
+  escala, e cada estação tem ~56 px de tela. Nesse tamanho o olho lê CONTORNO
+  primeiro, e cor depois — se chegar a olhar a cor.
+- **Não sobrevive à pressa.** Numa rodada de 3 minutos ninguém para pra comparar
+  dois tons de creme.
+- **Não sobrevive à pessoa.** Quem confunde verde e vermelho fica sem informação
+  nenhuma, e é cerca de um homem em cada doze.
+
+Agora cada estação se distingue por **três coisas ao mesmo tempo**, e qualquer
+uma sozinha já resolve:
+
+| | antes | agora |
+|---|---|---|
+| **Altura** | todas entre 0,56 e 0,66 | de 0,42 (bancada) a 1,3 (despensa) |
+| **Forma** | cubo, sempre | cilindro (lixo, panela, prato), arco (torneira da pia), vão aberto (entrega), estante com vãos (pratos), faca em pé (tábua) |
+| **Cor** | única pista | terceiro reforço |
+
+Foi preciso um `isoCilindro` novo (o motor da casa só tinha caixa), e os
+ingredientes também deixaram de ser cubos coloridos: a alface é um pé redondo, o
+tomate tem cabinho verde, a carne é um bife com gordura clara na borda, a massa
+são três fios cruzados e o pão é um rolinho com corte em cima.
+
+**E acima disso, o NOME escrito.** Porque silhueta só funciona depois que a
+pessoa já sabe o que a forma quer dizer — e na primeira partida ninguém sabe.
+Nenhum desenho é auto-explicativo.
+
+Os nomes vão em **HTML por cima do canvas**, e não desenhados dentro dele: texto
+em canvas de pixel art ou sai borrado (fonte suavizada sobre arte de borda dura)
+ou exige desenhar letra a letra; em HTML ele cresce com o ajuste de fonte do
+sistema e o leitor de tela enxerga.
+
+Duas coisas que isso obrigou, e as duas foram medidas:
+
+- **um rótulo por TIPO, não por estação.** Com um em cada, os quinze se
+  atropelavam — as duas bancadas ficam em células vizinhas, o que em isométrico
+  dá 24 px de arte entre elas, menos que a altura da própria etiqueta. E não faz
+  falta: as duas tábuas *são* a mesma coisa. A despensa é a exceção (cada uma
+  guarda um ingrediente), então as cinco levam nome;
+- **e ainda assim eles se encavalavam.** As cinco despensas ficam numa fileira, e
+  em isométrico fileira vira DIAGONAL: cada vizinha sai 28 px de tela pro lado, e
+  "alface" tem 40. **Medido: 7 pares sobrepostos.** Agora eles são empurrados pra
+  cima, um degrau por vez, até pararem de se tocar — sempre pra cima, porque
+  abaixo deles está o móvel que eles nomeiam. **Medido depois: 0 sobreposições,
+  nenhum rótulo fora do palco.**
+
+#### 2. "Não deu pra entender o que é pra fazer" — não havia nada explicando
+
+Este é o problema separado, e nenhuma melhoria de arte resolvia. Um jogo com oito
+estações e quatro receitas não se descobre sozinho no meio de uma rodada de três
+minutos, e o app não tinha **uma linha** explicando o fluxo.
+
+Duas respostas:
+
+**a) Um cartão "Como jogar"**, que abre sozinho na primeira vez e nunca mais. Ele
+mostra a cadeia — pegar → preparar → montar → entregar → lavar — e o cardápio com
+a legenda das bolinhas (redonda = inteiro, quadrada = picado, com anel = cozido).
+Um jogo que precisa de explicação e esconde a explicação atrás de um botão não
+explicou nada.
+
+**b) Uma DICA que responde "e agora?"**, calculada no servidor e apontando uma
+estação de cada vez, com a frase por extenso ("Pegue a alface na despensa",
+"Leve o prato até a massa cozida", "Macarrão pronto — leve para a entrega").
+
+Ela é calculada **no servidor**, e não na tela, pelo mesmo motivo de tudo neste
+jogo: saber o próximo passo exige conhecer as receitas e o que cada gesto faz, e
+isso é regra — que tem um dono só. Ela é sugestão, não trilho: dá pra desligar,
+junto com os nomes, e a escolha fica guardada no aparelho.
+
+#### 3. O teste que vale por todos: *seguir a dica até o fim*
+
+`test_cozinha.py` agora joga cada uma das quatro receitas **usando só a dica**, do
+primeiro toque à entrega. Se a receita sai, a dica ensina o jogo; se trava, a dica
+mente — e dica que mente é pior que nenhuma, porque quem está perdido segue até o
+fim.
+
+Ele pegou **três defeitos de verdade**, e os três eram laços infinitos:
+
+1. **comida queimada entupia a panela** e a dica mandava cozinhar pra sempre, sem
+   nunca dizer pra esvaziar. Agora queimado é a dica de prioridade máxima, antes
+   de qualquer receita — é o ponto exato onde quem está aprendendo desiste;
+2. **a dica dizia "pegue o tomate", e quem atendia era o cozinheiro que segurava o
+   PRATO.** A escolha automática prefere quem está carregando algo, e chegar numa
+   tábua com um prato não pega: **monta**. O tomate picado ia parar num macarrão,
+   que quer cozido, e o prato virava lixo — a dica seguinte mandava pegar outro
+   prato, pra sempre. Por isso a dica passou a dizer **QUEM**, e não só onde;
+3. **o prato ficava na mão pra sempre.** A dica manda pegar um prato no começo e
+   nunca mandava largar, então o único arranjo que o planejador sabia tratar
+   (prato na estação + ingrediente na mão) nunca acontecia. Montar funciona nos
+   dois sentidos, e agora ele conhece os três casos: leve o prato até a comida,
+   leve a comida até o prato, ou largue o prato quando as duas mãos estão cheias.
+
+E uma pegadinha que virou regra: **"espere" não é pra tocar.** Tocar numa panela
+cozinhando TIRA a comida de dentro (de propósito — é assim que se salva algo antes
+de queimar), então seguir essa dica ao pé da letra desfaria o próprio trabalho.
+Essas dicas vêm marcadas e a tela as mostra sem cara de botão.
+
+#### 4. Medido no navegador, com toques reais
+
+| | resultado |
+|---|---|
+| rótulos | 12, com os nomes certos, **0 sobreposições**, nenhum fora do palco |
+| a dica aparece | "AGORA Pegue um prato para o macarrão", com o anel na estante |
+| jogar seguindo **só** a dica | **10 toques → macarrão entregue → 116 pontos** |
+| cada dica nomeia o cozinheiro | `[p1]` / `[p2]` em todas |
+
+Na bateria, as quatro receitas saem seguindo só a dica, em 8 a 14 toques.
+
+**Estado: 831 verificações, 0 falha.** Build Vite aprovada.
+
+> **A lição, e ela vale pro app inteiro:** *distinguir por cor é distinguir por
+> nada.* Se duas coisas fazem papéis diferentes, elas precisam ter **formas**
+> diferentes — e, na primeira vez que alguém as vê, um **nome**.

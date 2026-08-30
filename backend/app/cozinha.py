@@ -49,12 +49,26 @@ QUEIMADO = "queimado"
 
 INGREDIENTES = {
     # `pica`: da pra picar? `cozinha`: da pra cozinhar (e a partir de que estado)
-    "alface": {"nome": "alface", "cor": "#7cc45f", "pica": True, "cozinha": None},
-    "tomate": {"nome": "tomate", "cor": "#e0553f", "pica": True, "cozinha": PICADO},
-    "carne": {"nome": "carne", "cor": "#b5644f", "pica": False, "cozinha": CRU},
-    "massa": {"nome": "massa", "cor": "#e8c86a", "pica": False, "cozinha": CRU},
-    "pao": {"nome": "pão", "cor": "#d2a05e", "pica": False, "cozinha": None},
+    # `g`: genero, so pra a DICA sair em portugues certo ("a alface picada", e
+    # nao "o alface picado"). Texto torto tira a confianca de quem le a dica.
+    "alface": {"nome": "alface", "g": "f", "cor": "#7cc45f", "pica": True, "cozinha": None},
+    "tomate": {"nome": "tomate", "g": "m", "cor": "#e0553f", "pica": True, "cozinha": PICADO},
+    "carne": {"nome": "carne", "g": "f", "cor": "#b5644f", "pica": False, "cozinha": CRU},
+    "massa": {"nome": "massa", "g": "f", "cor": "#e8c86a", "pica": False, "cozinha": CRU},
+    "pao": {"nome": "pão", "g": "m", "cor": "#d2a05e", "pica": False, "cozinha": None},
 }
+
+
+def _o(chave: str) -> str:
+    """"o" ou "a", conforme o ingrediente."""
+    return "a" if INGREDIENTES.get(chave, {}).get("g") == "f" else "o"
+
+
+def _concorda(palavra: str, genero: str) -> str:
+    """"picado" -> "picada" quando o dono da palavra e feminino."""
+    if genero == "f" and palavra.endswith("o"):
+        return palavra[:-1] + "a"
+    return palavra
 
 
 def _passo(ingrediente: str, estado: str) -> str | None:
@@ -82,25 +96,25 @@ def _passo(ingrediente: str, estado: str) -> str | None:
 
 RECEITAS = {
     "salada": {
-        "nome": "Salada",
+        "nome": "Salada", "g": "f",
         "itens": [("alface", PICADO), ("tomate", PICADO)],
         "pontos": 60,
         "prazo_ms": 55_000,
     },
     "macarrao": {
-        "nome": "Macarrão",
+        "nome": "Macarrão", "g": "m",
         "itens": [("massa", COZIDO), ("tomate", COZIDO)],
         "pontos": 90,
         "prazo_ms": 70_000,
     },
     "hamburguer": {
-        "nome": "Hambúrguer",
+        "nome": "Hambúrguer", "g": "m",
         "itens": [("pao", CRU), ("carne", COZIDO), ("alface", PICADO)],
         "pontos": 110,
         "prazo_ms": 80_000,
     },
     "casal": {
-        "nome": "Prato do casal",
+        "nome": "Prato do casal", "g": "m",
         "itens": [("massa", COZIDO), ("carne", COZIDO), ("tomate", PICADO)],
         "pontos": 150,
         "prazo_ms": 90_000,
@@ -813,6 +827,292 @@ def _entregar(estado: dict, cozinheiro: dict, quando: int) -> dict:
     return {"som": "entregue", "entregue": True, "pontos": ganho, "receita": codigo}
 
 
+# ==================================================================== a DICA
+#
+# Por que ela existe: o dono jogou a primeira versao e nao conseguiu. *"Nao deu
+# pra entender o que e pra fazer."* Silhueta e nome resolvem "o que e cada
+# coisa"; nao resolvem "e agora?".
+#
+# Entao o servidor responde "e agora?" apontando UMA estacao e dizendo a frase.
+# Aqui, e nao na tela, pelo mesmo motivo de sempre: pra saber qual e o proximo
+# passo e preciso conhecer as receitas e o que cada gesto faz — e isso e regra do
+# jogo, que tem um dono so.
+#
+# Ela e uma SUGESTAO, e nao um trilho: nada obriga a segui-la, e quem ja sabe
+# jogar simplesmente ignora. Da pra desligar na tela.
+
+
+def _conteudo_dos_pratos(estado: dict) -> list[tuple[dict, dict | None]]:
+    """Todo prato em jogo, com onde ele esta (estacao ou None se esta numa mao)."""
+    saida = []
+    for estacao in estado["estacoes"]:
+        item = estacao["item"]
+        if item and item.get("ing") == "prato":
+            saida.append((item, estacao))
+    for cozinheiro in estado["cozinheiros"].values():
+        mao = cozinheiro["mao"]
+        if mao and mao.get("ing") == "prato":
+            saida.append((mao, None))
+    return saida
+
+
+def _falta(precisa: list, tem: list) -> list:
+    """O que ainda falta, contando repeticao (dois tomates nao sao um)."""
+    restante = list(tem)
+    faltando = []
+    for par in precisa:
+        if par in restante:
+            restante.remove(par)
+        else:
+            faltando.append(par)
+    return faltando
+
+
+def _onde_esta(estado: dict, ing: str, preparo: str):
+    """Acha um ingrediente NESSE ponto de preparo. Devolve (estacao, mao_de_quem)."""
+    for estacao in estado["estacoes"]:
+        item = estacao["item"]
+        if item and item.get("ing") == ing and item.get("estado") == preparo:
+            # Numa panela que ja esta contando pra queimar ele ainda serve, e e
+            # justamente o caso mais urgente de ir buscar.
+            return estacao, None
+    for lado, cozinheiro in estado["cozinheiros"].items():
+        mao = cozinheiro["mao"]
+        if mao and mao.get("ing") == ing and mao.get("estado") == preparo:
+            return None, lado
+    return None, None
+
+
+def _quem_livre(estado: dict, estacao) -> str | None:
+    """O cozinheiro de MAO VAZIA mais perto de uma estacao.
+
+    Existe porque a dica precisa dizer QUEM, e nao so onde. Sem isso ela mentia:
+    "Pegue o tomate picado" era atendido pelo cozinheiro que estava com o PRATO
+    na mao (a escolha automatica prefere quem carrega algo), e chegar na tabua
+    com um prato nao pega o tomate — MONTA o tomate no prato. Num macarrao, que
+    quer tomate cozido, isso sujava o prato com um ingrediente errado e o jogo
+    entrava em espiral: o prato deixava de servir e a dica mandava pegar outro.
+
+    Medido seguindo a propria dica: prato[1] -> prato[2] com tomate picado
+    dentro, e dali em diante "Pegue um prato" pra sempre.
+    """
+    livres = [
+        lado for lado, c in estado["cozinheiros"].items() if c["mao"] is None
+    ]
+    if not livres:
+        return None
+    if estacao is None:
+        return livres[0]
+    alvo = (estacao["col"], estacao["row"])
+    return min(
+        livres,
+        key=lambda lado: _distancia(
+            (estado["cozinheiros"][lado]["col"], estado["cozinheiros"][lado]["row"]), alvo
+        ),
+    )
+
+
+def _quem_segura(estado: dict, ing: str, preparo: str | None = None) -> str | None:
+    """Quem esta com este item na mao."""
+    for lado, c in estado["cozinheiros"].items():
+        mao = c["mao"]
+        if mao and mao.get("ing") == ing and (preparo is None or mao.get("estado") == preparo):
+            return lado
+    return None
+
+
+def _primeira(estado: dict, tipo: str, vazia: bool | None = None):
+    for estacao in estado["estacoes"]:
+        if estacao["tipo"] != tipo:
+            continue
+        if vazia is True and estacao["item"] is not None:
+            continue
+        if vazia is False and estacao["item"] is None:
+            continue
+        return estacao
+    return None
+
+
+def proxima_dica(estado: dict) -> dict | None:
+    """A proxima jogada util, pro pedido mais urgente. `None` se nao houver."""
+    if estado.get("acabou"):
+        return None
+    abertos = [p for p in estado["pedidos"] if not p["entregue"]]
+    if not abertos:
+        return None
+    # ------------------------------------------ PRIMEIRO: tirar o que queimou
+    #
+    # Antes de qualquer receita. Comida queimada nao serve pra nada E entope a
+    # ferramenta: com as duas panelas ocupadas por carvao, nao ha o que cozinhar
+    # e o jogo trava sem dizer por que.
+    #
+    # Foi assim que este caso apareceu: seguindo a propria dica, a massa queimava,
+    # a panela ficava presa, e a dica entrava em LACO mandando cozinhar de novo
+    # uma massa que nao tinha onde ir. Quem esta aprendendo trava exatamente ai.
+    for lado, cozinheiro in estado["cozinheiros"].items():
+        mao = cozinheiro["mao"]
+        if mao and mao.get("estado") == QUEIMADO:
+            lixo = _primeira(estado, "lixo")
+            return {"estacao": lixo["id"] if lixo else None, "lado": lado,
+                    "texto": "Jogue o queimado no lixo", "urgente": True}
+    for estacao in estado["estacoes"]:
+        item = estacao["item"]
+        if item and item.get("estado") == QUEIMADO:
+            return {"estacao": estacao["id"], "lado": _quem_livre(estado, estacao),
+                    "texto": "Queimou — tire da panela", "urgente": True}
+
+    pedido = min(abertos, key=lambda p: p["vence_ms"])
+    receita = RECEITAS[pedido["receita"]]
+    precisa = [tuple(par) for par in receita["itens"]]
+    nome_prato = receita["nome"]
+    g_prato = receita.get("g", "m")
+    art_prato = "a" if g_prato == "f" else "o"
+
+    # ------------------------------------------------- que prato estamos montando
+    #
+    # O que ja tem MAIS coisa certa dentro. Um prato com coisa que nao entra
+    # nesta receita nao serve pra ela, e e ignorado.
+    melhor, onde_melhor, dentro_melhor = None, None, []
+    for prato, estacao in _conteudo_dos_pratos(estado):
+        dentro = [(i["ing"], i["estado"]) for i in prato.get("montado", [])]
+        if _falta(dentro, precisa):        # tem coisa que a receita nao pede
+            continue
+        if melhor is None or len(dentro) > len(dentro_melhor):
+            melhor, onde_melhor, dentro_melhor = prato, estacao, dentro
+
+    # ------------------------------------------------------------- sem prato
+    if melhor is None:
+        pia = _primeira(estado, "pia")
+        if estado["pratos_limpos"] <= 0:
+            if pia is not None and pia.get("sujos", 0) > 0:
+                return {"estacao": pia["id"], "lado": _quem_livre(estado, pia),
+                        "texto": "Lave um prato na pia",
+                        "receita": pedido["receita"]}
+            return {"estacao": None, "texto": "Sem prato limpo — espere um voltar da pia",
+                    "receita": pedido["receita"]}
+        pilha = _primeira(estado, "pratos")
+        return {"estacao": pilha["id"] if pilha else None,
+                "lado": _quem_livre(estado, pilha),
+                "texto": f"Pegue um prato para {art_prato} {nome_prato.lower()}",
+                "receita": pedido["receita"]}
+
+    faltando = _falta(precisa, dentro_melhor)
+
+    # ----------------------------------------------------------- prato pronto
+    if not faltando:
+        pronto = _concorda("pronto", g_prato)
+        if onde_melhor is not None:
+            return {"estacao": onde_melhor["id"],
+                    "lado": _quem_livre(estado, onde_melhor),
+                    "texto": f"{nome_prato} {pronto} — pegue o prato",
+                    "receita": pedido["receita"]}
+        entrega = _primeira(estado, "entrega")
+        return {"estacao": entrega["id"] if entrega else None,
+                "lado": _quem_segura(estado, "prato"),
+                "texto": f"{nome_prato} {pronto} — leve para a entrega",
+                "receita": pedido["receita"]}
+
+    ing, preparo = faltando[0]
+    dados = INGREDIENTES.get(ing, {})
+    nome = dados.get("nome", ing)
+    g = dados.get("g", "m")
+    art = _o(ing)
+
+    # -------------------------- o ingrediente ja esta no ponto: juntar ao prato
+    #
+    # Aqui importa QUEM esta com o que, e essa foi a parte que eu errei duas
+    # vezes. Montar acontece quando um prato encontra um ingrediente — tanto faz
+    # qual dos dois esta na mao. Entao sao tres arranjos, e cada um pede uma
+    # frase diferente:
+    #
+    #   prato na mao + ingrediente na estacao  -> LEVE O PRATO ate o ingrediente
+    #   prato na estacao + ingrediente na mao  -> leve o ingrediente ate o prato
+    #   os dois na mao                         -> largue o prato primeiro
+    #
+    # A primeira versao so conhecia o segundo arranjo. Como a dica manda pegar um
+    # prato logo no comeco (e nunca manda largar), o prato ficava na mao pra
+    # sempre e o jogo NUNCA chegava no arranjo que ela sabia tratar: ela mandava
+    # "junte ao prato" apontando pra uma bancada vazia, o ingrediente era largado
+    # la, e a dica seguinte mandava pegar de novo. Laco infinito, medido nas
+    # quatro receitas.
+    prato_na_mao = onde_melhor is None
+    quem_tem_prato = _quem_segura(estado, "prato") if prato_na_mao else None
+    estacao, mao = _onde_esta(estado, ing, preparo)
+
+    if estacao is not None:
+        if prato_na_mao and quem_tem_prato:
+            return {"estacao": estacao["id"], "lado": quem_tem_prato,
+                    "texto": f"Leve o prato até {art} {nome} {_concorda(preparo, g)}",
+                    "receita": pedido["receita"]}
+        return {"estacao": estacao["id"], "lado": _quem_livre(estado, estacao),
+                "texto": f"Pegue {art} {nome} {_concorda(preparo, g)}",
+                "receita": pedido["receita"]}
+
+    if mao is not None:
+        if onde_melhor is not None:
+            return {"estacao": onde_melhor["id"], "lado": mao,
+                    "texto": f"Junte {art} {nome} ao prato", "receita": pedido["receita"]}
+        # os dois estao em maos: alguem tem que largar, e o prato e o que espera
+        banca = _primeira(estado, "bancada", vazia=True)
+        return {"estacao": banca["id"] if banca else None, "lado": quem_tem_prato,
+                "texto": "Largue o prato na bancada", "receita": pedido["receita"]}
+
+    # -------------------------------- falta preparar: onde esta o passo anterior?
+    #
+    # Anda pra tras na cadeia (cozido <- picado <- cru) ate achar onde ele esta,
+    # e aponta a ferramenta que da o proximo passo.
+    cadeia = [CRU]
+    if INGREDIENTES.get(ing, {}).get("pica"):
+        cadeia.append(PICADO)
+    cadeia.append(COZIDO)
+    anterior = None
+    for etapa in cadeia:
+        if etapa == preparo:
+            break
+        anterior = etapa
+
+    while anterior is not None:
+        estacao, mao = _onde_esta(estado, ing, anterior)
+        ferramenta = "tabua" if _passo(ing, anterior) == PICADO else "panela"
+        rotulo = "pique" if ferramenta == "tabua" else "cozinhe"
+        if mao is not None:
+            livre = _primeira(estado, ferramenta, vazia=True)
+            if livre is None:
+                # Todas ocupadas. Mandar "cozinhe" apontando pro nada faria a
+                # dica pedir uma jogada impossivel, e ela perde a confianca de
+                # quem le na primeira vez que isso acontece.
+                banca = _primeira(estado, "bancada", vazia=True)
+                onde = "a tábua" if ferramenta == "tabua" else "a panela"
+                return {"estacao": banca["id"] if banca else None, "lado": mao,
+                        "texto": f"{onde.capitalize()} está ocupada — largue {art} {nome} na bancada",
+                        "receita": pedido["receita"]}
+            return {"estacao": livre["id"], "lado": mao,
+                    "texto": f"{rotulo.capitalize()} {art} {nome}", "receita": pedido["receita"]}
+        if estacao is not None:
+            if estacao["tipo"] == ferramenta and estacao["fase"]:
+                # `esperar` marca a dica que NAO e pra tocar. E importante: tocar
+                # numa panela cozinhando TIRA a comida de dentro (de proposito —
+                # e assim que se salva algo antes de queimar), entao seguir esta
+                # dica ao pe da letra desfaria o trabalho. A tela mostra estas
+                # sem cara de botao.
+                return {"estacao": estacao["id"], "esperar": True,
+                        "texto": f"{art.upper()} {nome} está quase — espere",
+                        "receita": pedido["receita"]}
+            infinitivo = "picar" if ferramenta == "tabua" else "cozinhar"
+            return {"estacao": estacao["id"], "lado": _quem_livre(estado, estacao),
+                    "texto": f"Pegue {art} {nome} para {infinitivo}",
+                    "receita": pedido["receita"]}
+        # nao achou nesta etapa: tenta a anterior
+        indice = cadeia.index(anterior)
+        anterior = cadeia[indice - 1] if indice > 0 else None
+
+    # ------------------------------------------- nao existe nenhum: buscar cru
+    despensa = next((e for e in estado["estacoes"] if e["tipo"] == "d" and e["ing"] == ing), None)
+    return {"estacao": despensa["id"] if despensa else None,
+            "lado": _quem_livre(estado, despensa),
+            "texto": f"Pegue {art} {nome} na despensa", "receita": pedido["receita"]}
+
+
 # ================================================================ o que a tela vê
 #
 # A vista e IGUAL pros dois — ao contrario da batalha naval, aqui nao ha nada a
@@ -848,4 +1148,7 @@ def vista(estado: dict, lado: str, agora: int) -> dict:
         # ela só precisa de um começo e de um fim, e os dois estão no estado.
         "tempos": {"picar": T_PICAR, "cozinhar": T_COZINHAR, "queimar": T_QUEIMAR,
                    "lavar": T_LAVAR, "passo": T_PASSO},
+        # "e agora?" — a proxima jogada util, calculada AQUI porque depende das
+        # receitas e do que cada gesto faz. Ver `proxima_dica`.
+        "dica": proxima_dica(estado),
     }

@@ -1407,3 +1407,64 @@ sozinho."*
       saía certa e o banco continuava vazio. Virou teste que **lê do banco**.
 - **[x]** A pré-carga dos sons desistia calada quando a tela montava antes do
       primeiro toque, e o pacote inteiro nunca tocava naquela sessão.
+
+### 30/08/2026 — A cozinha estava ilegível (segunda rodada)
+
+Pedido do dono, depois de tentar jogar: *"não consegui jogar, porque não deu pra
+entender o que é pra fazer. Visualmente os negócios são tudo iguais, só muda a
+cor; é extremamente difícil identificar onde fazer o quê. Melhore isso... faça
+cada objeto e ferramenta de um jeito melhor."*
+
+São **dois problemas**, e eu tinha juntado os dois num só.
+
+#### Cada objeto com forma própria
+
+- **[x]** Todas as oito estações eram a MESMA CAIXA, mudando só o tom. Cor é o
+      pior canal pra distinguir peça: não sobrevive ao tamanho (0,586 de escala
+      no celular), nem à pressa, nem a quem não distingue verde de vermelho.
+- **[x]** Agora se distinguem por **altura** (de 0,42 a 1,3, quando iam todas de
+      0,56 a 0,66), por **forma** (cilindro, arco, vão aberto, estante com vãos,
+      faca em pé) e só então por cor.
+- **[x]** A despensa virou armário alto com porta e puxador; o fogão tem boca
+      redonda acesa e a panela aparece só quando há comida; a pia tem cuba
+      afundada e torneira em arco; o lixo é cilindro com pedal; a entrega é um
+      vão com sineta; a bancada é a mais baixa e a mais vazia, de propósito.
+- **[x]** Os ingredientes deixaram de ser cubos coloridos: alface redonda, tomate
+      com cabinho, bife com gordura na borda, massa em fios, pão com corte.
+- **[x]** O **nome escrito** em cima de cada estação, porque silhueta só funciona
+      depois que a pessoa já sabe o que a forma quer dizer. Um por TIPO (duas
+      tábuas são a mesma coisa), e empurrados pra cima até não se tocarem —
+      **medido: de 7 sobreposições para 0**.
+- **[x]** Dá pra desligar os nomes quando não precisar mais.
+
+#### Entender o que fazer
+
+- **[x]** Cartão **"Como jogar"**, que abre sozinho na primeira vez: a cadeia
+      (pegar → preparar → montar → entregar → lavar), o cardápio e a legenda das
+      bolinhas do pedido.
+- **[x]** Uma **DICA** que responde "e agora?": aponta uma estação por vez, com a
+      frase por extenso e o cozinheiro certo. Calculada no servidor, porque saber
+      o próximo passo exige conhecer as receitas.
+- **[x]** Travado por teste: as quatro receitas saem do começo ao fim **seguindo
+      só a dica**, em 8 a 14 toques. Se travar, a dica está mentindo.
+- **[x]** No navegador, com toques reais: **10 toques → macarrão entregue → 116
+      pontos**.
+
+#### Defeitos que o teste da dica encontrou
+
+- **[x]** Comida queimada entupia a panela e a dica mandava cozinhar pra sempre.
+      Agora queimado é prioridade máxima — é onde quem está aprendendo desiste.
+- **[x]** A dica dizia "pegue o tomate" e quem atendia era quem segurava o PRATO;
+      chegar com um prato não pega, **monta**. O tomate picado ia pro macarrão (que
+      o quer cozido) e o prato virava lixo. A dica passou a dizer **quem**.
+- **[x]** O prato ficava na mão pra sempre, então o único arranjo que o
+      planejador conhecia nunca acontecia. Agora ele sabe os três: leve o prato
+      até a comida, a comida até o prato, ou largue o prato.
+- **[x]** "Espere" não é pra tocar: tocar numa panela cozinhando TIRA a comida de
+      dentro. Essas dicas vêm marcadas e a tela não lhes dá cara de botão.
+
+#### Ainda falta você
+
+- **[ ]** Jogar e dizer se agora dá pra entender. É a única medida que vale.
+- **[ ]** Se ainda estiver difícil, o próximo passo é o modo treino: uma rodada
+      sem relógio e com um pedido só, pra aprender sem pressão.

@@ -2554,3 +2554,135 @@ button:disabled,
   .cozinha-fim,
   .cozinha-fim.bom .cozinha-fim-pontos { animation: none; }
 }
+
+
+/* ============================ Cozinha: o que faz ela ser LEGIVEL (30/08, 2a rodada)
+   O dono nao conseguiu jogar a primeira versao: "visualmente os negocios sao
+   tudo iguais, so muda a cor; e extremamente dificil identificar onde fazer o
+   que". A arte foi refeita (silhueta e altura proprias por estacao), e daqui
+   vem o resto: o NOME de cada uma e o realce da DICA. */
+
+.cozinha-cena { position: relative; }
+
+/* A camada de texto por cima do canvas.
+   `pointer-events: none` e obrigatorio: sem isso as etiquetas comem o toque e o
+   jogo inteiro para de responder. */
+.cozinha-camada {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* O nome de cada estacao. Fica ANCORADO pelo pe (translate -100% em Y), entao a
+   etiqueta cresce pra cima e nunca cobre o movel que ela nomeia. */
+.cozinha-rotulo {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: rgba(255, 250, 240, .92);
+  border: 1.5px solid var(--ink);
+  font: 800 9.5px 'Baloo 2', sans-serif;
+  color: var(--ink);
+  white-space: nowrap;
+  line-height: 1.35;
+}
+.cozinha-rotulo.apontado {
+  background: var(--rose);
+  color: #fff;
+  transform: translate(-50%, -100%) scale(1.12);
+}
+
+/* O realce da dica: um anel que pulsa em cima da estacao apontada.
+   Anel, e nao preenchimento, pra nao esconder justamente a coisa que ele indica. */
+.cozinha-alvo {
+  position: absolute;
+  width: 54px;
+  height: 54px;
+  margin: -27px 0 0 -27px;
+  border-radius: 50%;
+  border: 3px solid var(--rose);
+  animation: cozinha-pulso 1.15s ease-out infinite;
+}
+.cozinha-alvo.urgente { border-color: #e0432c; animation-duration: .6s; }
+/* "Espere" nao e pra tocar — tocar numa panela cozinhando TIRA a comida de
+   dentro. Entao o anel fica parado e apagado, sem cara de botao. */
+.cozinha-alvo.esperando { border-color: #b9a9c4; border-style: dashed; animation: none; }
+@keyframes cozinha-pulso {
+  0% { transform: scale(.75); opacity: 1; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+
+/* A frase da dica. */
+.cozinha-dica {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 0;
+  padding: 6px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 12px 9px 13px 10px;
+  background: var(--rose);
+  color: #fff;
+  font: 700 13px 'Baloo 2', sans-serif;
+}
+.cozinha-dica strong {
+  font: 800 9.5px 'Baloo 2', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  opacity: .85;
+  flex: 0 0 auto;
+}
+.cozinha-dica.urgente { background: #e0432c; }
+.cozinha-dica.esperando { background: var(--paper); color: var(--muted); }
+
+/* Os botoezinhos de ajuste, embaixo do palco. */
+.cozinha-ajustes { display: flex; flex-wrap: wrap; gap: 5px; }
+.btn-chip {
+  padding: 4px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper);
+  font: 700 11px 'Baloo 2', sans-serif;
+  color: var(--muted);
+  cursor: pointer;
+}
+.btn-chip.ligado { background: var(--mint, #7fd6b0); color: var(--ink); }
+
+/* ------------------------------------------------------------- Como jogar */
+.cozinha-comojogar {
+  margin-top: 8px;
+  padding: 14px;
+  border: 2px solid var(--ink);
+  border-radius: 16px 12px 18px 13px;
+  background: var(--paper);
+}
+.cozinha-comojogar h2 { margin: 0 0 8px; font: 800 19px 'Baloo 2', sans-serif; }
+.cozinha-comojogar h3 { margin: 14px 0 4px; font: 800 14px 'Baloo 2', sans-serif; }
+.cozinha-passos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.cozinha-passos li { display: flex; gap: 8px; font-size: 13px; line-height: 1.4; }
+.cozinha-passo-n {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--rose);
+  color: #fff;
+  font: 800 12px 'Baloo 2', sans-serif;
+  display: grid;
+  place-items: center;
+}
+.cozinha-cardapio { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
+.cozinha-cardapio-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1.5px solid rgba(51, 32, 58, .25);
+  border-radius: 10px 8px 11px 9px;
+}
+.cozinha-cardapio-item strong { font: 800 12px 'Baloo 2', sans-serif; min-width: 88px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cozinha-alvo { animation: none; opacity: .9; }
+}

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { api } from '../api'
 import Icon from '../components/Icon'
 import { pararMusica, prepararEfeitos, tocarMusica } from '../jogoAudio'
-import { desenharCozinha, estacaoNoPonto, medidas } from '../render/cozinha'
+import { desenharCozinha, estacaoNoPonto, medidas, pontoDaEstacao, pontosDosRotulos } from '../render/cozinha'
 import { Painter } from '../render/pixel'
 import { subscribe } from '../store'
 
@@ -37,6 +37,24 @@ import { subscribe } from '../store'
  * outro não há o que perguntar: nada muda sozinho.
  */
 
+/**
+ * O nome de cada estação, escrito na tela.
+ *
+ * Existe porque o dono não conseguiu jogar a primeira versão: *"visualmente os
+ * negócios são tudo iguais, só muda a cor; é extremamente difícil identificar
+ * onde fazer o quê."*
+ *
+ * A arte foi refeita (cada estação tem silhueta e altura próprias, ver
+ * `render/cozinha.js`), mas silhueta só resolve depois que a pessoa já sabe o
+ * que a forma quer dizer. Na PRIMEIRA partida ninguém sabe, e nenhum desenho é
+ * auto-explicativo. O nome escrito resolve isso de uma vez, e sai do caminho
+ * sozinho: quem já aprendeu pode desligar no botão.
+ */
+const NOMES = {
+  tabua: 'tábua', panela: 'fogão', bancada: 'bancada', pratos: 'pratos',
+  pia: 'pia', lixo: 'lixo', entrega: 'entrega',
+}
+
 const AVISOS = {
   picou: 'cozinha-picar',
   cozinhou: 'cozinha-panela',
@@ -53,6 +71,20 @@ export default function GameCozinha({ telaCheia = false }) {
   const [aviso, setAviso] = useState(null)
   const [escolhido, setEscolhido] = useState(null) // sozinho: cozinheiro na mão
   const [premio, setPremio] = useState(0)
+  // Os nomes e a dica ficam no aparelho: quem aprendeu desliga uma vez e não
+  // precisa desligar de novo a cada rodada.
+  const [rotulos, setRotulos] = useState(() => {
+    try { return localStorage.getItem('casal:cozinha-rotulos') !== '0' } catch { return true }
+  })
+  const [ajuda, setAjuda] = useState(() => {
+    try { return localStorage.getItem('casal:cozinha-ajuda') !== '0' } catch { return true }
+  })
+  // Abre sozinho na PRIMEIRA vez, e nunca mais. Um jogo que precisa de
+  // explicação e esconde a explicação atrás de um botão não explicou nada — e
+  // foi exatamente isso que aconteceu na primeira versão.
+  const [comoJogar, setComoJogar] = useState(() => {
+    try { return localStorage.getItem('casal:cozinha-visto') !== '1' } catch { return false }
+  })
 
   // A vista fica TAMBÉM numa gaveta porque o laço de animação roda fora do
   // React: um valor capturado por closure congelaria no primeiro quadro.
@@ -197,10 +229,18 @@ export default function GameCozinha({ telaCheia = false }) {
     }
     const estacao = estacaoNoPonto(v, x, y)
     if (!estacao) return
+    // Se a DICA está apontando justamente esta estação, obedece o cozinheiro que
+    // ela indicou. Isso não é enfeite: a dica sabe QUEM precisa agir, e a escolha
+    // automática não. Ela prefere quem está carregando algo — então "pegue o
+    // tomate picado" era atendido por quem segurava o PRATO, e chegar com um
+    // prato não pega: MONTA. O tomate ia parar num macarrão que quer ele cozido,
+    // e o prato virava lixo. Medido, e agora impossível.
+    const dica = v.dica
+    const usarDaDica = dica && dica.estacao === estacao.id && dica.lado && !dica.esperar
     // "auto" = o SERVIDOR escolhe quem atende. A tela não tem como escolher
     // certo: pra isso seria preciso saber o que cada gesto faz, e isso é regra
     // do jogo — que mora num lugar só, de propósito. Ver `mandar_auto`.
-    const lado = v.solo ? (escolhido || 'auto') : v.meu_lado
+    const lado = usarDaDica ? dica.lado : (v.solo ? (escolhido || 'auto') : v.meu_lado)
     setEscolhido(null)
     mandar(lado, estacao.id)
   }
@@ -310,11 +350,45 @@ export default function GameCozinha({ telaCheia = false }) {
         </span>
       </div>
 
+      {/* A DICA. Ela responde "e agora?", que foi exatamente o que faltou na
+          primeira versão. Vem calculada do servidor, porque saber o próximo
+          passo exige conhecer as receitas — regra do jogo, um dono só. */}
+      {ajuda && vista.dica && (
+        <p className={`cozinha-dica ${vista.dica.urgente ? 'urgente' : ''} ${vista.dica.esperar ? 'esperando' : ''}`}>
+          <strong>{vista.dica.esperar ? 'Aguarde' : 'Agora'}</strong>
+          {vista.dica.texto}
+        </p>
+      )}
       {aviso && <p className={`notice ${aviso.tipo} cozinha-aviso`}>{aviso.texto}</p>}
 
-      <Palco vista={vista} atual={atual} agoraServidor={agoraServidor} aoTocar={tocar} />
+      <Palco vista={vista} atual={atual} agoraServidor={agoraServidor} aoTocar={tocar}
+             rotulos={rotulos} ajuda={ajuda} />
 
-      <button className="btn-ghost btn-sm" onClick={encerrar}>Encerrar o expediente</button>
+      <div className="cozinha-ajustes">
+        <button
+          className={`btn-chip ${ajuda ? 'ligado' : ''}`}
+          onClick={() => { const v = !ajuda; setAjuda(v); try { localStorage.setItem('casal:cozinha-ajuda', v ? '1' : '0') } catch { /* aba privada */ } }}
+        >
+          {ajuda ? 'Dica ligada' : 'Dica desligada'}
+        </button>
+        <button
+          className={`btn-chip ${rotulos ? 'ligado' : ''}`}
+          onClick={() => { const v = !rotulos; setRotulos(v); try { localStorage.setItem('casal:cozinha-rotulos', v ? '1' : '0') } catch { /* aba privada */ } }}
+        >
+          {rotulos ? 'Nomes ligados' : 'Nomes desligados'}
+        </button>
+        <button className="btn-chip" onClick={() => setComoJogar(true)}>Como jogar</button>
+        <button className="btn-chip" onClick={encerrar}>Encerrar</button>
+      </div>
+      {comoJogar && (
+        <ComoJogar
+          vista={vista}
+          aoFechar={() => {
+            setComoJogar(false)
+            try { localStorage.setItem('casal:cozinha-visto', '1') } catch { /* aba privada */ }
+          }}
+        />
+      )}
       {erro && <p className="notice error">{erro}</p>}
     </div>
   )
@@ -406,7 +480,7 @@ function FilaDePedidos({ vista, agora }) {
  * efeitos rodam, as refs já existem. É a solução do React pra isso, e não um
  * `setTimeout` esperando o elemento aparecer.
  */
-function Palco({ vista, atual, agoraServidor, aoTocar }) {
+function Palco({ vista, atual, agoraServidor, aoTocar, rotulos, ajuda }) {
   const holder = useRef(null)
   const canvas = useRef(null)
   const painter = useRef(null)
@@ -472,20 +546,116 @@ function Palco({ vista, atual, agoraServidor, aoTocar }) {
     )
   }
 
+  // Os nomes e o realce vão numa camada de HTML POR CIMA do canvas, e não
+  // desenhados dentro dele. Texto em canvas de pixel art sai borrado (fonte
+  // suavizada sobre arte de borda dura); em HTML ele é texto de verdade, cresce
+  // com o ajuste de fonte do sistema e o leitor de tela enxerga.
+  //
+  // `pointer-events: none` na camada é obrigatório: sem isso as etiquetas comem
+  // o toque e o jogo inteiro para de responder.
+  const dica = vista.dica
+  const alvo = ajuda && dica?.estacao != null ? pontoDaEstacao(vista, dica.estacao) : null
+
   return (
     <div className="cozinha-palco" ref={holder}>
-      <canvas
-        ref={canvas}
-        className="cozinha-canvas"
-        style={{
-          // Enquanto a medida não saiu, o canvas fica invisível em vez de
-          // aparecer no tamanho errado e pular quando a medida chegar.
-          width: escala ? m.width * escala : '100%',
-          height: escala ? m.height * escala : 'auto',
-          visibility: escala ? 'visible' : 'hidden',
-        }}
-        onClick={clique}
-      />
+      <div className="cozinha-cena" style={{ width: escala ? m.width * escala : '100%' }}>
+        <canvas
+          ref={canvas}
+          className="cozinha-canvas"
+          style={{
+            // Enquanto a medida não saiu, o canvas fica invisível em vez de
+            // aparecer no tamanho errado e pular quando a medida chegar.
+            width: escala ? m.width * escala : '100%',
+            height: escala ? m.height * escala : 'auto',
+            visibility: escala ? 'visible' : 'hidden',
+          }}
+          onClick={clique}
+        />
+        {escala > 0 && (
+          <div className="cozinha-camada" aria-hidden="true">
+            {alvo && (
+              <span
+                className={`cozinha-alvo ${dica.esperar ? 'esperando' : ''} ${dica.urgente ? 'urgente' : ''}`}
+                style={{ left: alvo.x * escala, top: alvo.y * escala }}
+              />
+            )}
+            {rotulos && pontosDosRotulos(vista, NOMES, escala).map((r) => (
+              <span
+                key={r.id}
+                className={`cozinha-rotulo ${dica?.estacao === r.id && ajuda ? 'apontado' : ''}`}
+                style={{ left: r.x * escala, top: r.y * escala }}
+              >
+                {r.texto}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+
+/**
+ * "Como jogar" — o cartão que faltava.
+ *
+ * O dono abriu a primeira versão e não conseguiu começar: *"não deu pra
+ * entender o que é pra fazer"*. Não havia lugar nenhum no app explicando o
+ * fluxo, e um jogo com oito estações e quatro receitas não se descobre sozinho
+ * no meio de uma rodada de três minutos.
+ *
+ * Ele mostra a CADEIA, que é a única coisa que precisa ser entendida uma vez:
+ * pegar → preparar → montar no prato → entregar. O resto o jogo ensina jogando,
+ * e a dica cobre o "e agora?" em cada passo.
+ */
+function ComoJogar({ vista, aoFechar }) {
+  const passos = [
+    ['Pegue', 'Toque numa despensa (as altas, no fundo) e o cozinheiro busca o ingrediente. Ele carrega uma coisa por vez.'],
+    ['Prepare', 'Leve à tábua pra picar, ou ao fogão pra cozinhar. Cozinhar não prende o cozinheiro — e é por isso que dá pra esquecer a comida e queimar.'],
+    ['Monte', 'Pegue um prato na estante e junte os ingredientes prontos. Tanto faz levar o prato até a comida ou a comida até o prato.'],
+    ['Entregue', 'Leve o prato montado até o balcão de entrega, o do vão e da sineta, antes do tempo do pedido acabar.'],
+    ['Lave', 'Os pratos são poucos. Depois de entregar eles voltam sujos pra pia, e alguém precisa largar tudo e ir lavar.'],
+  ]
+  return (
+    <div className="cozinha-comojogar" role="dialog" aria-label="Como jogar">
+      <h2>Como jogar</h2>
+      <ol className="cozinha-passos">
+        {passos.map(([titulo, texto], i) => (
+          <li key={titulo}>
+            <span className="cozinha-passo-n">{i + 1}</span>
+            <div><strong>{titulo}.</strong> {texto}</div>
+          </li>
+        ))}
+      </ol>
+
+      <h3>Os pedidos</h3>
+      <p className="muted small">
+        Cada um mostra as bolinhas do que ele leva. <strong>Bolinha redonda</strong> é
+        o ingrediente inteiro, <strong>quadrada</strong> é picado, e a que tem um
+        anel branco dentro é cozido.
+      </p>
+      <div className="cozinha-cardapio">
+        {Object.entries(vista.receitas).map(([codigo, r]) => (
+          <div key={codigo} className="cozinha-cardapio-item">
+            <strong>{r.nome}</strong>
+            <div className="cozinha-pedido-itens">
+              {r.itens.map(([ing, estado], i) => (
+                <span key={i} className={`cozinha-bolinha ${estado}`}
+                      style={{ background: vista.ingredientes[ing]?.cor }} />
+              ))}
+            </div>
+            <span className="muted small">
+              {r.itens.map(([ing, estado]) => `${vista.ingredientes[ing]?.nome} ${estado}`).join(' + ')}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <p className="muted small">
+        Se travar, deixe a <strong>dica</strong> ligada: ela diz o que fazer agora
+        e acende a estação certa. Quando não precisar mais, é só desligar.
+      </p>
+      <button className="btn btn-primary btn-block" onClick={aoFechar}>Entendi</button>
     </div>
   )
 }
