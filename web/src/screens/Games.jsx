@@ -308,7 +308,7 @@ export default function Games() {
       </div>
 
       {!cheia && (
-        <div className="vista-tabs">
+        <div className="vista-tabs jogos-tabs">
           {abas.map(([code, nome]) => (
             <button
               key={code}

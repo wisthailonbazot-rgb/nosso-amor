@@ -229,14 +229,28 @@ def _responder(partida: MinigameMatch, estado: dict, db: Session, user: User,
     """Avança, grava, paga se acabou, e devolve a vista. O caminho de saída de todas as rotas."""
     jogo.avancar(estado, agora)
     ganho = _fechar(partida, estado, db, user) if estado["acabou"] else 0
-    partida.state = estado
-    # Dizer explicitamente que o JSON mudou. Com a cópia funda de `_ler` a
-    # atribuição já bastaria, mas este é o defeito que reinicia a partida a cada
-    # toque **sem dar erro nenhum** — e ele custou uma sessão inteira pra
-    # aparecer. As duas garantias juntas custam nada.
-    flag_modified(partida, "state")
-    partida.revision += 1
-    db.commit()
+
+    # -------------------------------------------- so grava se algo MUDOU mesmo
+    #
+    # Antes, toda leitura gravava: o GET avancava o estado, incrementava a
+    # revisao e dava commit — mesmo quando nada tinha acontecido. Com a busca
+    # agendada da tela mais os eventos de tempo real, isso vira escrita
+    # constante, e no SQLite da bancada deu `database is locked` de verdade.
+    #
+    # A comparacao so e possivel porque `_ler` faz copia FUNDA: o valor
+    # carregado fica intacto, entao da pra perguntar se o novo difere dele.
+    #
+    # `db.new or db.dirty` cobre o resto: se `_fechar` mexeu no status ou a
+    # economia criou linha de extrato, grava de qualquer jeito.
+    if estado != partida.state:
+        partida.state = estado
+        # Dizer explicitamente que o JSON mudou. Com a cópia funda a atribuição
+        # já bastaria, mas este é o defeito que reinicia a partida a cada toque
+        # **sem dar erro nenhum** — e ele custou uma sessão inteira pra aparecer.
+        flag_modified(partida, "state")
+        partida.revision += 1
+    if db.new or db.dirty or db.deleted:
+        db.commit()
     vista = jogo.vista(estado, _lado(partida, user.id), agora)
     vista["id"] = partida.id
     vista["premio_ganho"] = ganho

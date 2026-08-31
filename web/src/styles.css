@@ -2686,3 +2686,79 @@ button:disabled,
 @media (prefers-reduced-motion: reduce) {
   .cozinha-alvo { animation: none; opacity: .9; }
 }
+
+
+/* ================ Cozinha, 3a rodada: comandas com nome e mais tela (30/08) */
+
+/* A COMANDA agora tras a receita escrita.
+   "Nas comandas coloque o nome ao inves so da cor, fica meio confuso de achar
+   certas coisas; coloque a receita" — e ele esta certo pelo mesmo motivo das
+   estacoes: tomate e carne sao dois tons de vermelho num circulo de 11 px.
+   A bolinha fica como reforco, porque ela e a ponte entre a comanda e o
+   ingrediente desenhado na cozinha. */
+.cozinha-pedido { min-width: 118px; }
+.cozinha-receita {
+  list-style: none;
+  margin: 1px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.cozinha-receita li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font: 600 10.5px 'Baloo 2', sans-serif;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.cozinha-receita em { font-style: normal; opacity: .6; font-size: 9.5px; }
+.cozinha-receita .cozinha-bolinha { width: 9px; height: 9px; flex: 0 0 auto; }
+
+/* --------------------------------------------------------- mais tela pro jogo
+   "Tenta aproveitar a tela inteira de um jeito melhor."
+
+   A arte isometrica tem proporcao ~2:1 SEMPRE (largura = (col+lin)*48, altura =
+   (col+lin)*24 + parede), entao ela e limitada pela LARGURA — nao adianta
+   esticar na vertical, e mudar o formato da grade nao muda a proporcao.
+
+   O que da pra fazer, e o que se faz aqui, e duas coisas:
+     1. o palco sangra ate a BORDA da tela, cancelando os 16 px de respiro que a
+        rota inteira aplica. So isso ja da 32 px de largura — e, na proporcao
+        2:1, 16 px de altura junto;
+     2. o espaco que sobra em baixo deixa de ser vazio: e onde as comandas com a
+        receita escrita passaram a caber. */
+.cozinha-palco {
+  margin-left: -16px;
+  margin-right: -16px;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  padding: 0;
+}
+/* Em tela cheia nao ha respiro pra cancelar. */
+.cozinha.cheia .cozinha-palco { margin-left: 0; margin-right: 0; }
+
+
+/* As abas de jogo, compactas.
+   Eram cinco botoes grandes em tres linhas, ~180 px so pra escolher o jogo —
+   espaco que fazia falta pro jogo em si ("tenta aproveitar a tela inteira de um
+   jeito melhor"). Agora e UMA linha que rola pro lado, ~40 px.
+
+   Vale pros cinco jogos, e nao so pra cozinha: a corrida e a naval ganham a
+   mesma sobra. */
+.jogos-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.jogos-tabs::-webkit-scrollbar { display: none; }
+.jogos-tabs button {
+  flex: 0 0 auto;
+  padding: 7px 14px;
+  font-size: 13px;
+  white-space: nowrap;
+}

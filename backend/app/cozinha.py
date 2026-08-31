@@ -156,7 +156,12 @@ MONTAVEIS = {par for r in RECEITAS.values() for par in r["itens"]}
 
 T_PICAR = 2_600
 T_COZINHAR = 7_000
-T_QUEIMAR = 6_500   # depois de cozido, quanto tempo ate estragar
+# Subiu de 6,5 s pra 12 s a pedido do dono ("aumente um pouquinho o tempo para
+# queimar"). 6,5 s obrigava a ficar ao lado da panela, e ai cozinhar deixava de
+# ser "ponha e va fazer outra coisa" — que e justamente o que da ritmo ao jogo.
+# Com 12 s da pra picar um ingrediente inteiro (2,6 s) e atravessar a cozinha
+# antes de estragar.
+T_QUEIMAR = 12_000  # depois de cozido, quanto tempo ate estragar
 T_LAVAR = 2_200
 T_PASSO = 260       # quanto leva pra andar UMA celula
 T_SUJAR = 9_000     # depois de entregue, quanto tempo ate o prato voltar sujo
@@ -185,38 +190,36 @@ PONTOS_ERRADO = -15    # entregou o prato errado
 #
 # A planta e DADO, entao nivel novo e uma entrada nova aqui — nao codigo novo.
 
-LARGURA = 7
+LARGURA = 8
 ALTURA = 5
 
 # tipo:parametro. "." é chão livre.
 # TODA estacao precisa de pelo menos uma celula livre VIZINHA, senao ela e
-# inalcancavel — e o jogo nao avisa: o toque simplesmente nao faz nada.
+# inalcancavel — e o jogo nao avisa: o toque simplesmente nao faz nada. A
+# primeira planta tinha duas despensas de canto assim, e o smoke passou a varrer
+# isso.
 #
-# A primeira versao desta planta tinha as duas despensas de canto encostadas em
-# outras estacoes dos dois lados, e as duas ficaram mortas. Por isso os cantos de
-# cima sao chao, e por isso existe uma verificacao no smoke que varre a planta
-# inteira atras disso. Planta e DADO: nivel novo e uma entrada aqui, e seria
-# facil demais repetir o erro escrevendo o proximo.
+# ---------------------------------------------- por que a BANCADA saiu do meio
 #
-# A BANCADA e uma ILHA de duas celulas no meio, e isso e decisao de projeto, nao
-# enfeite. Ela e a estacao compartilhada — a peca que a pesquisa aponta como "a
-# ideia numero um" do Overcooked —, entao ela e a unica que os DOIS precisam
-# conseguir usar ao mesmo tempo.
+# Ela era uma ilha em (3,2)/(3,3), e o dono reclamou: *"a bancada ta na frente
+# dos outros objetos, coloque ela em outro lugar que nao atrapalhe"*. Ele esta
+# certo, e o motivo e da projecao: em isometrico quem tem col+row maior e
+# desenhado DEPOIS, entao qualquer coisa no meio do chao cobre um pedaco do que
+# esta atras dela. Uma ilha no centro e a pior posicao possivel — ela tampa
+# justamente a fileira de despensas e o canto do fogao.
 #
-# A primeira versao a encostou na parede da esquerda, entre duas tabuas: sobrou
-# UM acesso, e um cozinheiro parado ali trancava o outro fora justamente da
-# estacao que existe pra eles se encontrarem. No meio, cada celula da ilha tem
-# tres lados livres.
+# Agora ela mora na parede da esquerda (0,1) e (0,2), encostada, sem nada atras.
+# O chao do meio ficou inteiramente livre, que e onde os cozinheiros andam.
 #
-# As outras estacoes ficam com um ou dois acessos de proposito: disputar passagem
-# na pia e na entrega e o aperto que o genero quer. O que nao pode e a bancada
-# ter esse problema.
+# Isso so ficou possivel porque os cozinheiros deixaram de se bloquear (ver
+# `mandar`): antes, uma bancada com um acesso so podia ser trancada pelo outro
+# boneco, e por isso ela precisava de tres lados livres.
 _PLANTA_1 = [
-    ".         d:alface  d:tomate  d:carne   d:pao     d:massa   .",
-    "tabua     .         .         .         .         .         panela",
-    ".         .         .         bancada   .         .         panela",
-    "tabua     .         .         bancada   .         .         pia",
-    "lixo      .         .         .         pratos    .         entrega",
+    ".         d:alface  d:tomate  d:carne   d:pao     d:massa   .         .",
+    "bancada   .         .         .         .         .         .         panela",
+    "bancada   .         .         .         .         .         .         panela",
+    "tabua     .         .         .         .         .         .         .",
+    "tabua     .         .         pratos    .         lixo      pia       entrega",
 ]
 
 NIVEIS = {
@@ -246,6 +249,10 @@ def montar_estacoes(nivel: int) -> list[dict]:
                 # o que está em cima dela (item ou prato), e o prazo do que ela
                 # está fazendo. `fim_ms` nulo = parada.
                 "item": None,
+                # o par do `mao_antes` do cozinheiro: o que estava aqui antes, e
+                # a hora em que o novo passa a valer.
+                "item_antes": None,
+                "item_ms": None,
                 "fim_ms": None,
                 "fase": None,   # "picando" | "cozinhando" | "lavando"
             })
@@ -296,6 +303,20 @@ def nova_partida(nivel: int, solo: bool, semente: int, inicio_ms: int | None = N
         "inicio_ms": inicio,
         "fim_ms": inicio + DURACAO_RODADA,
         "estacoes": estacoes,
+        # SOZINHO tem UM cozinheiro, e nao dois.
+        #
+        # A ideia de dois vinha do proprio Overcooked (a pesquisa em
+        # `docs/jogo-cozinha.md` conta), e no papel ela preserva a mecanica de
+        # dividir tarefa. Na pratica, com os dois na mao de uma pessoa so, o
+        # dono relatou o contrario: *"o jogo fica com dois bonecos mesmo jogando
+        # sozinho, o que buga muitas vezes o sistema, um boneco atrapalha o
+        # outro"*.
+        #
+        # Faz sentido: dividir tarefa entre duas pessoas e cooperacao; dividir
+        # entre dois bonecos que a MESMA pessoa comanda e so contabilidade. O
+        # ganho era teorico e o atrito era real, entao vale o que quem joga viu.
+        # A dois continua com um cozinheiro pra cada, que e onde a mecanica
+        # sempre fez sentido.
         "cozinheiros": {
             lado: {
                 "col": berco[i][0], "row": berco[i][1],
@@ -304,10 +325,15 @@ def nova_partida(nivel: int, solo: bool, semente: int, inicio_ms: int | None = N
                 "de_col": berco[i][0], "de_row": berco[i][1],
                 "saiu_ms": inicio, "chega_ms": inicio,
                 "mao": None,
+                # o que a mão tinha ANTES da jogada em curso, e quando o novo
+                # passa a valer. É o que impede o item de aparecer na mão dele
+                # enquanto ele ainda está a caminho. Ver `mandar`.
+                "mao_antes": None,
+                "mao_ms": None,
                 "ocupado_ate_ms": None,   # picando/lavando: não obedece nesse meio
                 "estacao_alvo": None,
             }
-            for i, lado in enumerate(("p1", "p2"))
+            for i, lado in enumerate(("p1",) if solo else ("p1", "p2"))
         },
         # Pratos limpos disponíveis na pilha; os sujos viram estação `pia`.
         "pratos_limpos": PRATOS,
@@ -414,6 +440,14 @@ def avancar(estado: dict, agora: int) -> dict:
             cozinheiro["de_row"] = cozinheiro["row"]
         if cozinheiro["ocupado_ate_ms"] is not None and cozinheiro["ocupado_ate_ms"] <= agora:
             cozinheiro["ocupado_ate_ms"] = None
+        # a foto do "antes" so vale ate a chegada; depois ela vira lixo no estado
+        if cozinheiro.get("mao_ms") is not None and cozinheiro["mao_ms"] <= agora:
+            cozinheiro["mao_ms"] = None
+            cozinheiro["mao_antes"] = None
+    for estacao in estado["estacoes"]:
+        if estacao.get("item_ms") is not None and estacao["item_ms"] <= agora:
+            estacao["item_ms"] = None
+            estacao["item_antes"] = None
 
     estado["avisos"] = avisos
     return estado
@@ -566,12 +600,19 @@ def mandar(estado: dict, lado: str, estacao_id: int, agora: int) -> dict:
     if estacao is None:
         raise Recusado("Essa estação não existe")
 
+    # Os cozinheiros NAO se bloqueiam mais, e isso e conserto de defeito.
+    #
+    # A celula do outro entrava aqui como ocupada, "pra dois nao ficarem
+    # desenhados um dentro do outro". O preco era alto demais: uma estacao com um
+    # acesso so ficava TRANCADA enquanto o outro estivesse parado ali, o toque
+    # era recusado com "nao da pra chegar", e de fora parecia o jogo travando.
+    # Foi o que o dono viu: *"um boneco atrapalha o outro"*.
+    #
+    # Numa cozinha apertada, dois corpos passam um pelo outro — e o desenho
+    # resolve o resto: quando os dois caem na mesma celula, cada um e deslocado
+    # meio corpo pro lado (ver `desenharCozinheiro`). Estacao inalcancavel e
+    # defeito; dois bonecos encostados e so aperto, que e o que o jogo quer.
     ocupadas = celulas_ocupadas(estado["estacoes"])
-    # A célula do OUTRO também não vale: dois cozinheiros na mesma casa ficariam
-    # desenhados um dentro do outro.
-    for outro_lado, outro in estado["cozinheiros"].items():
-        if outro_lado != lado:
-            ocupadas.add((outro["col"], outro["row"]))
     vizinhas = _vizinhas_livres(estacao, ocupadas)
     if not vizinhas:
         raise Recusado("Não dá pra chegar nessa estação agora")
@@ -589,7 +630,37 @@ def mandar(estado: dict, lado: str, estacao_id: int, agora: int) -> dict:
     cozinheiro["chega_ms"] = chegada
     cozinheiro["estacao_alvo"] = estacao_id
 
+    # ------------------------------------------ o que MUDA so aparece na chegada
+    #
+    # A acao e resolvida agora, mas ela so acontece de verdade quando ele chega.
+    # Sem marcar isso, a tela mostrava o efeito na hora do toque: o dono viu
+    # *"o objeto que o cozinheiro pega aparece na mao dele enquanto ele ta indo
+    # pegar"* — e sao TRES casos do mesmo defeito, nao um:
+    #
+    #   - ele anda ate a despensa ja segurando o que ainda vai pegar;
+    #   - o tomate SOME da tabua no instante do toque, e ele ainda esta longe;
+    #   - o que ele carrega POUSA no balcao antes de ele chegar la.
+    #
+    # A correcao guarda o estado ANTERIOR junto com a hora em que o novo passa a
+    # valer. A tela desenha o antigo ate a chegada e o novo depois — e isso
+    # continua sendo interpolacao, nao simulacao: ela recebe os dois lados e uma
+    # hora, e nao decide nada.
+    #
+    # A foto e funda porque montar no prato altera o prato POR DENTRO (a lista de
+    # ingredientes cresce), e uma comparacao rasa nao veria a diferenca.
+    antes_mao = copy.deepcopy(cozinheiro["mao"])
+    antes_itens = {e["id"]: copy.deepcopy(e["item"]) for e in estado["estacoes"]}
+
     resultado = _agir(estado, cozinheiro, estacao, chegada)
+
+    if cozinheiro["mao"] != antes_mao:
+        cozinheiro["mao_antes"] = antes_mao
+        cozinheiro["mao_ms"] = chegada
+    for e in estado["estacoes"]:
+        if e["item"] != antes_itens[e["id"]]:
+            e["item_antes"] = antes_itens[e["id"]]
+            e["item_ms"] = chegada
+
     resultado["chega_ms"] = chegada
     return resultado
 
@@ -934,7 +1005,32 @@ def _primeira(estado: dict, tipo: str, vazia: bool | None = None):
 
 
 def proxima_dica(estado: dict) -> dict | None:
-    """A proxima jogada util, pro pedido mais urgente. `None` se nao houver."""
+    """A proxima jogada util, pro pedido mais urgente. `None` se nao houver.
+
+    Esta casca faz uma coisa so, e ela importa no modo SOZINHO: se o cozinheiro
+    que a dica indicou estiver OCUPADO (picando, lavando), ela vira uma dica de
+    espera em vez de um convite ao toque.
+
+    Sem isso a dica pedia uma jogada que seria recusada com "ele esta ocupado" —
+    e com um cozinheiro so isso acontece o tempo todo, porque enquanto ele pica
+    nao ha mais ninguem pra fazer nada. Dica recusada e o pior tipo de dica: quem
+    esta perdido toca, nao acontece nada, e conclui que o jogo travou.
+
+    Da pra olhar `ocupado_ate_ms` sem o relogio porque `avancar` roda antes de
+    toda leitura e ja limpou os prazos vencidos: se ainda tem valor, ele esta
+    ocupado AGORA.
+    """
+    dica = _dica_bruta(estado)
+    if dica is None or dica.get("esperar"):
+        return dica
+    lado = dica.get("lado")
+    if lado and estado["cozinheiros"].get(lado, {}).get("ocupado_ate_ms") is not None:
+        return {**dica, "esperar": True, "texto": f"{dica['texto']} (espere ele terminar)"}
+    return dica
+
+
+def _dica_bruta(estado: dict) -> dict | None:
+    """O planejador. `proxima_dica` e quem trata do cozinheiro ocupado."""
     if estado.get("acabou"):
         return None
     abertos = [p for p in estado["pedidos"] if not p["entregue"]]
@@ -980,23 +1076,47 @@ def proxima_dica(estado: dict) -> dict | None:
         if melhor is None or len(dentro) > len(dentro_melhor):
             melhor, onde_melhor, dentro_melhor = prato, estacao, dentro
 
+    faltando = _falta(precisa, dentro_melhor)
+
     # ------------------------------------------------------------- sem prato
+    #
+    # O PRATO E O ULTIMO PASSO, e nao o primeiro. Esta ordem mudou quando o modo
+    # sozinho passou a ter UM cozinheiro, e o motivo e a regra mais basica do
+    # jogo: uma coisa por vez na mao.
+    #
+    # Com o prato na mao, uma pessoa sozinha nao consegue buscar mais nada — e a
+    # dica entrava em laco mandando "pegue a alface na despensa" com a mao
+    # ocupada, recusado, pra sempre. Medido nas quatro receitas: 60 toques, zero
+    # entregas.
+    #
+    # Preparando tudo primeiro, os ingredientes ficam esperando nas tabuas e
+    # panelas; so entao vale a pena pegar o prato e passar recolhendo. Funciona
+    # igual com um ou com dois.
     if melhor is None:
+        pendente = next(
+            (par for par in faltando if _onde_esta(estado, par[0], par[1]) == (None, None)),
+            None,
+        )
+        if pendente is not None:
+            return _dica_preparar(estado, pedido, pendente[0], pendente[1])
+
         pia = _primeira(estado, "pia")
         if estado["pratos_limpos"] <= 0:
             if pia is not None and pia.get("sujos", 0) > 0:
                 return {"estacao": pia["id"], "lado": _quem_livre(estado, pia),
                         "texto": "Lave um prato na pia",
                         "receita": pedido["receita"]}
-            return {"estacao": None, "texto": "Sem prato limpo — espere um voltar da pia",
+            return {"estacao": None, "esperar": True,
+                    "texto": "Sem prato limpo — espere um voltar da pia",
                     "receita": pedido["receita"]}
         pilha = _primeira(estado, "pratos")
-        return {"estacao": pilha["id"] if pilha else None,
-                "lado": _quem_livre(estado, pilha),
+        livre = _quem_livre(estado, pilha)
+        if livre is None:
+            # Ninguem com a mao vazia: largue o que estiver segurando primeiro.
+            return _dica_largar(estado, pedido)
+        return {"estacao": pilha["id"] if pilha else None, "lado": livre,
                 "texto": f"Pegue um prato para {art_prato} {nome_prato.lower()}",
                 "receita": pedido["receita"]}
-
-    faltando = _falta(precisa, dentro_melhor)
 
     # ----------------------------------------------------------- prato pronto
     if not faltando:
@@ -1044,7 +1164,10 @@ def proxima_dica(estado: dict) -> dict | None:
             return {"estacao": estacao["id"], "lado": quem_tem_prato,
                     "texto": f"Leve o prato até {art} {nome} {_concorda(preparo, g)}",
                     "receita": pedido["receita"]}
-        return {"estacao": estacao["id"], "lado": _quem_livre(estado, estacao),
+        livre = _quem_livre(estado, estacao)
+        if livre is None:
+            return _dica_largar(estado, pedido)
+        return {"estacao": estacao["id"], "lado": livre,
                 "texto": f"Pegue {art} {nome} {_concorda(preparo, g)}",
                 "receita": pedido["receita"]}
 
@@ -1057,12 +1180,37 @@ def proxima_dica(estado: dict) -> dict | None:
         return {"estacao": banca["id"] if banca else None, "lado": quem_tem_prato,
                 "texto": "Largue o prato na bancada", "receita": pedido["receita"]}
 
-    # -------------------------------- falta preparar: onde esta o passo anterior?
-    #
-    # Anda pra tras na cadeia (cozido <- picado <- cru) ate achar onde ele esta,
-    # e aponta a ferramenta que da o proximo passo.
+    return _dica_preparar(estado, pedido, ing, preparo)
+
+
+def _dica_largar(estado: dict, pedido: dict) -> dict:
+    """Ninguem com a mao vazia: largue o que estiver segurando.
+
+    E a saida obrigatoria do modo sozinho. Com uma mao so, qualquer passo que
+    precise pegar algo esbarra no que ja esta na mao — e sem esta dica o jogo
+    parecia travado, mandando pegar uma coisa que nao tinha como ser pega.
+    """
+    banca = _primeira(estado, "bancada", vazia=True) or _primeira(estado, "bancada")
+    lado = next((l for l, c in estado["cozinheiros"].items() if c["mao"]), None)
+    mao = estado["cozinheiros"][lado]["mao"] if lado else None
+    o_que = "o prato" if mao and mao.get("ing") == "prato" else "o que está na mão"
+    return {"estacao": banca["id"] if banca else None, "lado": lado,
+            "texto": f"Largue {o_que} na bancada", "receita": pedido["receita"]}
+
+
+def _dica_preparar(estado: dict, pedido: dict, ing: str, preparo: str) -> dict:
+    """Como chegar num ingrediente NESTE ponto de preparo.
+
+    Anda pra tras na cadeia (cozido <- picado <- cru) ate achar onde ele esta, e
+    aponta a ferramenta que da o proximo passo. Quando nao acha nenhum, manda
+    buscar na despensa.
+    """
+    dados = INGREDIENTES.get(ing, {})
+    nome = dados.get("nome", ing)
+    art = _o(ing)
+
     cadeia = [CRU]
-    if INGREDIENTES.get(ing, {}).get("pica"):
+    if dados.get("pica"):
         cadeia.append(PICADO)
     cadeia.append(COZIDO)
     anterior = None
@@ -1078,38 +1226,38 @@ def proxima_dica(estado: dict) -> dict | None:
         if mao is not None:
             livre = _primeira(estado, ferramenta, vazia=True)
             if livre is None:
-                # Todas ocupadas. Mandar "cozinhe" apontando pro nada faria a
-                # dica pedir uma jogada impossivel, e ela perde a confianca de
-                # quem le na primeira vez que isso acontece.
+                onde = "A tábua" if ferramenta == "tabua" else "A panela"
                 banca = _primeira(estado, "bancada", vazia=True)
-                onde = "a tábua" if ferramenta == "tabua" else "a panela"
                 return {"estacao": banca["id"] if banca else None, "lado": mao,
-                        "texto": f"{onde.capitalize()} está ocupada — largue {art} {nome} na bancada",
+                        "texto": f"{onde} está ocupada — largue {art} {nome} na bancada",
                         "receita": pedido["receita"]}
             return {"estacao": livre["id"], "lado": mao,
-                    "texto": f"{rotulo.capitalize()} {art} {nome}", "receita": pedido["receita"]}
+                    "texto": f"{rotulo.capitalize()} {art} {nome}",
+                    "receita": pedido["receita"]}
         if estacao is not None:
             if estacao["tipo"] == ferramenta and estacao["fase"]:
-                # `esperar` marca a dica que NAO e pra tocar. E importante: tocar
-                # numa panela cozinhando TIRA a comida de dentro (de proposito —
-                # e assim que se salva algo antes de queimar), entao seguir esta
-                # dica ao pe da letra desfaria o trabalho. A tela mostra estas
-                # sem cara de botao.
+                # `esperar` marca a dica que NAO e pra tocar: tocar numa panela
+                # cozinhando TIRA a comida de dentro (de proposito — e assim que
+                # se salva algo antes de queimar), entao seguir esta dica ao pe da
+                # letra desfaria o proprio trabalho.
                 return {"estacao": estacao["id"], "esperar": True,
                         "texto": f"{art.upper()} {nome} está quase — espere",
                         "receita": pedido["receita"]}
+            livre = _quem_livre(estado, estacao)
+            if livre is None:
+                return _dica_largar(estado, pedido)
             infinitivo = "picar" if ferramenta == "tabua" else "cozinhar"
-            return {"estacao": estacao["id"], "lado": _quem_livre(estado, estacao),
+            return {"estacao": estacao["id"], "lado": livre,
                     "texto": f"Pegue {art} {nome} para {infinitivo}",
                     "receita": pedido["receita"]}
-        # nao achou nesta etapa: tenta a anterior
         indice = cadeia.index(anterior)
         anterior = cadeia[indice - 1] if indice > 0 else None
 
-    # ------------------------------------------- nao existe nenhum: buscar cru
     despensa = next((e for e in estado["estacoes"] if e["tipo"] == "d" and e["ing"] == ing), None)
-    return {"estacao": despensa["id"] if despensa else None,
-            "lado": _quem_livre(estado, despensa),
+    livre = _quem_livre(estado, despensa)
+    if livre is None:
+        return _dica_largar(estado, pedido)
+    return {"estacao": despensa["id"] if despensa else None, "lado": livre,
             "texto": f"Pegue {art} {nome} na despensa", "receita": pedido["receita"]}
 
 
@@ -1140,7 +1288,20 @@ def vista(estado: dict, lado: str, agora: int) -> dict:
         "errados": estado["errados"],
         "avisos": estado["avisos"],
         "receitas": {
-            codigo: {"nome": r["nome"], "itens": r["itens"], "pontos": r["pontos"]}
+            codigo: {
+                "nome": r["nome"],
+                "itens": r["itens"],
+                # O texto de cada ingrediente vem PRONTO daqui, ja concordado
+                # ("a alface picada", "o tomate picado"). A tela nao monta essa
+                # frase: genero e concordancia sao dados do catalogo, e deixar a
+                # tela juntar as partes criaria um segundo dono da regra — que
+                # foi como a comanda acabou escrevendo "alface picado".
+                "rotulos": [
+                    f'{INGREDIENTES[ing]["nome"]} {_concorda(estado_ing, INGREDIENTES[ing].get("g", "m"))}'
+                    for ing, estado_ing in r["itens"]
+                ],
+                "pontos": r["pontos"],
+            }
             for codigo, r in RECEITAS.items()
         },
         "ingredientes": INGREDIENTES,

@@ -350,6 +350,22 @@ function desenharComida(p, ing, estado, col, row, z, origin, cor) {
 // conta de tres.
 
 /**
+ * O que está visível AGORA, quando o estado carrega um "antes" com hora.
+ *
+ * A ação é resolvida no instante do toque, mas só acontece de verdade quando o
+ * cozinheiro chega. O servidor manda os dois lados e a hora da virada; aqui só
+ * se escolhe qual desenhar. Continua sendo interpolação: nada é decidido, só
+ * comparado com o relógio.
+ *
+ * Sem isto, o item aparecia na mão de quem ainda estava indo buscá-lo, sumia da
+ * tábua antes de alguém chegar nela, e pousava no balcão adiantado.
+ */
+function visivel(dono, campo, agora) {
+  const quando = dono?.[`${campo}_ms`]
+  return quando != null && agora < quando ? dono[`${campo}_antes`] : dono?.[campo]
+}
+
+/**
  * Onde a comida POUSA em cada estação.
  *
  * Cada número aqui corresponde ao topo desenhado em `corpoDaEstacao`, e os dois
@@ -484,11 +500,15 @@ const CORES_COZINHEIRO = {
 }
 
 /** O cozinheiro: corpo, cabeça, chapéu, e o que ele carrega na frente. */
-function desenharCozinheiro(p, c, lado, origin, agora, t, cores, ehMeu) {
+function desenharCozinheiro(p, c, lado, origin, agora, t, cores, ehMeu, desvio = 0) {
   const pos = ondeEsta(c, agora)
   const cor = CORES_COZINHEIRO[lado] || CORES_COZINHEIRO.p1
-  const col = pos.col
-  const row = pos.row
+  // Os cozinheiros deixaram de se bloquear (uma estação de acesso único ficava
+  // TRANCADA enquanto o outro estivesse parado ali). O preço é que agora eles
+  // podem cair na mesma célula — e aí cada um é deslocado meio corpo pro lado,
+  // pra não ficar um desenhado dentro do outro.
+  const col = pos.col + desvio
+  const row = pos.row - desvio
   // O gingado só existe andando. Parado, ele fica parado — figura que treme no
   // lugar cansa a vista numa tela em que se olha o tempo todo.
   const balanco = pos.andando ? Math.abs(Math.sin(t / 90)) * 0.055 : 0
@@ -512,7 +532,8 @@ function desenharCozinheiro(p, c, lado, origin, agora, t, cores, ehMeu) {
   isoBox(p, faces('#fdfbf4'), { col: col + 0.34, row: row + 0.34, w: 0.32, d: 0.28, z: zc + 0.36, h: 0.16 }, origin, OUTLINE)
 
   // o que ele carrega, na altura do peito
-  if (c.mao) desenharItem(p, c.mao, col, row - 0.36, 0.66, origin, cores)
+  const naMao = visivel(c, 'mao', agora)
+  if (naMao) desenharItem(p, naMao, col, row - 0.36, 0.66, origin, cores)
 
   // A SETA de quem é você. Num jogo de dois bonecos parecidos correndo, saber
   // qual é o seu tem que ser instantâneo — e cor sozinha não basta pra quem não
@@ -552,9 +573,26 @@ export function desenharCozinha(p, vista, agora, t = 0) {
     fila.push({ _chef: true, lado, c, col: pos.col, row: pos.row, w: 1, d: 1 })
   }
 
+  // Quem está pisando na mesma casa que outro é afastado meio corpo. A conta é
+  // feita aqui (e não no desenho) porque ela precisa ver os DOIS.
+  const ondeEstao = new Map()
+  for (const item of fila) {
+    if (!item._chef) continue
+    const casa = `${Math.round(item.col)},${Math.round(item.row)}`
+    ondeEstao.set(casa, (ondeEstao.get(casa) || 0) + 1)
+  }
+  let jaDesviado = new Set()
+
   for (const coisa of depthSort(fila)) {
     if (coisa._chef) {
-      desenharCozinheiro(p, coisa.c, coisa.lado, origin, agora, t, cores, coisa.lado === vista.meu_lado)
+      const casa = `${Math.round(coisa.col)},${Math.round(coisa.row)}`
+      let desvio = 0
+      if ((ondeEstao.get(casa) || 0) > 1) {
+        desvio = jaDesviado.has(casa) ? 0.19 : -0.19
+        jaDesviado.add(casa)
+      }
+      desenharCozinheiro(p, coisa.c, coisa.lado, origin, agora, t, cores,
+                         coisa.lado === vista.meu_lado, desvio)
       continue
     }
     // o corpo já veio no fundo; aqui só o que está EM CIMA dele
@@ -575,7 +613,8 @@ export function desenharCozinha(p, vista, agora, t = 0) {
       barra(p, coisa, origin, agora, vista.tempos)
       continue
     }
-    if (coisa.tipo === 'panela' && coisa.item) {
+    const emCima = visivel(coisa, 'item', agora)
+    if (coisa.tipo === 'panela' && emCima) {
       // A PANELA em volta da comida: cilindro com duas alças. Só aparece quando
       // há algo cozinhando, então "fogão vazio" e "fogão ocupado" se distinguem
       // pela silhueta, e não por um detalhe pequeno em cima.
@@ -583,9 +622,9 @@ export function desenharCozinha(p, vista, agora, t = 0) {
       isoBox(p, faces('#6b737b'), { col: coisa.col - 0.04, row: coisa.row + 0.42, w: 0.14, d: 0.16, z: 0.65, h: 0.05 }, origin, OUTLINE)
       isoBox(p, faces('#6b737b'), { col: coisa.col + 0.9, row: coisa.row + 0.42, w: 0.14, d: 0.16, z: 0.65, h: 0.05 }, origin, OUTLINE)
     }
-    desenharItem(p, coisa.item, coisa.col, coisa.row, tampo(coisa.tipo), origin, cores)
+    desenharItem(p, emCima, coisa.col, coisa.row, tampo(coisa.tipo), origin, cores)
     barra(p, coisa, origin, agora, vista.tempos)
-    if (coisa.item?.estado === 'queimado') fumaca(p, coisa, origin, t)
+    if (emCima?.estado === 'queimado') fumaca(p, coisa, origin, t)
   }
 }
 

@@ -69,7 +69,6 @@ export default function GameCozinha({ telaCheia = false }) {
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [aviso, setAviso] = useState(null)
-  const [escolhido, setEscolhido] = useState(null) // sozinho: cozinheiro na mão
   const [premio, setPremio] = useState(0)
   // Os nomes e a dica ficam no aparelho: quem aprendeu desliga uma vez e não
   // precisa desligar de novo a cada rodada.
@@ -110,8 +109,19 @@ export default function GameCozinha({ telaCheia = false }) {
     try {
       const r = await api.get('/api/games/cozinha')
       aplicar(r.partida)
-    } catch (e) {
-      setErro(e.message)
+      setErro('')
+    } catch {
+      // LER que falha não vira erro na tela, e isso é decisão, não desleixo.
+      //
+      // Esta busca se repete sozinha: ela é agendada pro próximo prazo e
+      // disparada de novo a cada evento de tempo real. Um soluço de rede (ou um
+      // `database is locked` do SQLite da bancada) some na tentativa seguinte —
+      // mas o aviso vermelho ficava na tela pra sempre, no meio de uma partida,
+      // como se algo estivesse quebrado. Ficava a CICATRIZ de um problema que
+      // já tinha passado.
+      //
+      // Se as buscas pararem de vez, isso aparece de um jeito muito mais claro:
+      // o jogo congela. Não é um caso que precise de aviso próprio.
     } finally {
       setCarregando(false)
     }
@@ -196,37 +206,33 @@ export default function GameCozinha({ telaCheia = false }) {
           window.casalSound?.(`cozinha-${som === 'largar' || som === 'montar' ? 'pegar' : som}`)
         }
       }
-    } catch (e) { setErro(e.message) }
+    } catch (e) {
+      // Jogada que falhou por rede vira AVISO, e não erro: o aviso some no
+      // próximo toque, e num jogo de três minutos ninguém vai parar pra ler um
+      // erro vermelho — vai tocar de novo, que é a resposta certa mesmo.
+      setAviso({ tipo: 'warn', texto: 'Não foi dessa vez — toque de novo' })
+    }
     ocupado.current = false
   }
 
   /**
    * O toque na cozinha.
    *
-   * Sozinho, o cozinheiro é escolhido pela tela: vai o mais PERTO que não está
-   * ocupado. É a solução do Overcooked pro modo de um jogador — e a razão é a
-   * mesma: se o jogo fizesse escolher qual boneco a cada toque, o modo sozinho
-   * ficaria duas vezes mais lento que o modo a dois em vez de igual.
+   * Sozinho existe UM cozinheiro, então não há quem escolher: o servidor
+   * resolve com `auto`. A dois, cada um manda no seu.
    *
-   * Quem quiser mandar num cozinheiro específico toca nele antes; a escolha vale
-   * pro toque seguinte e depois solta.
+   * Quando a DICA está apontando justamente a estação tocada, quem vai é o
+   * cozinheiro que ela indicou — ela sabe QUEM precisa agir, e a escolha
+   * automática não.
    */
   function tocar(x, y) {
     const v = atual.current
     if (!v || v.acabou) return
     const m = medidas(v.largura, v.altura)
 
-    if (v.solo) {
-      // Tocou EM CIMA de um cozinheiro? Então a intenção era escolher ele.
-      for (const [lado, c] of Object.entries(v.cozinheiros)) {
-        const [cx, cy] = projetarCozinheiro(c, m, agoraServidor())
-        if (Math.hypot(x - cx, y - cy) < 26) {
-          setEscolhido(lado === escolhido ? null : lado)
-          window.casalSound?.('nav')
-          return
-        }
-      }
-    }
+    // Não existe mais "escolher o cozinheiro": sozinho há UM, e a dois cada um
+    // manda no seu. Era uma escolha que só existia pra contornar dois bonecos na
+    // mão de uma pessoa — e essa ideia caiu (ver `cozinha.py`).
     const estacao = estacaoNoPonto(v, x, y)
     if (!estacao) return
     // Se a DICA está apontando justamente esta estação, obedece o cozinheiro que
@@ -240,8 +246,7 @@ export default function GameCozinha({ telaCheia = false }) {
     // "auto" = o SERVIDOR escolhe quem atende. A tela não tem como escolher
     // certo: pra isso seria preciso saber o que cada gesto faz, e isso é regra
     // do jogo — que mora num lugar só, de propósito. Ver `mandar_auto`.
-    const lado = usarDaDica ? dica.lado : (v.solo ? (escolhido || 'auto') : v.meu_lado)
-    setEscolhido(null)
+    const lado = usarDaDica ? dica.lado : (v.solo ? 'auto' : v.meu_lado)
     mandar(lado, estacao.id)
   }
 
@@ -345,8 +350,7 @@ export default function GameCozinha({ telaCheia = false }) {
         <span className="cozinha-relogio">{Math.ceil(resta / 1000)}s</span>
         <span className="cozinha-pontos">{vista.pontos} pts</span>
         <span className="muted small">
-          {vista.solo ? (escolhido ? `mandando no ${escolhido === 'p1' ? '1º' : '2º'}` : 'os dois são seus')
-            : (vista.parceiro?.name ? `com ${vista.parceiro.name}` : 'a dois')}
+          {vista.solo ? 'sozinho' : (vista.parceiro?.name ? `com ${vista.parceiro.name}` : 'a dois')}
         </span>
       </div>
 
@@ -433,19 +437,25 @@ function FilaDePedidos({ vista, agora }) {
         return (
           <div key={p.id} className={`cozinha-pedido ${sobra < 0.25 ? 'apertado' : ''}`}>
             <strong>{receita?.nome}</strong>
-            {/* Os ingredientes como PONTOS COLORIDOS, e não como texto: é a
-                interface por ícone que o gênero pede — dá pra conferir o pedido
-                de relance, no meio da correria. */}
-            <div className="cozinha-pedido-itens">
+            {/* A RECEITA ESCRITA, e não só as bolinhas coloridas.
+                O dono pediu: "nas comandas coloque o nome ao invés só da cor,
+                fica meio confuso de achar certas coisas; coloque a receita".
+                Ele está certo pelo mesmo motivo das estações: cor sozinha não
+                diz nada — e aqui é pior, porque tomate e carne são dois tons de
+                vermelho num círculo de 11 px.
+                A bolinha fica, mas como reforço: ela é a ponte visual entre a
+                comanda e o ingrediente desenhado na cozinha. */}
+            <ul className="cozinha-receita">
               {(receita?.itens || []).map(([ing, estado], i) => (
-                <span
-                  key={i}
-                  className={`cozinha-bolinha ${estado}`}
-                  style={{ background: vista.ingredientes[ing]?.cor }}
-                  title={`${vista.ingredientes[ing]?.nome} ${estado}`}
-                />
+                <li key={i}>
+                  <span
+                    className={`cozinha-bolinha ${estado}`}
+                    style={{ background: vista.ingredientes[ing]?.cor }}
+                  />
+                  {receita.rotulos?.[i] || `${vista.ingredientes[ing]?.nome} ${estado}`}
+                </li>
               ))}
-            </div>
+            </ul>
             <div className="cozinha-pedido-barra">
               <span style={{ width: `${sobra * 100}%` }} />
             </div>
@@ -645,7 +655,7 @@ function ComoJogar({ vista, aoFechar }) {
               ))}
             </div>
             <span className="muted small">
-              {r.itens.map(([ing, estado]) => `${vista.ingredientes[ing]?.nome} ${estado}`).join(' + ')}
+              {(r.rotulos || r.itens.map(([ing, e]) => `${vista.ingredientes[ing]?.nome} ${e}`)).join(' + ')}
             </span>
           </div>
         ))}

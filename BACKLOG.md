@@ -1468,3 +1468,59 @@ São **dois problemas**, e eu tinha juntado os dois num só.
 - **[ ]** Jogar e dizer se agora dá pra entender. É a única medida que vale.
 - **[ ]** Se ainda estiver difícil, o próximo passo é o modo treino: uma rodada
       sem relógio e com um pedido só, pra aprender sem pressão.
+
+### 30/08/2026 — Cozinha, terceira rodada (jogando de verdade)
+
+Pedido do dono: *"o jogo fica com dois bonecos mesmo jogando sozinho, o que buga
+muitas vezes o sistema, um boneco atrapalha o outro. A bancada tá na frente dos
+outros objetos... tenta aproveitar a tela inteira de um jeito melhor... nas
+comandas coloque o nome ao invés só da cor, coloque a receita... aumente um
+pouquinho o tempo para queimar."* E depois: *"o objeto que o cozinheiro pega
+aparece na mão dele enquanto ele tá indo pegar."*
+
+- **[x]** **Sozinho tem UM cozinheiro.** A ideia de dois veio do Overcooked e no
+      papel preserva a mecânica; na prática, com os dois na mão de uma pessoa só,
+      é atrito. Dividir tarefa entre duas pessoas é cooperação; entre dois bonecos
+      da mesma pessoa é contabilidade.
+- **[x]** **"Um boneco atrapalha o outro" era defeito.** A célula do outro contava
+      como ocupada, então uma estação de acesso único ficava trancada e o toque
+      era recusado. Agora eles passam um pelo outro, e quem coincide é desenhado
+      meio corpo pro lado.
+- **[x]** **A bancada saiu do meio** pra parede da esquerda. Em isométrico, o que
+      está no meio do chão cobre o que está atrás — uma ilha central é a pior
+      posição possível. Só deu pra mover porque os cozinheiros pararam de se
+      bloquear.
+- **[x]** **As comandas dizem o nome e a receita inteira** ("alface picada /
+      tomate picado"), com a bolinha como reforço. O texto vem pronto do servidor,
+      já concordado — a tela juntando as partes foi como saiu "alface picado".
+- **[x]** **Mais tela pro jogo:** o palco sangra até a borda (+32 px de largura) e
+      as abas de jogo viraram uma linha só que rola (+140 px). Medido: canvas
+      375×246 começando a 334 px do topo, contra ~440 antes.
+- **[x]** **Queimar subiu de 6,5 s pra 12 s.** Dá pra picar um ingrediente e
+      atravessar a cozinha antes de estragar.
+- **[x]** **O item não aparece mais na mão de quem ainda está indo buscá-lo** — e
+      eram três casos do mesmo defeito (o item somia da tábua e pousava no balcão
+      adiantado também). O estado guarda o "antes" com a hora da virada; a tela
+      desenha o antigo até a chegada. **Medido: mão vazia em 5 amostras durante a
+      caminhada.**
+
+#### Defeitos encontrados consertando
+
+- **[x]** A dica entrava em **laço com um cozinheiro só**: mandava pegar o prato
+      primeiro, e aí não sobrava mão pra buscar nada. Agora **o prato é o último
+      passo** — prepara tudo, depois recolhe. E há um "largue o que está na mão"
+      pra quando nenhuma mão está livre.
+- **[x]** Dica que aponta um cozinheiro **ocupado** virou dica de espera, em vez
+      de convite a um toque que seria recusado.
+- **[x]** **Todo GET gravava** no banco, mesmo sem nada ter mudado. Com a busca
+      agendada mais os eventos, virava escrita constante — deu `database is
+      locked` no SQLite da bancada (12 vezes num teste). Agora só grava se mudou.
+- **[x]** **Erro de rede não deixa mais cicatriz na tela.** Uma busca que falha se
+      repete sozinha; o banner vermelho ficava lá pra sempre no meio da partida.
+
+#### Ainda falta você
+
+- **[ ]** Jogar e dizer se agora dá pra entender e se o ritmo está bom.
+- **[ ]** Jogar **a dois**, um celular em cada mão — é o único modo que nunca
+      rodou com duas pessoas ao mesmo tempo.
+- **[ ]** Se ainda estiver difícil: modo treino, sem relógio e com um pedido só.

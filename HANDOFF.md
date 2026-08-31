@@ -3660,3 +3660,157 @@ Na bateria, as quatro receitas saem seguindo só a dica, em 8 a 14 toques.
 > **A lição, e ela vale pro app inteiro:** *distinguir por cor é distinguir por
 > nada.* Se duas coisas fazem papéis diferentes, elas precisam ter **formas**
 > diferentes — e, na primeira vez que alguém as vê, um **nome**.
+
+### 9.32 Um cozinheiro, a bancada fora do meio, e o item que aparecia antes da hora (30/08/2026)
+
+Pedido do dono, jogando: *"o jogo fica com dois bonecos mesmo jogando sozinho, o
+que buga muitas vezes o sistema, um boneco atrapalha o outro. A bancada tá na
+frente dos outros objetos, coloque ela em outro lugar que não atrapalhe. Tenta
+aproveitar a tela inteira de um jeito melhor também. Nas comandas coloque o nome
+ao invés só da cor... coloque a receita. Aumente um pouquinho o tempo para
+queimar."* E depois: *"o objeto que o cozinheiro pega aparece na mão dele
+enquanto ele tá indo pegar, é bem estranho."*
+
+#### 1. Sozinho passou a ter UM cozinheiro
+
+A ideia de dois veio da pesquisa (o próprio Overcooked faz assim no modo de um
+jogador) e no papel ela preserva a mecânica de dividir tarefa. **Na prática ele
+tem razão e a pesquisa não:** dividir tarefa entre duas pessoas é cooperação;
+entre dois bonecos que a *mesma* pessoa comanda é contabilidade. O ganho era
+teórico e o atrito era real.
+
+Isso apagou junto a UI de "escolher o cozinheiro", que só existia pra contornar o
+problema que agora não existe.
+
+#### 2. "Um boneco atrapalha o outro" era defeito, e dos caros
+
+A célula onde um cozinheiro estava parado contava como **ocupada** — "pra dois
+não ficarem desenhados um dentro do outro". O preço: uma estação de acesso único
+ficava **trancada** enquanto o outro estivesse ali, o toque era recusado com "não
+dá pra chegar", e de fora parecia o jogo travando.
+
+Numa cozinha apertada dois corpos passam um pelo outro. Agora passam, e o desenho
+resolve o resto: caindo na mesma casa, cada um é deslocado meio corpo pro lado.
+**Estação inalcançável é defeito; dois bonecos encostados é aperto** — e aperto é
+o que o jogo quer.
+
+Esse conserto **destravou a planta**: era ele que obrigava a bancada a ter três
+lados livres, e por isso ela vivia no meio do chão.
+
+#### 3. A bancada saiu do meio
+
+Ela era uma ilha em (3,2)/(3,3). Em isométrico, quem tem `col+row` maior é
+desenhado depois — então qualquer coisa no meio do chão **cobre um pedaço do que
+está atrás**. Uma ilha central é a pior posição possível: ela tampava justamente
+a fileira de despensas e o canto do fogão.
+
+Agora ela mora encostada na parede da esquerda, sem nada atrás. O chão do meio
+ficou inteiramente livre, que é onde se anda. A grade passou de 7×5 pra 8×5.
+
+#### 4. As comandas dizem o NOME, e a receita inteira
+
+Cor sozinha não servia, e aqui era pior que nas estações: tomate e carne são dois
+tons de vermelho num círculo de 11 px. A comanda agora lista *"alface picada /
+tomate picado"*, com a bolinha ao lado como ponte visual entre a comanda e o
+ingrediente desenhado na cozinha.
+
+O texto vem **pronto do servidor**, já concordado. Deixar a tela juntar nome +
+preparo criaria um segundo dono da regra — e foi exatamente assim que a primeira
+versão escreveu "alface picado".
+
+#### 5. Aproveitar a tela
+
+Duas coisas, e vale dizer o que **não** dá:
+
+A arte isométrica tem proporção ~2:1 **sempre** (largura `(col+lin)×48`, altura
+`(col+lin)×24 + parede`), então ela é limitada pela LARGURA. Mudar o formato da
+grade não muda isso, e esticar na vertical deformaria a arte. Num celular em pé
+sempre vai sobrar altura.
+
+O que dá, e foi feito:
+
+- **o palco sangra até a borda da tela**, cancelando os 16 px de respiro da rota.
+  São 32 px de largura — e, na proporção 2:1, 16 px de altura junto;
+- **as abas de jogo viraram uma linha só que rola**, no lugar de cinco botões
+  grandes em três linhas: **~140 px** devolvidos, e vale pros cinco jogos;
+- **a sobra de baixo deixou de ser vazio**: é onde as comandas com a receita
+  escrita passaram a caber.
+
+Medido: canvas de 375×246, encostado nas duas bordas, começando a 334 px do topo
+(antes ~440).
+
+#### 6. O tempo de queimar: 6,5 s → 12 s
+
+6,5 s obrigava a ficar ao lado da panela, e aí cozinhar deixava de ser "ponha e vá
+fazer outra coisa" — que é justamente o que dá ritmo ao jogo. Com 12 s dá pra
+picar um ingrediente inteiro (2,6 s) e atravessar a cozinha antes de estragar.
+
+#### 7. O item aparecia na mão de quem ainda estava indo buscá-lo
+
+São **três** casos do mesmo defeito, e o dono viu um: ele anda já segurando o que
+vai pegar; o tomate **some** da tábua no instante do toque, com ele ainda longe; e
+o que ele carrega **pousa** no balcão adiantado.
+
+A causa é a decisão de projeto que continua certa: a ação é resolvida **no
+instante do toque** (é o que permite recusar na hora, com o motivo), mas ela só
+acontece de verdade **na chegada**.
+
+O conserto: o estado passou a guardar o **anterior** junto com a hora em que o
+novo passa a valer (`mao_antes`/`mao_ms`, `item_antes`/`item_ms`). A tela desenha
+o antigo até a chegada e o novo depois — e isso continua sendo **interpolação, não
+simulação**: ela recebe os dois lados e uma hora, e não decide nada.
+
+A foto é FUNDA porque montar no prato altera o prato por dentro (a lista de
+ingredientes cresce), e comparação rasa não veria a diferença.
+
+> **Medido no navegador**, com o cozinheiro atravessando a cozinha: durante todo
+> o segundo de caminhada o estado já dizia `mao = massa`, e a tela desenhou
+> **MÃO VAZIA** em cinco amostras seguidas. A massa só apareceu na chegada.
+
+#### 8. Dois defeitos que apareceram consertando
+
+**a) A dica entrou em laço com um cozinheiro só.** Ela mandava pegar o prato
+primeiro; com uma mão só, a pessoa então não conseguia buscar mais nada, e a dica
+insistia em "pegue a alface" com a mão ocupada. Medido: 60 toques, zero entregas,
+nas quatro receitas.
+
+O conserto muda a ORDEM: **o prato é o último passo, não o primeiro.** Preparando
+tudo antes, os ingredientes esperam nas tábuas e panelas, e só então vale a pena
+pegar o prato e passar recolhendo. Funciona igual com um ou com dois. E existe
+agora um "largue o que está na mão" pra quando nenhuma mão está livre.
+
+Também: se o cozinheiro que a dica indicou estiver **ocupado** (picando, lavando),
+ela vira dica de espera em vez de convite ao toque — com um cozinheiro só isso
+acontece o tempo todo, e dica recusada é o pior tipo de dica.
+
+**b) Todo GET gravava.** A leitura avançava o estado, incrementava a revisão e
+dava commit — mesmo sem nada ter acontecido. Com a busca agendada mais os eventos
+de tempo real, isso vira escrita constante; no SQLite da bancada deu
+`database is locked` de verdade (12 ocorrências num teste), e no PostgreSQL seria
+só desperdício. Agora só grava se o estado **mudou** — e a comparação só é
+possível porque `_ler` faz cópia funda.
+
+**E o aviso de erro deixou de deixar cicatriz.** Uma busca que falha não vira mais
+banner vermelho: ela se repete sozinha, e o aviso ficava na tela pra sempre no
+meio da partida, como se algo estivesse quebrado. Se as buscas pararem de vez,
+isso aparece de um jeito muito mais claro — o jogo congela.
+
+> Os 12 `database is locked` foram conferidos um a um: **todos** de SQLite,
+> **nenhum** com código nosso no traceback. Produção é PostgreSQL e não tem esse
+> modo de falha. Fica escrito porque "é só a bancada" é exatamente o tipo de
+> conclusão que este projeto já pagou caro por assumir.
+
+#### Medido, com toques reais no navegador
+
+| | resultado |
+|---|---|
+| cozinheiros no solo | **1** |
+| um boneco tranca o outro | não (travado no teste, com o outro em cima do único acesso) |
+| item na mão durante a caminhada | **MÃO VAZIA** em 5 amostras de 200 ms |
+| comanda | "Salada / alface picada / tomate picado" |
+| canvas | 375×246, encostado nas duas bordas |
+| tempo de queimar | 12 s |
+| jogar seguindo só a dica | **8 toques → salada entregue → 81 pontos** |
+| na bateria | as 4 receitas, **solo e a dois**, 8 a 19 toques, **zero recusas** |
+
+**Estado: 844 verificações, 0 falha.** Build Vite aprovada.
