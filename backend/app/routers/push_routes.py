@@ -189,14 +189,32 @@ def ack_push(payload: AckIn) -> dict:
     diferentes que parecem iguais: a Apple recusou, a Apple aceitou mas o
     aparelho nao acordou, ou o aparelho acordou e nao conseguiu mostrar o aviso.
     """
-    logging.getLogger("push").info(
+    logging.getLogger("push").warning(
         "push ACK ack=%s mostrou=%s modo=%s erro=%s",
         payload.ack or "?",
         payload.ok,
         payload.modo or "-",
         payload.erro or "-",
     )
+    # E tambem guardado, pra tela de Perfil poder ESPERAR por ele. Antes ia so
+    # pro log, e log ninguem le do celular — o app continuava sem conseguir
+    # dizer se o aviso chegou a aparecer.
+    push.anotar_ack(payload.ack, payload.ok, payload.modo, payload.erro)
     return {"ok": True}
+
+
+@router.get("/ack/{ack}")
+def ver_ack(ack: str, user: User = Depends(current_user)) -> dict:
+    """O que se sabe de um envio: o servico aceitou? o aparelho mostrou?
+
+    A tela de Perfil chama isto por alguns segundos depois do teste. E a unica
+    forma de separar tres falhas que parecem iguais de fora — o servidor nao
+    mandou, o servico de push recusou, ou o aparelho recebeu e nao mostrou.
+    """
+    registro = push.ver_ack(ack, user.id)
+    if registro is None:
+        return {"conhecido": False}
+    return {"conhecido": True, **registro}
 
 
 def _guess_label(agent: str) -> str:

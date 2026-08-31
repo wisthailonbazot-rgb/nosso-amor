@@ -99,25 +99,25 @@ RECEITAS = {
         "nome": "Salada", "g": "f",
         "itens": [("alface", PICADO), ("tomate", PICADO)],
         "pontos": 60,
-        "prazo_ms": 55_000,
+        "prazo_ms": 90_000,
     },
     "macarrao": {
         "nome": "Macarrão", "g": "m",
         "itens": [("massa", COZIDO), ("tomate", COZIDO)],
         "pontos": 90,
-        "prazo_ms": 70_000,
+        "prazo_ms": 120_000,
     },
     "hamburguer": {
         "nome": "Hambúrguer", "g": "m",
         "itens": [("pao", CRU), ("carne", COZIDO), ("alface", PICADO)],
         "pontos": 110,
-        "prazo_ms": 80_000,
+        "prazo_ms": 120_000,
     },
     "casal": {
         "nome": "Prato do casal", "g": "m",
         "itens": [("massa", COZIDO), ("carne", COZIDO), ("tomate", PICADO)],
         "pontos": 150,
-        "prazo_ms": 90_000,
+        "prazo_ms": 145_000,
     },
 }
 
@@ -172,9 +172,38 @@ PRATOS = 3                # poucos de propósito: e o que obriga alguem a lavar
 # O ritmo dos pedidos APERTA com o tempo: comeca folgado e fecha. E a forma de
 # ter "sempre mais tarefa do que mao" (Overcooked) sem despejar tudo no comeco,
 # o que so confundiria nos primeiros dez segundos.
-PEDIDO_INTERVALO_INICIAL = 11_000
-PEDIDO_INTERVALO_FINAL = 6_000
-PEDIDOS_SIMULTANEOS = 4
+#
+# ------------------------------------------------- por que estes numeros mudaram
+#
+# O dono jogou e disse: *"o tempo para executar cada receita e bem curto, nunca
+# da tempo de fazer"*. Medi antes de mexer, e ele estava certo — mas a causa nao
+# era o prazo de cada pedido, era a FILA.
+#
+# Uma receita isolada leva de 11 s (salada) a 27 s (prato do casal), com prazos
+# de 55 a 90 s: folga de sobra. So que os pedidos chegavam a cada 6 a 11 s, e um
+# cozinheiro sozinho serve um a cada ~22 s. A fila crescia mais rapido do que
+# qualquer pessoa consegue servir, e ai TODO pedido parecia curto — porque quando
+# se chegava nele, ele ja estava acabando.
+#
+# > **Medido, jogando PERFEITO pela propria dica** (o teto do que da pra fazer):
+# > sozinho entregava 3 ou 4 e **perdia 4 ou 5** por rodada. Uma pessoa de
+# > verdade faz pior que isso.
+#
+# Duas mudancas, e a segunda e a que importa:
+#
+#  1. os prazos subiram (~+45%), porque um pedido tem que sobreviver na fila
+#     enquanto o anterior e feito;
+#  2. o intervalo entre pedidos passou a depender de QUANTAS MAOS existem. Antes
+#     era o mesmo pra um e pra dois, o que fazia o modo sozinho ser
+#     matematicamente impossivel enquanto o modo a dois era so dificil.
+PEDIDO_INTERVALO_INICIAL = 26_000
+PEDIDO_INTERVALO_FINAL = 19_000
+PEDIDOS_SIMULTANEOS = 3
+
+# Quanto o intervalo estica quando ha um cozinheiro so. Metade das maos nao pede
+# o dobro do tempo (da pra adiantar uma coisa enquanto outra cozinha), mas pede
+# bem mais do que nada — este numero saiu de medir, nao de chutar.
+FOLGA_SOZINHO = 1.8
 
 PONTOS_PERDIDO = -25   # deixou vencer
 PONTOS_ERRADO = -15    # entregou o prato errado
@@ -190,8 +219,8 @@ PONTOS_ERRADO = -15    # entregou o prato errado
 #
 # A planta e DADO, entao nivel novo e uma entrada nova aqui — nao codigo novo.
 
-LARGURA = 8
-ALTURA = 5
+LARGURA = 7
+ALTURA = 4
 
 # tipo:parametro. "." é chão livre.
 # TODA estacao precisa de pelo menos uma celula livre VIZINHA, senao ela e
@@ -215,11 +244,10 @@ ALTURA = 5
 # `mandar`): antes, uma bancada com um acesso so podia ser trancada pelo outro
 # boneco, e por isso ela precisava de tres lados livres.
 _PLANTA_1 = [
-    ".         d:alface  d:tomate  d:carne   d:pao     d:massa   .         .",
-    "bancada   .         .         .         .         .         .         panela",
-    "bancada   .         .         .         .         .         .         panela",
-    "tabua     .         .         .         .         .         .         .",
-    "tabua     .         .         pratos    .         lixo      pia       entrega",
+    ".         d:alface  d:tomate  d:carne   d:pao     d:massa   .",
+    "tabua     .         .         .         .         .         panela",
+    "tabua     .         .         .         .         .         panela",
+    ".         bancada   pratos    lixo      entrega   pia       .",
 ]
 
 NIVEIS = {
@@ -545,13 +573,18 @@ def _aplicar(estado: dict, quando: int, avisos: list) -> None:
 
 
 def _intervalo(estado: dict, quando: int) -> int:
-    """O ritmo dos pedidos, que aperta conforme a rodada anda."""
+    """O ritmo dos pedidos: aperta com o tempo, e afrouxa se ha uma mao so."""
     andado = (quando - estado["inicio_ms"]) / max(1, DURACAO_RODADA)
     andado = min(1.0, max(0.0, andado))
-    return int(
+    base = (
         PEDIDO_INTERVALO_INICIAL
         + (PEDIDO_INTERVALO_FINAL - PEDIDO_INTERVALO_INICIAL) * andado
     )
+    # A conta e pelo numero de cozinheiros, e nao pela marca `solo`: se um dia
+    # existir uma cozinha de tres, ela se ajusta sozinha.
+    if len(estado.get("cozinheiros") or {}) < 2:
+        base *= FOLGA_SOZINHO
+    return int(base)
 
 
 def _empilhar_sujo(estado: dict) -> None:
@@ -1054,7 +1087,13 @@ def _dica_bruta(estado: dict) -> dict | None:
     for estacao in estado["estacoes"]:
         item = estacao["item"]
         if item and item.get("estado") == QUEIMADO:
-            return {"estacao": estacao["id"], "lado": _quem_livre(estado, estacao),
+            livre = _quem_livre(estado, estacao)
+            if livre is None:
+                # Ninguem com a mao vazia. Mandar tocar assim seria RECUSADO
+                # ("isso nao vai junto": chegar com algo na mao tenta MONTAR, nao
+                # pegar) — e a dica ficava repetindo uma jogada impossivel.
+                return {**_dica_largar(estado, {"receita": None}), "urgente": True}
+            return {"estacao": estacao["id"], "lado": livre,
                     "texto": "Queimou — tire da panela", "urgente": True}
 
     pedido = min(abertos, key=lambda p: p["vence_ms"])
@@ -1190,12 +1229,33 @@ def _dica_largar(estado: dict, pedido: dict) -> dict:
     precise pegar algo esbarra no que ja esta na mao — e sem esta dica o jogo
     parecia travado, mandando pegar uma coisa que nao tinha como ser pega.
     """
-    banca = _primeira(estado, "bancada", vazia=True) or _primeira(estado, "bancada")
     lado = next((l for l, c in estado["cozinheiros"].items() if c["mao"]), None)
     mao = estado["cozinheiros"][lado]["mao"] if lado else None
+
+    # Onde LARGAR de verdade. Uma bancada ocupada nao serve: chegar nela com algo
+    # na mao tenta MONTAR, e a jogada seria recusada — a dica estaria mandando
+    # fazer o impossivel, que e o pior tipo de dica.
+    #
+    # O que queimou vai pro lixo, e nao pra bancada: largar carvao num balcao so
+    # entope mais um lugar.
+    if mao and mao.get("estado") == QUEIMADO:
+        lixo = _primeira(estado, "lixo")
+        return {"estacao": lixo["id"] if lixo else None, "lado": lado,
+                "texto": "Jogue o queimado no lixo", "receita": pedido.get("receita")}
+
+    destino = (
+        _primeira(estado, "bancada", vazia=True)
+        or _primeira(estado, "tabua", vazia=True)
+        or _primeira(estado, "panela", vazia=True)
+    )
+    if destino is None:
+        return {"estacao": None, "esperar": True,
+                "texto": "Sem espaço livre — termine algo antes",
+                "receita": pedido.get("receita")}
+    onde = {"bancada": "na bancada", "tabua": "na tábua", "panela": "na panela"}[destino["tipo"]]
     o_que = "o prato" if mao and mao.get("ing") == "prato" else "o que está na mão"
-    return {"estacao": banca["id"] if banca else None, "lado": lado,
-            "texto": f"Largue {o_que} na bancada", "receita": pedido["receita"]}
+    return {"estacao": destino["id"], "lado": lado,
+            "texto": f"Largue {o_que} {onde}", "receita": pedido.get("receita")}
 
 
 def _dica_preparar(estado: dict, pedido: dict, ing: str, preparo: str) -> dict:
@@ -1242,6 +1302,29 @@ def _dica_preparar(estado: dict, pedido: dict, ing: str, preparo: str) -> dict:
                 # letra desfaria o proprio trabalho.
                 return {"estacao": estacao["id"], "esperar": True,
                         "texto": f"{art.upper()} {nome} está quase — espere",
+                        "receita": pedido["receita"]}
+            # -------------------------------------------- NAO pegue sem ter onde por
+            #
+            # Este `if` conserta um PING-PONG que travava a rodada inteira. Sem
+            # ele, com as duas panelas ocupadas, a dica alternava pra sempre:
+            #
+            #   "A panela esta ocupada — largue a carne na bancada"
+            #   "Pegue a carne para cozinhar"     <- pega de volta
+            #   "A panela esta ocupada — largue a carne na bancada"
+            #   ...
+            #
+            # Medido numa rodada a dois: 20 toques em 1 segundo de jogo, zero
+            # entregas na rodada. Quem esta seguindo a dica ficaria fazendo isso
+            # ate o gongo.
+            #
+            # Se nao ha ferramenta livre, o certo e ESPERAR uma vagar — e nao
+            # ficar carregando o ingrediente de um lado pro outro.
+            vaga = _primeira(estado, ferramenta, vazia=True)
+            if vaga is None:
+                ocupada = _primeira(estado, ferramenta)
+                onde = "A tábua" if ferramenta == "tabua" else "A panela"
+                return {"estacao": ocupada["id"] if ocupada else None, "esperar": True,
+                        "texto": f"{onde} está ocupada — espere vagar",
                         "receita": pedido["receita"]}
             livre = _quem_livre(estado, estacao)
             if livre is None:

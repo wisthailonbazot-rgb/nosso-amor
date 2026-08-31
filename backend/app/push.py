@@ -42,6 +42,48 @@ log = logging.getLogger("push")
 # a assinatura e considerada perdida. Evita ficar batendo em endpoint zumbi.
 MAX_FAILURES = 10
 
+# ------------------------------------------------------- o bilhete de volta, GUARDADO
+#
+# O `ack` ja existia e ia so pro LOG — e log ninguem le do celular. Entao o app
+# continuava sem conseguir responder a unica pergunta que importa quando o dono
+# diz "as notificacoes nao funcionam":
+#
+#   o servidor mandou?  o servico de push aceitou?  o aparelho MOSTROU?
+#
+# Sao tres coisas diferentes que pareciam iguais. Agora o bilhete fica aqui por
+# alguns minutos e a tela de Perfil consegue esperar por ele.
+#
+# Na MEMORIA de proposito: e diagnostico, nao dado. Perder num reinicio nao custa
+# nada, e gravar no banco custaria uma tabela e uma migracao pra guardar lixo. O
+# app roda com UM worker (regra do `realtime.py`), entao o dicionario e unico.
+_ACKS: dict[str, dict] = {}
+_ACKS_TETO = 40
+
+
+def registrar_envio(ack: str, user_id: int, aceitos: int) -> None:
+    """Anota que um push saiu, esperando o bilhete de volta."""
+    _ACKS[ack] = {"user_id": user_id, "aceitos": aceitos, "mostrou": None,
+                  "modo": "", "erro": "", "quando": utcnow().isoformat()}
+    # Teto simples: o mais velho sai. Sem isto, um app que nunca responde faria
+    # o dicionario crescer pra sempre.
+    while len(_ACKS) > _ACKS_TETO:
+        _ACKS.pop(next(iter(_ACKS)))
+
+
+def anotar_ack(ack: str, mostrou: bool, modo: str, erro: str) -> None:
+    registro = _ACKS.get(ack)
+    if registro is None:
+        return
+    registro.update(mostrou=mostrou, modo=modo, erro=erro)
+
+
+def ver_ack(ack: str, user_id: int) -> dict | None:
+    """O que se sabe daquele envio. So pro dono dele."""
+    registro = _ACKS.get(ack)
+    if registro is None or registro["user_id"] != user_id:
+        return None
+    return {k: v for k, v in registro.items() if k != "user_id"}
+
 
 # Um topico e um rotulo curto que o servico de push usa pra SUBSTITUIR um aviso
 # ainda nao entregue por outro do mesmo assunto. Sem ele, dez mensagens de chat
@@ -92,6 +134,18 @@ def _send_one(sub: PushSubscription, payload: dict, ttl: int = 43200) -> tuple[b
         code = getattr(exc.response, "status_code", None)
         if code in (404, 410):
             # o aparelho desinstalou o app ou revogou a permissao
+            return False, True
+        if code in (401, 403):
+            # A credencial nao serve pra esta assinatura, e nunca mais vai servir:
+            # ela foi criada com OUTRA chave VAPID. Acontece quando as chaves do
+            # servidor sao trocadas depois de o aparelho ja ter se inscrito.
+            #
+            # Antes isso so virava uma linha de log, e o registro morto ficava no
+            # banco PRA SEMPRE — todo envio futuro gastava tempo com ele e o app
+            # continuava achando que tinha aparelho ligado. Apagando, o app
+            # percebe que nao ha assinatura e refaz na proxima vez que a tela de
+            # Perfil abrir.
+            log.warning("push com credencial invalida (%s): assinatura descartada", code)
             return False, True
         log.warning("push falhou (%s): %s", code, exc)
         return False, False
@@ -183,4 +237,7 @@ def send_to_user(
             if sub.failures >= MAX_FAILURES:
                 db.delete(sub)
     db.flush()
-    return {"sent": sent, "devices": len(subs)}
+    # O bilhete fica esperando resposta do aparelho. E o que permite a tela de
+    # Perfil distinguir "o servico de push aceitou" de "o aviso apareceu".
+    registrar_envio(ack, user_id, sent)
+    return {"sent": sent, "devices": len(subs), "ack": ack}

@@ -1524,3 +1524,48 @@ aparece na mão dele enquanto ele tá indo pegar."*
 - **[ ]** Jogar **a dois**, um celular em cada mão — é o único modo que nunca
       rodou com duas pessoas ao mesmo tempo.
 - **[ ]** Se ainda estiver difícil: modo treino, sem relógio e com um pedido só.
+
+### 30/08/2026 — Tempo, tela do jogo e notificações (quarta rodada)
+
+- **[x]** **O tempo era impossível, e a causa era a FILA, não o prazo.** Medido:
+      jogando perfeito, sozinho perdia 4 ou 5 pedidos por rodada — se o teto já
+      perde, a pessoa não tem chance. Os prazos subiram (~+50%) e o ritmo dos
+      pedidos passou a depender de quantas mãos existem; antes era igual pra um e
+      pra dois, o que fazia o modo sozinho ser matematicamente impossível. Agora:
+      **0 perdidos no teto**, 2 a 3 entregues em ritmo humano.
+- **[x]** Dois **laços infinitos** da dica, achados pelo teste de rodada inteira:
+      o ping-pong "largue/pegue" com as panelas ocupadas, e o "tire da panela"
+      mandado sem ninguém de mão vazia.
+- **[x]** Um erro meu: as trocas de prazo cascatearam e o **hambúrguer ficou com o
+      prazo mais curto de todos**. Agora a troca é ancorada no nome da receita.
+- **[x]** **A tela do jogo** (era isso que ele queria dizer, e eu tinha entendido
+      como sendo a página): grade 8×5 → 7×4, parede 2 → 3 com azulejo, janela e
+      prateleira, e as comandas movidas pra baixo do palco. Canvas de 375×246 →
+      **375×290**, célula de 58 → **68 px**, e os ~145 px mortos de baixo quase
+      sumiram.
+- **[x]** **Deitado, o canvas estourava a tela** (530×410 numa tela de 375 de
+      altura, terminando 350 px abaixo do fim): a escala só olhava a largura.
+      Agora olha as duas, e há um CSS próprio pra telas baixas.
+
+#### Notificações
+
+- **[~]** As chaves VAPID **estão certas em produção** (conferidas pela API do
+      Coolify) e o código de envio e o service worker estão corretos. Não consigo
+      ver daqui qual elo quebra — sem o aparelho dele e sem os logs do container.
+- **[x]** Então o app passou a diagnosticar: o `ack` que o service worker devolve
+      **agora fica guardado** (ia só pro log, e log ninguém lê do celular), e o
+      teste em Perfil **espera o aparelho confirmar** antes de dizer que deu
+      certo.
+- **[x]** Assinatura recusada por credencial (403/401) passou a ser **descartada**,
+      como já acontecia com 404/410. Uma credencial recusada assim nunca mais vai
+      servir — ela foi criada com outra chave VAPID.
+- **[ ]** **Abrir Perfil → notificações → "Enviar teste" e me dizer a frase que
+      aparece.** É ela que separa as três falhas: a assinatura não existe, o
+      serviço de push recusou, ou o aparelho recebeu e não mostrou.
+
+#### Achado de configuração
+
+- **[ ]** Em produção, `COUPLE_START_DATE` está com o valor literal de dois
+      apóstrofos em vez de uma data. Inofensivo se a data já foi definida dentro
+      do app (o `seed.py` avisa e ignora), mas vale olhar o "juntos há N dias" na
+      tela inicial. Não mexi porque não sei a data de vocês.

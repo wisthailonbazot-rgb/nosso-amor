@@ -3814,3 +3814,145 @@ isso aparece de um jeito muito mais claro — o jogo congela.
 | na bateria | as 4 receitas, **solo e a dois**, 8 a 19 toques, **zero recusas** |
 
 **Estado: 844 verificações, 0 falha.** Build Vite aprovada.
+
+### 9.33 O tempo era impossível, a cozinha era pequena, e o push não dava pra diagnosticar (30/08/2026)
+
+Pedido do dono, jogando: *"o tempo para executar cada receita é bem curto, nunca
+dá tempo de fazer. As notificações mesmo com a permissão não funcionam nem no
+Android nem no iPhone. Quando falei sobre aproveitamento da tela, tava falando da
+tela do jogo de cozinha em si, que usa apenas a parte de cima da tela, fica
+pequeno e desperdiça a tela toda."*
+
+#### 1. O tempo: a causa não era o prazo, era a FILA
+
+Medi antes de mexer, e ele estava certo — mas não pelo motivo que a frase sugere.
+Uma receita isolada leva de 11 s (salada) a 27 s (prato do casal), com prazos de
+55 a 90 s. Folga de sobra.
+
+O problema era a vazão: os pedidos chegavam a cada 6 a 11 s e um cozinheiro serve
+um a cada ~22 s. **A fila crescia mais rápido do que qualquer pessoa consegue
+servir** — e aí TODO pedido parecia curto, porque quando se chegava nele ele já
+estava acabando.
+
+> **Medido, jogando PERFEITO pela própria dica** (o teto do que dá pra fazer):
+> sozinho entregava 3 ou 4 e **perdia 4 ou 5** por rodada. Se o teto já perde, a
+> pessoa não tem chance.
+
+Três mudanças, e a segunda é a que importa:
+
+1. os prazos subiram (55/70/80/90 s → 90/120/120/145 s);
+2. **o intervalo entre pedidos passou a depender de quantas MÃOS existem.** Era o
+   mesmo pra um e pra dois, o que fazia o modo sozinho ser matematicamente
+   impossível enquanto o de dois era só difícil (`FOLGA_SOZINHO`);
+3. o teto de pedidos simultâneos caiu de 4 pra 3.
+
+**Medido depois:** no teto, 0 perdidos nos dois modos. Com demora humana de 800 ms
+a 1,5 s por toque, 2 a 3,3 entregues e 0,2 a 1 perdido.
+
+E um erro meu no caminho, que só apareceu porque conferi o arquivo: as
+substituições dos prazos **cascatearam** (troquei 55→80, depois 80→115, e a
+segunda pegou o resultado da primeira). O hambúrguer, de três ingredientes, ficou
+com o prazo MAIS CURTO de todos. Agora a troca é ancorada no nome da receita.
+
+#### 2. Dois laços infinitos que o teste de rodada inteira encontrou
+
+São os piores do tipo: o jogo não trava, a dica só fica dando voltas.
+
+**a) O ping-pong.** Com as duas panelas ocupadas, a dica alternava pra sempre:
+"a panela está ocupada — largue a carne na bancada" / "pegue a carne para
+cozinhar" / "largue…" — 20 toques em 1 segundo de jogo, zero entregas na rodada.
+Agora, sem ferramenta livre, ela manda **esperar vagar** em vez de ficar
+carregando o ingrediente de um lado pro outro.
+
+**b) O queimado impossível.** "Queimou — tire da panela" era mandado mesmo sem
+ninguém de mão vazia, e a jogada era recusada com "isso não vai junto" (chegar com
+algo na mão tenta MONTAR, não pegar). Agora ela manda largar primeiro. E o que
+queimou vai pro LIXO, não pra bancada — largar carvão num balcão só entope mais um
+lugar.
+
+Isso virou teste: **a rodada inteira jogada só pela dica**, exigindo zero pedidos
+perdidos e zero recusas.
+
+#### 3. A tela do jogo: o que dá e o que não dá
+
+Eu tinha entendido errado da primeira vez (achei que era a página). Ele falava do
+canvas.
+
+**O que não dá, e vale escrever:** a arte isométrica é sempre ~2:1 (largura
+`(col+lin)×48`, altura `(col+lin)×24 + parede`). Ela é limitada pela LARGURA da
+tela, e mudar o formato da grade não muda essa proporção. Num celular em pé vai
+sobrar altura, sempre.
+
+**O que dá, e foi feito:**
+
+| | antes | depois |
+|---|---|---|
+| grade | 8×5 | **7×4** — menos células, cada uma maior |
+| parede | 2 | **3**, com azulejo, janela e prateleira |
+| canvas na tela | 375×246 | **375×290** |
+| célula | 58 px | **68 px** |
+
+7×4 é o MENOR tamanho que ainda cabe: as 14 estações precisam de uma célula livre
+ao lado, e num retângulo só as bordas com vizinho interno servem — num 7×4 elas
+são exatamente 14, com as quatro quinas de chão.
+
+A parede cresceu porque é a única parte da cena que pode crescer sem deformar
+nada. Cheguei a pôr 4 e **ficou errado**: a faixa acima dos armários virava um
+paredão azul e a cozinha parecia estar no fundo de um poço. 3 é o ponto em que ela
+ainda ganha altura sem dominar. *Espaço aproveitado não é espaço preenchido.*
+
+E as **comandas foram pra baixo do palco**: sobravam ~145 px mortos entre os
+botões e a barra de navegação. Com elas ali, o jogo sobe ~90 px e o vazio quase
+some.
+
+**Um defeito de verdade no caminho:** a escala só olhava a LARGURA. Em pé isso
+passa; **deitado o canvas estourava** — medido em 812×375, ele saía 530×410 e
+terminava 350 px abaixo do fim da tela. Deitar o celular, que devia ser a melhor
+forma de jogar um jogo 2:1, era a pior. Agora ela olha as duas dimensões, e há um
+CSS próprio pra telas baixas que esconde o título e as abas.
+
+> E aprendi que **paisagem não é melhor aqui**: as comandas e a dica também
+> precisam de altura, e numa tela de 375 de altura sobra tão pouco que o canvas
+> fica menor do que em pé. Retrato é a orientação certa.
+
+#### 4. O push: eu não consigo diagnosticar daqui, então fiz o app diagnosticar
+
+As chaves VAPID **estão configuradas em produção** (conferido pela API do Coolify:
+pública 87, privada 43, subject 32 — os tamanhos certos), então `PUSH_ENABLED` é
+verdadeiro e o push não está desligado. O código de envio e o service worker foram
+lidos e estão corretos.
+
+Sem acesso ao aparelho dele nem aos logs do container, não tenho como ver qual elo
+quebra. Então o trabalho foi **tornar a falha legível por quem tem o aparelho**:
+
+- **o `ack` agora fica guardado.** Ele já existia — todo push leva um número que o
+  service worker devolve dizendo se conseguiu MOSTRAR o aviso — mas ia só pro log,
+  e log ninguém lê do celular;
+- **a tela de Perfil espera por ele.** Antes ela dizia "enviado para 1
+  aparelho(s)" e parava, o que é o servidor falando do servidor. Agora ela separa
+  as três falhas que pareciam iguais:
+
+  1. *"Nenhum aparelho registrado"* — a assinatura não chegou a ser criada;
+  2. *"O serviço aceitou, mas o aparelho não respondeu em 10s"* — é do lado do
+     aparelho (no iPhone, quase sempre é o app aberto pelo Safari em vez da Tela
+     de Início);
+  3. *"O aparelho recebeu, mas não conseguiu mostrar"* — com o erro do service
+     worker junto.
+
+  A Apple responde "aceito" **antes** de decidir se mostra, e é por isso que o
+  servidor sozinho nunca conseguiu distinguir as três.
+
+- **403/401 agora descarta a assinatura**, como já acontecia com 404/410. Uma
+  credencial recusada assim nunca mais vai servir: aquela assinatura foi criada
+  com OUTRA chave VAPID. Antes o registro morto ficava no banco pra sempre, todo
+  envio gastava tempo com ele, e o app continuava achando que tinha aparelho
+  ligado.
+
+**Achado de configuração, não consertado de propósito:** em produção
+`COUPLE_START_DATE` está com o valor literal de dois apóstrofos, e não uma data. O
+app trata isso bem (`seed.py` avisa e ignora) e só usa a variável pra semear o
+valor inicial — então, se a data já foi definida dentro do app, não há efeito. Não
+mexi porque não sei a data deles e porque mudar configuração de produção no
+palpite é o tipo de coisa que se pergunta antes.
+
+**Estado: 856 verificações, 0 falha.** Build Vite aprovada.

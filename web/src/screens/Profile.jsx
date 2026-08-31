@@ -81,21 +81,63 @@ export default function Profile() {
     setBusy(false)
   }
 
+  /**
+   * Manda um aviso de teste e ESPERA o aparelho confirmar que mostrou.
+   *
+   * Antes ela dizia "enviado para 1 aparelho(s)" e parava aí — mas isso é o
+   * servidor falando do servidor. Quando o dono disse que as notificações não
+   * funcionavam em nenhum dos dois celulares, essa mensagem não ajudava em
+   * nada: ela some três coisas MUITO diferentes numa frase só.
+   *
+   *   1. o servidor não tinha aparelho registrado;
+   *   2. tinha, mandou, e o serviço de push (Apple/Google) recusou;
+   *   3. o serviço aceitou, o aparelho recebeu, e o aviso não apareceu.
+   *
+   * O terceiro é o mais comum e o mais invisível — e é o único que o servidor
+   * não tem como perceber sozinho, porque a Apple responde "aceito" antes de
+   * decidir se vai mostrar. Por isso todo push carrega um bilhete (`ack`) que o
+   * service worker devolve; agora a tela espera por ele.
+   */
   async function sendTest() {
     setBusy(true)
-    setMessage(null)
+    setMessage({ kind: 'warn', text: 'Enviando…' })
     try {
       const result = await api.post('/api/push/test')
-      setMessage(
-        result.sent > 0
-          ? { kind: 'ok', text: `Enviado para ${result.sent} aparelho(s). Deve chegar agora.` }
-          : {
-              kind: 'error',
-              text:
-                result.skipped ||
-                'O servidor não encontrou nenhum aparelho ligado para você. Ligue as notificações primeiro.',
-            }
-      )
+      if (!result.sent) {
+        setMessage({
+          kind: 'error',
+          text: result.skipped
+            || 'Nenhum aparelho registrado para você. Ligue as notificações neste aparelho primeiro.',
+        })
+        setBusy(false)
+        return
+      }
+      setMessage({ kind: 'warn', text: 'O serviço de push aceitou. Esperando o aparelho mostrar…' })
+
+      // Até 10 segundos. O caminho servidor → Apple/Google → aparelho → service
+      // worker leva alguns segundos, e no iPhone com a tela apagada leva mais.
+      let visto = null
+      for (let i = 0; i < 20 && !visto; i++) {
+        await new Promise((r) => setTimeout(r, 500))
+        const q = await api.get(`/api/push/ack/${result.ack}`).catch(() => null)
+        if (q?.conhecido && q.mostrou !== null) visto = q
+      }
+
+      if (!visto) {
+        setMessage({
+          kind: 'error',
+          text: 'O serviço de push aceitou, mas o aparelho não respondeu em 10s. '
+            + 'No iPhone, o app precisa estar aberto pela Tela de Início (não pelo Safari). '
+            + 'Se estiver, me diga que aparece aqui — é do lado do aparelho, não do servidor.',
+        })
+      } else if (visto.mostrou) {
+        setMessage({ kind: 'ok', text: 'Chegou e apareceu neste aparelho. Está funcionando.' })
+      } else {
+        setMessage({
+          kind: 'error',
+          text: `O aparelho recebeu, mas não conseguiu mostrar o aviso${visto.erro ? `: ${visto.erro}` : '.'}`,
+        })
+      }
     } catch (err) {
       setMessage({ kind: 'error', text: err.message })
     }

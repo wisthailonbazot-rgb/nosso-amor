@@ -34,7 +34,22 @@ import { FACE_LEFT, FACE_RIGHT, FACE_TOP, TH, TW, TZ, depthSort, groundShadow, i
 import { Painter, mix, shade } from './pixel'
 
 const OUTLINE = '#33203a'
-const ALTURA_PAREDE = 2
+// A parede subiu de 2 pra 3, e isso e ganho de TELA.
+//
+// A arte isometrica e limitada pela largura (~2:1), entao a altura sobrava. A
+// parede e a unica parte da cena que pode crescer sem deformar nada: ela nao tem
+// celulas, nao entra na projecao do chao, e cada unidade dela sao 48 px de arte
+// a mais.
+//
+// Cheguei a por 4, e ficou ERRADO: a faixa acima dos armarios virava um paredao
+// azul de ~100 px e a cozinha parecia estar no fundo de um poco. 3 e o ponto em
+// que a parede ainda cresce (+48 px de arte, canvas de 246 -> 290 px de tela)
+// sem passar a dominar a cena. Espaco aproveitado nao e espaco preenchido.
+//
+// Mas parede vazia e pior que tela vazia — ficaria um poco azul. Por isso ela
+// ganhou azulejo, uma JANELA com vista e uma prateleira com potes: o espaco que
+// era desperdicio passou a ser cozinha.
+const ALTURA_PAREDE = 3
 const QUEIMADO = 'queimado'
 
 /** As três faces a partir de uma cor só — igual aos móveis da casa. */
@@ -91,6 +106,7 @@ export function fundoDaCozinha(largura, altura, estacoes) {
   const pf = faces(COR.parede)
   isoBox(p, pf, { col: -0.35, row: -0.35, w: largura + 0.35, d: 0.35, z: 0, h: ALTURA_PAREDE }, origin, OUTLINE)
   isoBox(p, pf, { col: -0.35, row: 0, w: 0.35, d: altura, z: 0, h: ALTURA_PAREDE }, origin, OUTLINE)
+  decorarParede(p, largura, altura, origin)
 
   // ---------------------------------------------------------------- o piso
   // Xadrez, que é o que uma cozinha tem — e ajuda a contar as casas de olho,
@@ -119,6 +135,65 @@ export function fundoDaCozinha(largura, altura, estacoes) {
   if (cacheFundo.size > 8) cacheFundo.clear()
   cacheFundo.set(chave, resultado)
   return resultado
+}
+
+/**
+ * O que enche a parede alta: azulejo, uma janela e uma prateleira.
+ *
+ * A parede cresceu pra aproveitar a altura da tela (ver `ALTURA_PAREDE`), e
+ * parede lisa de 4 unidades seria um paredão azul — trocaria "tela vazia" por
+ * "cozinha vazia", que não é melhor. Com azulejo, janela e potes, o espaço que
+ * era desperdício vira cenário.
+ *
+ * Tudo aqui é desenhado UMA vez, junto com o fundo: nada disso se mexe.
+ */
+function decorarParede(p, largura, altura, origin) {
+  // ---------------------------------------------------------- o azulejo
+  // Faixas horizontais nas duas paredes, a cada meia unidade de altura. Elas
+  // dão escala à parede: sem nenhuma linha, não dá pra perceber que ela é alta.
+  for (let z = 0.5; z < ALTURA_PAREDE; z += 0.5) {
+    const claro = shade(COR.parede, z % 1 === 0 ? -0.1 : 0.06)
+    // a de trás (ao longo das colunas)
+    p.fillPoly([
+      project(-0.35, 0, z, origin), project(largura, 0, z, origin),
+      project(largura, 0, z - 0.06, origin), project(-0.35, 0, z - 0.06, origin),
+    ], claro)
+    // a da esquerda (ao longo das linhas)
+    p.fillPoly([
+      project(0, -0.35, z, origin), project(0, altura, z, origin),
+      project(0, altura, z - 0.06, origin), project(0, -0.35, z - 0.06, origin),
+    ], claro)
+  }
+
+  // ------------------------------------------------------------ a janela
+  // Na parede do fundo, acima das despensas. Ela é o único ponto de fuga da
+  // cena — sem ela a parede alta não tem pra onde olhar.
+  const jc = Math.max(1.2, largura - 3.2)
+  const moldura = (c0, c1, z0, z1, cor) => p.fillPoly([
+    project(c0, 0, z1, origin), project(c1, 0, z1, origin),
+    project(c1, 0, z0, origin), project(c0, 0, z0, origin),
+  ], cor)
+  moldura(jc - 0.12, jc + 2.12, 1.62, 2.82, '#8d7a6b')          // caixilho
+  moldura(jc, jc + 2, 1.72, 2.72, '#a8dcef')                     // o céu
+  moldura(jc, jc + 2, 1.72, 2.02, '#7fc46a')                     // o campo lá fora
+  moldura(jc + 0.35, jc + 0.75, 2.08, 2.34, '#fdfbf4')           // uma nuvem
+  moldura(jc + 1.15, jc + 1.45, 2.22, 2.45, '#fdfbf4')
+  moldura(jc + 0.94, jc + 1.06, 1.72, 2.72, '#8d7a6b')           // o caixilho do meio
+
+  // -------------------------------------------------------- a prateleira
+  // Na parede da esquerda, com potes de cores diferentes. Dá vida ao lado que
+  // não tem janela, e reforça que aquilo ali é uma cozinha.
+  const prat = (r0, r1, z, cor) => p.fillPoly([
+    project(0, r0, z, origin), project(0, r1, z, origin),
+    project(0, r1, z - 0.09, origin), project(0, r0, z - 0.09, origin),
+  ], cor)
+  prat(0.3, altura - 0.3, 2.12, '#b98a5e')
+  const potes = ['#e0553f', '#7cc45f', '#e8c86a', '#d78ab0']
+  potes.forEach((cor, i) => {
+    const r0 = 0.45 + i * 0.72
+    if (r0 + 0.5 > altura - 0.3) return
+    prat(r0, r0 + 0.5, 2.55, cor)
+  })
 }
 
 /**

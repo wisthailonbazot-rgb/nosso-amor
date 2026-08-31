@@ -344,8 +344,6 @@ export default function GameCozinha({ telaCheia = false }) {
   const resta = Math.max(0, vista.fim_ms - agoraServidor())
   return (
     <div className={`cozinha ${telaCheia ? 'cheia' : ''}`}>
-      <FilaDePedidos vista={vista} agora={agoraServidor} />
-
       <div className="cozinha-hud">
         <span className="cozinha-relogio">{Math.ceil(resta / 1000)}s</span>
         <span className="cozinha-pontos">{vista.pontos} pts</span>
@@ -366,7 +364,15 @@ export default function GameCozinha({ telaCheia = false }) {
       {aviso && <p className={`notice ${aviso.tipo} cozinha-aviso`}>{aviso.texto}</p>}
 
       <Palco vista={vista} atual={atual} agoraServidor={agoraServidor} aoTocar={tocar}
-             rotulos={rotulos} ajuda={ajuda} />
+             rotulos={rotulos} ajuda={ajuda} telaCheia={telaCheia} />
+
+      {/* As comandas ficam ABAIXO do palco, e isso e economia de tela.
+          O dono: "a tela do jogo usa apenas a parte de cima e desperdica a tela
+          toda". Medido: sobravam ~145 px mortos entre os botoes e a barra de
+          navegacao. Com as comandas ali, o jogo sobe ~90 px e o vazio quase
+          some — e elas continuam a um olhar de distancia, como o trilho de
+          pedidos de uma cozinha de verdade. */}
+      <FilaDePedidos vista={vista} agora={agoraServidor} />
 
       <div className="cozinha-ajustes">
         <button
@@ -490,7 +496,7 @@ function FilaDePedidos({ vista, agora }) {
  * efeitos rodam, as refs já existem. É a solução do React pra isso, e não um
  * `setTimeout` esperando o elemento aparecer.
  */
-function Palco({ vista, atual, agoraServidor, aoTocar, rotulos, ajuda }) {
+function Palco({ vista, atual, agoraServidor, aoTocar, rotulos, ajuda, telaCheia }) {
   const holder = useRef(null)
   const canvas = useRef(null)
   const painter = useRef(null)
@@ -501,25 +507,51 @@ function Palco({ vista, atual, agoraServidor, aoTocar, rotulos, ajuda }) {
   useLayoutEffect(() => {
     const caixa = holder.current
     if (!caixa) return
-    // A cozinha inteira TEM que caber de uma vez.
-    //
-    // Na casa o cômodo pode rolar pro lado, porque quem decora tem tempo. Numa
-    // rodada de 3 minutos, rolar a tela pra achar a panela é perder a rodada.
-    //
-    // Por isso, e só por isso, aqui a escala aceita fração quando nem 1× cabe —
-    // o resto do app usa escala inteira porque meio pixel de arte vira franja.
-    // No celular a conta dá ~0,58, e é o preço de ver a cozinha toda.
+    /**
+     * A escala olha a LARGURA **e a ALTURA**, e a altura foi o que faltava.
+     *
+     * A primeira versão só cabia pela largura. Em pé isso passa (a arte é ~2:1,
+     * então a largura é sempre o lado apertado), mas **deitado ela estourava**:
+     * medido em 812×375, o canvas saía 530×410 e terminava em 728 — trezentos e
+     * cinquenta pixels abaixo do fim da tela. Deitar o celular, que devia ser a
+     * melhor forma de jogar um jogo 2:1, era a pior.
+     *
+     * `RESERVA` é o que fica embaixo do palco e precisa continuar visível: a
+     * fileira de botões e a barra de navegação. Sem descontar isso, o canvas
+     * cresce até esconder o "Encerrar".
+     */
+    const RESERVA = telaCheia ? 56 : 150
     const medir = () => {
       const disponivel = caixa.clientWidth
       if (!disponivel) return
-      const inteira = Math.floor(disponivel / m.width)
-      setEscala(inteira >= 1 ? Math.min(3, inteira) : disponivel / m.width)
+      const alturaLivre = window.innerHeight - caixa.getBoundingClientRect().top - RESERVA
+      const porLargura = disponivel / m.width
+      // O piso de 140 px existe pro caso de a medida sair negativa (acontece no
+      // instante da montagem, e com o celular deitado antes de o CSS de tela
+      // baixa entrar). Sem ele, `porAltura` virava um numero absurdo e o canvas
+      // sumia; com ele, o pior caso e um canvas pequeno, e nao um canvas
+      // quebrado.
+      const porAltura = Math.max(140, alturaLivre) / m.height
+      const cabe = Math.min(porLargura, porAltura)
+      // Escala INTEIRA quando dá (meio pixel de arte vira franja em pixel art),
+      // e fração quando nem 1× cabe — a cozinha inteira TEM que aparecer de uma
+      // vez: numa rodada de 3 minutos, rolar a tela pra achar a panela é perder
+      // a rodada.
+      setEscala(cabe >= 1 ? Math.min(3, Math.floor(cabe)) : cabe)
     }
     medir()
     const obs = new ResizeObserver(medir)
     obs.observe(caixa)
-    return () => obs.disconnect()
-  }, [m.width])
+    // Girar o celular não muda a largura do container na hora certa; a janela é
+    // quem avisa.
+    window.addEventListener('resize', medir)
+    window.addEventListener('orientationchange', medir)
+    return () => {
+      obs.disconnect()
+      window.removeEventListener('resize', medir)
+      window.removeEventListener('orientationchange', medir)
+    }
+  }, [m.width, m.height, telaCheia])
 
   useEffect(() => {
     const c = canvas.current

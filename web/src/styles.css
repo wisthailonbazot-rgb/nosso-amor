@@ -2762,3 +2762,30 @@ button:disabled,
   font-size: 13px;
   white-space: nowrap;
 }
+
+
+/* ------------------------------------------------- o celular DEITADO (e telas baixas)
+   A arte da cozinha e ~2:1, entao deitada ela caberia perfeitamente — e era
+   justamente deitado que ficava pior: o cabecalho (titulo + abas + comandas +
+   placar + dica) somava ~318 px, e a tela deitada tem 375. Nao sobrava nada.
+
+   Numa tela baixa, o que sai e o que da pra reconstruir de cabeca: o titulo
+   grande (a aba ja diz onde voce esta) e as abas dos outros jogos (ninguem troca
+   de jogo no meio de uma rodada). As comandas encolhem, mas FICAM — sem elas nao
+   da pra jogar. */
+@media (max-height: 520px) {
+  .app-main { padding-top: calc(var(--safe-top) + 6px); }
+  .cozinha ~ .screen-title,
+  .screen-title:has(~ * .cozinha) { display: none; }
+  .jogos-tabs { display: none; }
+  .cozinha-pedido { min-width: 96px; padding: 3px 6px 4px; }
+  .cozinha-pedido strong { font-size: 11px; }
+  .cozinha-receita li { font-size: 9.5px; }
+  .cozinha-receita .cozinha-bolinha { width: 8px; height: 8px; }
+  .cozinha-dica { padding: 3px 8px; font-size: 12px; }
+  .cozinha-hud { gap: 8px; }
+  .cozinha-relogio { font-size: 16px; }
+  .cozinha-pontos { font-size: 14px; }
+  .cozinha-ajustes { gap: 4px; }
+  .btn-chip { padding: 2px 8px; font-size: 10px; }
+}
