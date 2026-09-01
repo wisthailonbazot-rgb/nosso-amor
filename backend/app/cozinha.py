@@ -219,8 +219,8 @@ PONTOS_ERRADO = -15    # entregou o prato errado
 #
 # A planta e DADO, entao nivel novo e uma entrada nova aqui — nao codigo novo.
 
-LARGURA = 7
-ALTURA = 4
+LARGURA = 8
+ALTURA = 5
 
 # tipo:parametro. "." é chão livre.
 # TODA estacao precisa de pelo menos uma celula livre VIZINHA, senao ela e
@@ -244,10 +244,11 @@ ALTURA = 4
 # `mandar`): antes, uma bancada com um acesso so podia ser trancada pelo outro
 # boneco, e por isso ela precisava de tres lados livres.
 _PLANTA_1 = [
-    ".         d:alface  d:tomate  d:carne   d:pao     d:massa   .",
-    "tabua     .         .         .         .         .         panela",
-    "tabua     .         .         .         .         .         panela",
-    ".         bancada   pratos    lixo      entrega   pia       .",
+    ".         d:alface  d:tomate  d:carne   d:pao     d:massa   .         .",
+    "tabua     .         .         .         .         .         .         panela",
+    "pia       .         bancada   .         bancada   .         .         panela",
+    "tabua     .         .         .         .         .         .         .",
+    "lixo      .         .         pratos    .         entrega   .         .",
 ]
 
 NIVEIS = {

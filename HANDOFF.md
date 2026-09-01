@@ -3956,3 +3956,105 @@ mexi porque não sei a data deles e porque mudar configuração de produção no
 palpite é o tipo de coisa que se pergunta antes.
 
 **Estado: 856 verificações, 0 falha.** Build Vite aprovada.
+
+### 9.34 O fogão que "não funcionava" era o dedo, e a cozinha voltou a respirar (31/08/2026)
+
+Pedido do dono: *"você encurtou muito o espaço da cozinha, as coisas estão uma em
+cima da outra. Além disso, dos dois fogões só um funciona, tá bugado o outro. E
+deixe duas bancadas, só uma não dá pra fazer nada. Os alimentos estão bem feios,
+melhore a qualidade deles."*
+
+#### 1. O fogão "bugado": os dois sempre funcionaram
+
+Conferido antes de mexer: **os dois cozinham** (pus carne num e massa no outro, os
+dois foram a `cozido`) e **a dica aponta os dois** (ela usou as duas panelas numa
+receita). O motor nunca teve esse defeito.
+
+O que não funcionava era **acertar** o segundo. O toque escolhia a estação de
+CENTRO mais próximo, e em isométrico duas estações vizinhas ficam a ~54 px de
+arte uma da outra — na escala do celular, **32 px entre os dois centros**. Um dedo
+tem uns 44 px. Metade dos toques no fogão de baixo caía no de cima, e de fora isso
+é exatamente "um funciona e o outro não".
+
+**O conserto:** o toque passou a ser testado contra a **silhueta desenhada** — o
+hexágono que o bloco ocupa na tela. O dedo acerta a estação que está embaixo dele,
+e não a que tem o centro mais perto. Quando duas silhuetas se sobrepõem, ganha a
+**da frente**, que é a que a pessoa vê inteira.
+
+> **Medido depois, com a geometria refeita em Python:** as 15 estações respondem
+> por si mesmas. E virou teste — uma planta futura em que alguma ficasse coberta
+> reprova ali.
+
+Uma consequência interessante que a medição revelou: numa fileira de armários
+encostados, o **meio do corpo** de cada um fica coberto pelo vizinho da frente, e
+tocar ali acerta o vizinho. Isso é geometricamente honesto (aquela parte está
+mesmo escondida). O **topo**, não: ele é visível nos quinze, é onde a comida
+aparece e onde o nome é pendurado. Por isso o anel da dica foi movido pro topo.
+
+#### 2. A cozinha voltou a respirar, e as duas reclamações eram opostas
+
+Vale registrar o vaivém, porque as duas frases são verdadeiras e puxam pra lados
+contrários:
+
+| | |
+|---|---|
+| *"fica pequeno e desperdiça a tela toda"* | menos células, cada uma maior |
+| *"as coisas estão uma em cima da outra"* | mais células, mais respiro |
+
+O 7×4 resolveu a primeira e criou a segunda: 14 estações em 28 células deixavam
+**14 casas de chão**. Agora são 15 estações em 40 células — **25 de chão, quase o
+dobro** — e espalhadas em vez de enfileiradas.
+
+O que permitiu voltar a crescer sem reviver o aperto **não foi o tamanho**: foi o
+toque por silhueta. Com o acerto exato, estações podem ficar lado a lado sem
+confundir o dedo.
+
+**E uma regra de composição que faltava:** toda despensa foi pra fileira do fundo.
+Ela é a estação mais ALTA (1,3 — um armário), e em isométrico o que está na frente
+cobre o que está atrás. Com duas despensas na fileira da frente, como cheguei a
+pôr, dois armários enormes tapavam o meio da cena.
+
+> Atrás o que é **alto** (despensas), nas laterais o que é **médio** (fogão, pia,
+> tábua), na frente só o que é **baixo** (pratos, entrega, lixo). É como uma
+> cozinha de verdade se organiza, e não é coincidência: quem desenha cozinha põe
+> o armário na parede pelo mesmo motivo.
+
+**Duas bancadas**, como pedido.
+
+#### 3. A comida: faltava volume, não forma
+
+A versão anterior já tinha trocado o cubo colorido por formas (alface redonda,
+tomate com cabinho, bife baixo) — e ainda assim estava feia. O motivo é que forma
+sozinha não bastava: cada peça era **uma cor chapada**. Numa cena onde todo o
+resto tem três faces sombreadas, um objeto de cor única fica com cara de adesivo
+colado por cima do cenário.
+
+O que mudou, e vale pras cinco:
+
+- **luz própria** no alto de cada peça, na mesma direção de luz do resto;
+- **mais de uma peça**: a alface é um pé com folhas soltas, a massa é um ninho de
+  fios cruzados, o pão tem corte e gergelim. Objeto composto lê como comida;
+  bloco só lê como bloco;
+- **o estado se vê**: cozido ganha brilho quente e marca de grelha; picado virou
+  pedaços de tamanhos e tons diferentes — quatro cubinhos iguais liam como padrão,
+  não como comida cortada.
+
+E a prateleira da parede: os potes eram desenhados como **faixas** (o mesmo
+polígono chato da prateleira, em outra cor) e saíam como riscos coloridos —
+parecia defeito, não louça. Agora são blocos com volume e tampa, apoiados na
+tábua.
+
+#### 4. Um verificador novo, que pegou defeito na estreia
+
+Eu quebrei a tela **duas vezes** nesta sessão do mesmo jeito: reescrevendo blocos
+grandes por script, e a faixa substituída levava junto uma função que estava no
+meio dela (`visivel`, `pontosDosRotulos`, e depois `isoCilindro`,
+`corpoDaEstacao`, `desenharComida`). **A build passa nas duas** — o empacotador
+pega import que não existe, mas não pega função local que sumiu. Vira
+`ReferenceError` só na hora de desenhar, e a tela do jogo cai inteira.
+
+Agora o smoke tem um verificador pequeno que procura `nome(` sem `nome` definido
+no arquivo nem vindo de import. Ele **reprovou na primeira execução**, apontando
+as três funções que eu tinha acabado de apagar sem perceber.
+
+**Estado: 859 verificações, 0 falha.** Build Vite aprovada.

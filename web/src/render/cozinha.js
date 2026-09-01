@@ -181,18 +181,31 @@ function decorarParede(p, largura, altura, origin) {
   moldura(jc + 0.94, jc + 1.06, 1.72, 2.72, '#8d7a6b')           // o caixilho do meio
 
   // -------------------------------------------------------- a prateleira
-  // Na parede da esquerda, com potes de cores diferentes. Dá vida ao lado que
-  // não tem janela, e reforça que aquilo ali é uma cozinha.
-  const prat = (r0, r1, z, cor) => p.fillPoly([
-    project(0, r0, z, origin), project(0, r1, z, origin),
-    project(0, r1, z - 0.09, origin), project(0, r0, z - 0.09, origin),
-  ], cor)
-  prat(0.3, altura - 0.3, 2.12, '#b98a5e')
-  const potes = ['#e0553f', '#7cc45f', '#e8c86a', '#d78ab0']
-  potes.forEach((cor, i) => {
-    const r0 = 0.45 + i * 0.72
-    if (r0 + 0.5 > altura - 0.3) return
-    prat(r0, r0 + 0.5, 2.55, cor)
+  //
+  // Na parede da esquerda, com potes. A primeira versão desenhava os potes como
+  // FAIXAS na parede (o mesmo polígono chato da prateleira, em outra cor), e o
+  // resultado eram riscos coloridos — parecia defeito, não louça.
+  //
+  // Agora eles são blocos de verdade, com volume, apoiados sobre a tábua: um
+  // pote tem três faces sombreadas como todo o resto da cozinha, e é isso que o
+  // faz parecer um objeto em vez de uma mancha.
+  const tabuaZ = 2.05
+  isoBox(p, faces('#b98a5e'), {
+    col: 0, row: 0.3, w: 0.14, d: altura - 0.6, z: tabuaZ, h: 0.08,
+  }, origin, OUTLINE)
+  const potes = [
+    ['#e0553f', 0.26], ['#7cc45f', 0.2], ['#e8c86a', 0.3], ['#d78ab0', 0.22],
+  ]
+  potes.forEach(([cor, alturaPote], i) => {
+    const r0 = 0.5 + i * ((altura - 1.2) / potes.length)
+    if (r0 + 0.42 > altura - 0.3) return
+    isoBox(p, faces(cor), {
+      col: 0.01, row: r0, w: 0.12, d: 0.42, z: tabuaZ + 0.08, h: alturaPote,
+    }, origin, OUTLINE)
+    // a tampa, um tico mais larga — é o detalhe que faz ler "pote"
+    isoBox(p, faces(shade(cor, -0.18)), {
+      col: 0, row: r0 - 0.04, w: 0.14, d: 0.5, z: tabuaZ + 0.08 + alturaPote, h: 0.05,
+    }, origin, OUTLINE)
   })
 }
 
@@ -201,32 +214,11 @@ function decorarParede(p, largura, altura, origin) {
  *
  * A primeira versão destas estações era a MESMA CAIXA em cores diferentes, e o
  * dono não conseguiu jogar: *"visualmente os negócios são tudo iguais, só muda a
- * cor; é extremamente difícil identificar onde fazer o quê."* Ele está certo, e
- * o erro tem nome.
+ * cor"*. Cor é o pior canal pra distinguir peça num jogo de correria: não
+ * sobrevive ao tamanho, nem à pressa, nem a quem confunde verde e vermelho.
  *
- * Cor é o pior canal pra distinguir peça num jogo de correria:
- *
- *  - ela **não sobrevive ao tamanho.** No celular a cozinha inteira sai a 0,586
- *    de escala; uma estação tem ~56 px de tela. Nesse tamanho o olho lê CONTORNO
- *    primeiro, e cor depois — se é que chega a olhar a cor;
- *  - ela **não sobrevive à pressa.** Numa rodada de 3 minutos ninguém para pra
- *    comparar dois tons de creme;
- *  - e ela **não sobrevive à pessoa.** Quem confunde verde e vermelho fica sem
- *    nenhuma informação, e cerca de um homem em cada doze confunde.
- *
- * Então agora cada estação se distingue por **três coisas ao mesmo tempo**, e
- * qualquer uma delas sozinha já resolve:
- *
- *   1. **ALTURA.** Elas iam todas de 0,56 a 0,66. Agora vão de 0,42 (a bancada,
- *      deliberadamente a mais baixa e vazia) a 1,3 (a despensa, um armário
- *      alto). Isso muda a silhueta antes de qualquer detalhe.
- *   2. **FORMA.** Redondo contra quadrado: o lixo e a panela são cilindros; a
- *      pia tem uma torneira em arco; a entrega é um vão aberto, não um bloco.
- *   3. **COR**, que continua existindo, mas como terceiro reforço e não como
- *      única pista.
- *
- * E acima disso a tela escreve o NOME de cada uma (ver `GameCozinha.jsx`),
- * porque nenhum desenho é auto-explicativo na primeira partida.
+ * Agora cada estação se distingue por ALTURA (de 0,42 a 1,3), por FORMA
+ * (cilindro, arco, vão aberto, faca em pé) e só então por cor.
  */
 
 /** Um cilindro isométrico. É o que separa "redondo" de "quadrado" na silhueta. */
@@ -375,54 +367,112 @@ function corpoDaEstacao(p, e, origin) {
 }
 
 /**
- * A comida desenhada com a FORMA dela, e não como um cubo colorido.
+ * A comida, desenhada peça por peça.
  *
- * Mesmo motivo da silhueta das estações: cinco cubos em cinco cores são cinco
- * cubos. Aqui cada ingrediente tem contorno próprio, então dá pra saber o que
- * está na tábua sem comparar tons.
+ * ------------------------------------------------------------ a segunda volta
+ *
+ * A primeira versão já tinha trocado o cubo colorido por formas (alface redonda,
+ * tomate com cabinho, bife baixo), e ainda assim o dono disse: *"os alimentos
+ * estão bem feios, melhore a qualidade deles"*. Ele tem razão, e o motivo é que
+ * forma sozinha não bastava — faltava **volume**.
+ *
+ * Cada peça era uma cor chapada com o contorno padrão. Numa cena onde tudo o
+ * mais tem três faces sombreadas (é o que `isoBox` faz), um objeto de cor única
+ * fica com cara de adesivo colado por cima do cenário.
+ *
+ * O que mudou, e vale pras cinco:
+ *
+ *  - **luz e sombra própria.** Cada ingrediente tem um brilho no alto, na mesma
+ *    direção de luz do resto da cozinha;
+ *  - **mais de uma peça.** Alface é um pé com folhas soltas; a massa é um ninho
+ *    de fios; o pão tem corte e gergelim. Um objeto composto lê como comida; um
+ *    bloco só lê como bloco;
+ *  - **o estado se vê.** Cozido ganha brilho quente e marca de grelha; picado
+ *    vira pedaços de tamanhos diferentes, e não quatro cubinhos iguais.
  */
-function desenharComida(p, ing, estado, col, row, z, origin, cor) {
-  const base = estado === QUEIMADO ? COR.queimado : (cor || '#999')
-  const F = faces(base)
-  if (ing === 'alface') {
-    // um pé redondo e folhudo: cilindro largo e baixo + folhas por cima
-    isoCilindro(p, base, { col, row, r: 0.26, z, h: 0.16 }, origin)
-    isoCilindro(p, shade(base, 0.16), { col: col + 0.06, row, r: 0.16, z: z + 0.16, h: 0.08 }, origin)
-    return
-  }
-  if (ing === 'tomate') {
-    isoCilindro(p, base, { col, row, r: 0.22, z, h: 0.2 }, origin)
-    // o cabinho verde, que é o que faz ler "tomate" e não "bola vermelha"
-    isoBox(p, faces('#5d9b48'), { col: col + 0.44, row: row + 0.44, w: 0.12, d: 0.12, z: z + 0.2, h: 0.07 }, origin, OUTLINE)
-    return
-  }
-  if (ing === 'carne') {
-    // bife: baixo, largo e com gordura clara na borda
-    isoBox(p, F, { col: col + 0.2, row: row + 0.26, w: 0.6, d: 0.48, z, h: 0.1 }, origin, OUTLINE)
-    isoBox(p, faces('#e8cdbb'), { col: col + 0.2, row: row + 0.26, w: 0.6, d: 0.08, z: z + 0.02, h: 0.07 }, origin, OUTLINE)
-    return
-  }
-  if (ing === 'massa') {
-    // três fios longos, cruzados
-    isoBox(p, F, { col: col + 0.16, row: row + 0.3, w: 0.68, d: 0.08, z, h: 0.07 }, origin, OUTLINE)
-    isoBox(p, F, { col: col + 0.16, row: row + 0.46, w: 0.68, d: 0.08, z, h: 0.07 }, origin, OUTLINE)
-    isoBox(p, faces(shade(base, -0.12)), { col: col + 0.42, row: row + 0.2, w: 0.08, d: 0.56, z, h: 0.07 }, origin, OUTLINE)
-    return
-  }
-  if (ing === 'pao') {
-    // pãozinho: comprido, arredondado e com um corte claro em cima
-    isoCilindro(p, base, { col: col + 0.02, row, r: 0.24, z, h: 0.18 }, origin, 10)
-    isoBox(p, faces(shade(base, 0.22)), { col: col + 0.34, row: row + 0.3, w: 0.3, d: 0.08, z: z + 0.18, h: 0.03 }, origin, OUTLINE)
-    return
-  }
-  isoBox(p, F, { col: col + 0.26, row: row + 0.26, w: 0.48, d: 0.48, z, h: 0.2 }, origin, OUTLINE)
+
+/** Uma bolota com luz em cima — a peça base de quase tudo aqui. */
+function bolota(p, base, { col, row, r, z, h, luz = 0.22 }, origin, lados = 10) {
+  isoCilindro(p, base, { col, row, r, z, h }, origin, lados)
+  // o alto pega a luz: um disco menor, deslocado pro fundo, mais claro
+  isoCilindro(p, shade(base, luz), {
+    col: col - 0.03, row: row - 0.03, r: r * 0.55, z: z + h, h: 0.012,
+  }, origin, lados)
 }
 
+function desenharComida(p, ing, estado, col, row, z, origin, cor) {
+  const queimado = estado === QUEIMADO
+  const base = queimado ? COR.queimado : (cor || '#999')
 
-// =========================================================== o que se mexe
-//
-// Daqui pra baixo tudo recebe `agora` e desenha O INSTANTE. Nenhuma decisao: so
-// conta de tres.
+  if (ing === 'alface') {
+    bolota(p, base, { col, row, r: 0.25, z, h: 0.14 }, origin)
+    for (const [dx, dy, r] of [[-0.13, 0.05, 0.11], [0.14, -0.02, 0.1], [0.02, 0.15, 0.1]]) {
+      isoCilindro(p, shade(base, dx > 0 ? 0.14 : -0.1), {
+        col: col + dx, row: row + dy, r, z: z + 0.08, h: 0.07,
+      }, origin, 8)
+    }
+    bolota(p, shade(base, 0.2), { col: col + 0.02, row, r: 0.14, z: z + 0.15, h: 0.06 }, origin, 8)
+    return
+  }
+
+  if (ing === 'tomate') {
+    bolota(p, base, { col, row, r: 0.22, z, h: 0.2, luz: 0.3 }, origin, 12)
+    for (const [dx, dy] of [[0, -0.08], [0.07, 0.04], [-0.07, 0.04]]) {
+      isoBox(p, faces('#5d9b48'), {
+        col: col + 0.44 + dx, row: row + 0.44 + dy, w: 0.13, d: 0.09, z: z + 0.2, h: 0.04,
+      }, origin, OUTLINE)
+    }
+    isoBox(p, faces('#3f7a33'), {
+      col: col + 0.46, row: row + 0.46, w: 0.08, d: 0.08, z: z + 0.24, h: 0.06,
+    }, origin, OUTLINE)
+    return
+  }
+
+  if (ing === 'carne') {
+    isoBox(p, faces(base), { col: col + 0.16, row: row + 0.24, w: 0.68, d: 0.52, z, h: 0.11 }, origin, OUTLINE)
+    isoBox(p, faces(shade(base, 0.26)), { col: col + 0.2, row: row + 0.28, w: 0.6, d: 0.44, z: z + 0.11, h: 0.02 }, origin, null)
+    isoBox(p, faces(queimado ? shade(base, 0.3) : '#e8cdbb'), {
+      col: col + 0.16, row: row + 0.24, w: 0.68, d: 0.07, z: z + 0.02, h: 0.07,
+    }, origin, OUTLINE)
+    if (estado === 'cozido') {
+      for (const dy of [0.34, 0.48, 0.62]) {
+        isoBox(p, faces(shade(base, -0.35)), {
+          col: col + 0.2, row: row + dy, w: 0.6, d: 0.04, z: z + 0.12, h: 0.01,
+        }, origin, null)
+      }
+    }
+    return
+  }
+
+  if (ing === 'massa') {
+    const fios = [
+      [0.14, 0.3, 0.7, 0.09, 0.0], [0.18, 0.5, 0.64, 0.08, 0.05],
+      [0.4, 0.18, 0.09, 0.62, 0.02], [0.58, 0.22, 0.08, 0.55, 0.07],
+    ]
+    fios.forEach(([c, r, w, d, dz], i) => {
+      isoBox(p, faces(shade(base, i % 2 ? -0.12 : 0.1)), {
+        col: col + c, row: row + r, w, d, z: z + dz, h: 0.07,
+      }, origin, OUTLINE)
+    })
+    bolota(p, shade(base, 0.16), { col, row, r: 0.1, z: z + 0.13, h: 0.05 }, origin, 8)
+    return
+  }
+
+  if (ing === 'pao') {
+    bolota(p, base, { col: col + 0.02, row, r: 0.26, z, h: 0.19, luz: 0.26 }, origin, 12)
+    isoBox(p, faces(shade(base, 0.34)), {
+      col: col + 0.3, row: row + 0.3, w: 0.36, d: 0.09, z: z + 0.19, h: 0.02,
+    }, origin, null)
+    for (const [dx, dy] of [[0.36, 0.44], [0.5, 0.36], [0.56, 0.5]]) {
+      isoBox(p, faces('#fdf3d6'), {
+        col: col + dx, row: row + dy, w: 0.06, d: 0.05, z: z + 0.2, h: 0.02,
+      }, origin, null)
+    }
+    return
+  }
+
+  bolota(p, base, { col, row, r: 0.22, z, h: 0.18 }, origin)
+}
 
 /**
  * O que está visível AGORA, quando o estado carrega um "antes" com hora.
@@ -461,20 +511,6 @@ function tampo(tipo) {
   }[tipo] ?? 0.6
 }
 
-/**
- * A altura que o DEDO mira, que não é a mesma em que a comida pousa.
- *
- * O armário da despensa tem 1,3 de altura: mirar no topo dele faria o alvo do
- * toque ficar bem acima do móvel, sobre o vizinho de trás. O dedo mira o meio da
- * massa visível, que é onde a pessoa naturalmente aponta.
- */
-function alvoDoToque(tipo) {
-  return {
-    d: 0.7, tabua: 0.5, panela: 0.4, bancada: 0.4,
-    pratos: 0.55, pia: 0.5, lixo: 0.5, entrega: 0.5,
-  }[tipo] ?? 0.5
-}
-
 /** Um ingrediente ou um prato, do jeito que ele aparece em cima de uma estação. */
 function desenharItem(p, item, col, row, z, origin, cores) {
   if (!item) return
@@ -494,18 +530,30 @@ function desenharItem(p, item, col, row, z, origin, cores) {
     return
   }
   if (item.estado === 'picado') {
-    // Picado = pedacinhos separados, sempre, seja qual for o ingrediente. É a
-    // forma dizendo "isto já passou pela faca", e ela lê antes da cor.
+    // Picado = pedacinhos SOLTOS, sempre, seja qual for o ingrediente. É a forma
+    // dizendo "isto já passou pela faca", e ela lê antes da cor.
+    //
+    // Tamanhos e tons diferentes de propósito: quatro cubinhos iguais liam como
+    // um padrão, e não como comida cortada. Faca de verdade não sai igual.
     const base = cores[item.ing]?.cor || '#999'
-    for (const [dx, dy] of [[0.2, 0.24], [0.46, 0.3], [0.3, 0.52], [0.54, 0.54]]) {
-      isoBox(p, faces(base), { col: col + dx, row: row + dy, w: 0.17, d: 0.17, z, h: 0.08 }, origin, OUTLINE)
+    const pedacos = [
+      [0.18, 0.22, 0.2, 0.0], [0.46, 0.28, 0.15, 0.13],
+      [0.26, 0.5, 0.17, -0.1], [0.56, 0.54, 0.13, 0.06],
+      [0.4, 0.42, 0.11, 0.2],
+    ]
+    for (const [dx, dy, tam, tom] of pedacos) {
+      isoBox(p, faces(shade(base, tom)), {
+        col: col + dx, row: row + dy, w: tam, d: tam, z, h: 0.06 + tam * 0.2,
+      }, origin, OUTLINE)
     }
     return
   }
   desenharComida(p, item.ing, item.estado, col, row, z, origin, cores[item.ing]?.cor)
   if (item.estado === 'cozido') {
-    // Cozido ganha um brilho quente por cima: é o "está pronto" visto de longe.
-    isoBox(p, faces('#ffd9a0'), { col: col + 0.34, row: row + 0.3, w: 0.18, d: 0.1, z: z + 0.16, h: 0.02 }, origin, null)
+    // Cozido ganha um brilho quente por cima: é o "está pronto" visto de longe,
+    // sem precisar ler barra nenhuma.
+    isoBox(p, faces('#ffe0ab'), { col: col + 0.3, row: row + 0.26, w: 0.22, d: 0.12, z: z + 0.2, h: 0.015 }, origin, null)
+    isoBox(p, faces('#fff3d8'), { col: col + 0.36, row: row + 0.3, w: 0.1, d: 0.06, z: z + 0.215, h: 0.015 }, origin, null)
   }
 }
 
@@ -703,61 +751,123 @@ export function desenharCozinha(p, vista, agora, t = 0) {
   }
 }
 
-/** O pixel do dedo -> a estação tocada, ou null. Usado pela tela. */
+/** A altura do corpo de cada estação — o topo do que está desenhado. */
+function alturaDaEstacao(tipo) {
+  return {
+    d: 1.34, tabua: 0.62, panela: 0.57, bancada: 0.47,
+    pratos: 0.9, pia: 0.6, lixo: 0.94, entrega: 1.23,
+  }[tipo] ?? 0.6
+}
+
+/** Um ponto está dentro deste polígono? (varredura de cruzamentos) */
+function dentroDoPoligono(x, y, pontos) {
+  let dentro = false
+  for (let i = 0, j = pontos.length - 1; i < pontos.length; j = i++) {
+    const [xi, yi] = pontos[i]
+    const [xj, yj] = pontos[j]
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) dentro = !dentro
+  }
+  return dentro
+}
+
+/**
+ * A SILHUETA de uma estação: o hexágono que o bloco dela ocupa na tela.
+ *
+ * É o contorno de uma caixa isométrica — o losango do topo mais as duas faces
+ * visíveis descendo até o chão. É exatamente o que a pessoa vê e mira.
+ */
+function silhueta(e, origin) {
+  const h = alturaDaEstacao(e.tipo)
+  const { col, row } = e
+  const P = (c, r, z) => project(c, r, z, origin)
+  return [
+    P(col, row + 1, h),      // canto esquerdo, no topo
+    P(col, row, h),          // fundo
+    P(col + 1, row, h),      // canto direito, no topo
+    P(col + 1, row, 0),      // desce pela direita
+    P(col + 1, row + 1, 0),  // frente, no chão
+    P(col, row + 1, 0),      // desce pela esquerda
+  ]
+}
+
+/**
+ * O pixel do dedo -> a estação tocada, ou null.
+ *
+ * ------------------------------------------------- por que NÃO é mais "a mais perto"
+ *
+ * A primeira versão pegava o centro de cada estação e escolhia a mais próxima
+ * dentro de meia célula. Ela parecia funcionar, e o dono achou o defeito
+ * jogando: *"dos dois fogões só um funciona, tá bugado o outro"*.
+ *
+ * Os dois fogões funcionam — conferido no motor, e a dica usa os dois. O que não
+ * funcionava era ACERTAR o segundo: em isométrico, duas estações vizinhas ficam
+ * a ~54 px de arte uma da outra, o que na escala do celular vira **38 px entre
+ * os dois centros**. Um dedo tem uns 44. Metade dos toques no fogão de baixo
+ * caíam no de cima, e de fora isso é exatamente "um funciona e o outro não".
+ *
+ * Agora o teste é contra a SILHUETA desenhada: o dedo acerta a estação que está
+ * embaixo dele, e não a que tem o centro mais perto. Quando duas silhuetas se
+ * sobrepõem (uma na frente da outra), ganha **a da frente** — que é a que a
+ * pessoa está vendo por inteiro, e a única em que ela conseguiria mirar.
+ *
+ * O losango do chão, como reserva, cobre o toque que cai no vão entre dois
+ * móveis: antes ele não fazia nada, e "não fez nada" é o pior retorno possível.
+ */
 export function estacaoNoPonto(vista, x, y) {
   const { origin } = medidas(vista.largura, vista.altura)
-  // As estações são altas, então o dedo quase sempre cai no CORPO delas e não na
-  // célula do chão. Converter direto por `unproject` acertaria a célula de trás.
-  // Por isso a busca é pela distância ao topo desenhado de cada estação, que é
-  // onde a pessoa está de fato mirando.
+
+  // 1) quem está DESENHADO debaixo do dedo. Da frente pra trás.
+  const daFrente = [...vista.estacoes].sort(
+    (a, b) => (b.col + b.row) - (a.col + a.row)
+  )
+  for (const e of daFrente) {
+    if (dentroDoPoligono(x, y, silhueta(e, origin))) return e
+  }
+
+  // 2) reserva: o dedo caiu no chão. Vale a estação daquela célula, se houver.
+  const dx = x - origin.x
+  const dy = y - origin.y
+  const col = Math.floor(dy / TH + dx / TW)
+  const row = Math.floor(dy / TH - dx / TW)
+  const naCelula = vista.estacoes.find((e) => e.col === col && e.row === row)
+  if (naCelula) return naCelula
+
+  // 3) última reserva: a mais perto, mas só bem perto — pra não roubar um toque
+  // que a pessoa deu no chão de propósito.
   let melhor = null
   let menor = Infinity
   for (const e of vista.estacoes) {
-    const [ex, ey] = project(e.col + 0.5, e.row + 0.5, alvoDoToque(e.tipo), origin)
+    const [ex, ey] = project(e.col + 0.5, e.row + 0.5, alturaDaEstacao(e.tipo) / 2, origin)
     const dist = Math.hypot(x - ex, y - ey)
-    if (dist < menor) {
-      menor = dist
-      melhor = e
-    }
+    if (dist < menor) { menor = dist; melhor = e }
   }
-  // Um raio de meia célula: fora disso o toque foi no chão, e chão não é alvo.
-  return menor <= TW * 0.42 ? melhor : null
+  return menor <= TW * 0.3 ? melhor : null
 }
 
 /**
  * Onde pendurar o rótulo de cada estação, em pixel de arte.
  *
- * A tela desenha os NOMES em HTML por cima do canvas, e não aqui dentro. Duas
- * razões, e a segunda é a que decide:
- *
- *  - texto em canvas de pixel art ou sai borrado (fonte suavizada sobre arte de
- *    borda dura) ou exige desenhar uma fonte letra a letra;
- *  - em HTML ele é **texto de verdade**: cresce com o ajuste de tamanho de fonte
- *    do sistema, e o leitor de tela enxerga.
- *
- * O `z` de cada tipo é a altura do móvel, pra a etiqueta pousar logo acima dele
- * em vez de flutuar solta ou entrar dentro da estação.
+ * A tela desenha os NOMES em HTML por cima do canvas, e não aqui dentro: texto
+ * em canvas de pixel art ou sai borrado (fonte suavizada sobre arte de borda
+ * dura) ou exige desenhar letra a letra. Em HTML ele é texto de verdade, cresce
+ * com o ajuste de fonte do sistema e o leitor de tela enxerga.
  */
 export function pontosDosRotulos(vista, nomes, escala = 1) {
   const { origin } = medidas(vista.largura, vista.altura)
-  const topo = {
-    d: 1.5, tabua: 1.2, panela: 0.95, bancada: 0.55,
-    pratos: 1.05, pia: 1.1, lixo: 1.0, entrega: 1.28,
-  }
 
-  // UM rotulo por TIPO, e nao um por estacao.
+  // UM rótulo por TIPO, e não um por estação.
   //
-  // Com um em cada, os quinze se atropelavam: as duas bancadas ficam em celulas
-  // vizinhas, e em isometrico isso da 24 px de arte entre elas — menos que a
-  // altura da propria etiqueta. O meio da cozinha virava uma pilha de palavras
-  // ilegivel, o que e o oposto do que os nomes vieram resolver.
+  // Com um em cada, os quinze se atropelavam: duas estações vizinhas ficam a
+  // 24 px de arte uma da outra na vertical — menos que a altura da própria
+  // etiqueta. O meio da cozinha virava uma pilha de palavras ilegível, que é o
+  // oposto do que os nomes vieram resolver.
   //
-  // E nao faz falta: as duas tabuas SAO a mesma coisa e sao desenhadas iguais.
-  // Nomear uma ja diz o que a outra e. A despensa e a excecao — cada uma guarda
-  // um ingrediente diferente, entao todas as cinco levam nome.
+  // E não faz falta: as duas tábuas SÃO a mesma coisa e são desenhadas iguais.
+  // Nomear uma já diz o que a outra é. A despensa é a exceção — cada uma guarda
+  // um ingrediente diferente, então todas levam nome.
   //
-  // Quando ha mais de uma do tipo, a escolhida e a da FRENTE (maior col+row):
-  // e a menos coberta por outros moveis, e a que o olho acha primeiro.
+  // Quando há mais de uma do tipo, a escolhida é a da FRENTE (maior col+row): é
+  // a menos coberta por outros móveis, e a que o olho acha primeiro.
   const porGrupo = new Map()
   for (const e of vista.estacoes) {
     const grupo = e.tipo === 'd' ? `d:${e.ing}` : e.tipo
@@ -766,36 +876,33 @@ export function pontosDosRotulos(vista, nomes, escala = 1) {
   }
 
   const itens = [...porGrupo.values()].map((e) => {
-    const [x, y] = project(e.col + 0.5, e.row + 0.5, topo[e.tipo] ?? 0.9, origin)
+    const [x, y] = project(e.col + 0.5, e.row + 0.5, alturaDaEstacao(e.tipo) + 0.2, origin)
     const texto = e.tipo === 'd'
       ? (vista.ingredientes?.[e.ing]?.nome || e.ing)
       : (nomes?.[e.tipo] || e.tipo)
     return { id: e.id, tipo: e.tipo, ing: e.ing, texto, x, y }
   })
 
-  // ------------------------------------------------- e agora tira o encavalamento
+  // ------------------------------------------- e agora tira o encavalamento
   //
-  // Mesmo com um por tipo eles ainda se sobrepunham: as cinco despensas ficam
-  // numa fileira, e em isometrico uma fileira vira uma DIAGONAL — cada vizinha
-  // sai 28 px de tela pro lado, e a palavra "alface" tem 40. Medido: 7 pares
-  // sobrepostos.
+  // Mesmo com um por tipo eles ainda se sobrepunham: uma fileira de despensas,
+  // em isométrico, vira uma DIAGONAL — cada vizinha sai ~28 px de tela pro lado,
+  // e a palavra "alface" tem 40. Medido: 7 pares sobrepostos.
   //
-  // Entao os rotulos sao empurrados PRA CIMA, um degrau por vez, ate pararem de
-  // se tocar. Sempre pra cima porque abaixo deles esta o movel que eles nomeiam;
-  // empurrar pro lado apontaria pro vizinho errado, que e pior do que sobrepor.
+  // Então os rótulos são empurrados PRA CIMA, um degrau por vez, até pararem de
+  // se tocar. Sempre pra cima porque abaixo deles está o móvel que eles nomeiam;
+  // empurrar pro lado apontaria pro vizinho errado, que é pior do que sobrepor.
   //
-  // A conta e em pixel de ARTE, e por isso a escala entra: a etiqueta tem tamanho
+  // A conta é em pixel de ARTE, e por isso a escala entra: a etiqueta tem tamanho
   // fixo em pixel de TELA (é texto de verdade, não desenho), então quanto menor a
   // escala, MAIOR ela é em relação à cena — e é justamente no celular, onde a
-  // escala é ~0,59, que o problema aparece.
-  const alturaTela = 16
-  const alt = alturaTela / escala
+  // escala é ~0,6, que o problema aparece.
+  const alt = 16 / escala
   const larg = (t) => (t.length * 5.4 + 14) / escala
   const degrau = alt * 0.9
 
   // De cima pra baixo: quem está mais ao fundo assenta primeiro, e quem vem à
-  // frente sobe se precisar. Assim os que sobem são os da frente, que têm céu
-  // livre acima.
+  // frente sobe se precisar — assim quem sobe tem céu livre acima.
   itens.sort((a, b) => a.y - b.y)
   const postos = []
   for (const item of itens) {
@@ -813,12 +920,22 @@ export function pontosDosRotulos(vista, nomes, escala = 1) {
   return itens
 }
 
-/** O centro de uma estação na tela — pra o realce da dica pousar em cima dela. */
+/**
+ * Onde pousar o realce da dica: no TOPO da estação, e não no meio dela.
+ *
+ * Medido: numa fileira de armários encostados, o meio do corpo de cada um fica
+ * COBERTO pelo vizinho da frente — em isométrico, quem tem `col+row` maior é
+ * desenhado depois. Tocar ali acerta o vizinho, e é geometricamente honesto:
+ * aquela parte está mesmo escondida.
+ *
+ * O topo, não. Ele é visível nos quinze, é onde a comida aparece, é onde o nome
+ * é pendurado — e é, portanto, onde a pessoa mira. O anel tem que estar lá.
+ */
 export function pontoDaEstacao(vista, id) {
   const { origin } = medidas(vista.largura, vista.altura)
   const e = vista.estacoes.find((x) => x.id === id)
   if (!e) return null
-  const [x, y] = project(e.col + 0.5, e.row + 0.5, alvoDoToque(e.tipo), origin)
+  const [x, y] = project(e.col + 0.5, e.row + 0.5, alturaDaEstacao(e.tipo), origin)
   return { x, y }
 }
 

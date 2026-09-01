@@ -1569,3 +1569,34 @@ aparece na mão dele enquanto ele tá indo pegar."*
       apóstrofos em vez de uma data. Inofensivo se a data já foi definida dentro
       do app (o `seed.py` avisa e ignora), mas vale olhar o "juntos há N dias" na
       tela inicial. Não mexi porque não sei a data de vocês.
+
+### 31/08/2026 — Fogão, espaço, bancadas e comida (quinta rodada)
+
+- **[x]** **"Um fogão funciona e o outro não" era o DEDO, não o motor.** Os dois
+      sempre cozinharam e a dica sempre usou os dois — conferido. O que falhava
+      era acertar: o toque pegava a estação de centro mais próximo, e duas
+      estações vizinhas ficam a 32 px de centro a centro na tela, contra ~44 px
+      de dedo. Agora o toque é contra a **silhueta desenhada**, e as 15 estações
+      respondem por si mesmas (medido, e travado em teste).
+- **[x]** **A cozinha voltou a respirar:** 7×4 → 8×5. Eram 14 casas de chão,
+      agora são **25**. Só deu pra crescer de novo porque o toque por silhueta
+      permite estações lado a lado sem confundir o dedo.
+- **[x]** **Regra de composição nova:** toda despensa (a estação mais alta) vai
+      pra fileira do fundo. Duas delas na frente tapavam o meio da cena. Atrás o
+      alto, nas laterais o médio, na frente só o baixo.
+- **[x]** **Duas bancadas**, como pedido.
+- **[x]** **A comida ganhou volume.** Forma já tinha; faltava luz e mais de uma
+      peça. Alface é um pé com folhas soltas, massa é um ninho de fios, pão tem
+      corte e gergelim, cozido tem marca de grelha, picado virou pedaços de
+      tamanhos diferentes. E os potes da prateleira, que saíam como riscos
+      coloridos, viraram blocos com tampa.
+- **[x]** **Verificador novo no smoke:** função usada e não definida nos arquivos
+      de desenho. Eu quebrei a tela duas vezes na mesma sessão apagando funções
+      sem querer, e a build passa nas duas — só o navegador reclama. Ele reprovou
+      na primeira execução e achou as três que eu tinha acabado de apagar.
+
+#### Ainda falta você
+
+- **[ ]** Jogar e dizer se o espaço e o ritmo estão bons agora.
+- **[ ]** Jogar **a dois**, um celular em cada mão.
+- **[ ]** Perfil → notificações → "Enviar teste", e me dizer a frase que aparece.
