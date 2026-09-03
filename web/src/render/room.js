@@ -29,7 +29,7 @@ export const WALL_STYLES = {
 }
 
 // ------------------------------------------------------------------ paredes
-function drawWalls(p, cols, rows, origin, style) {
+export function drawWalls(p, cols, rows, origin, style) {
   const wall = WALL_STYLES[style] || WALL_STYLES.padrao
   const top = WALL_HEIGHT
   const P = (c, r, z) => project(c, r, z, origin)
@@ -81,7 +81,7 @@ function motif(p, x, y, color) {
 }
 
 // ------------------------------------------------------------------ piso
-function drawFloor(p, cols, rows, origin, style) {
+export function drawFloor(p, cols, rows, origin, style) {
   const floor = FLOOR_STYLES[style] || FLOOR_STYLES.padrao
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
@@ -257,7 +257,7 @@ const PET_L = 62
 const PET_A = 52
 const PET_ESCALA = PET_A / 108
 
-function drawHousePet(p, pet, origin, t) {
+export function drawHousePet(p, pet, origin, t) {
   const [x, y] = project(pet.col + 0.5, pet.row + 0.5, 0.05, origin)
   if (!drawHousePet.canvas) {
     drawHousePet.canvas = document.createElement('canvas')

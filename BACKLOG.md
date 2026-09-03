@@ -1600,3 +1600,20 @@ aparece na mão dele enquanto ele tá indo pegar."*
 - **[ ]** Jogar e dizer se o espaço e o ritmo estão bons agora.
 - **[ ]** Jogar **a dois**, um celular em cada mão.
 - **[ ]** Perfil → notificações → "Enviar teste", e me dizer a frase que aparece.
+
+### 03/09/2026 — A casa vira um lote contínuo, estilo The Sims
+
+- **[x]** Removida a separação jogável entre fachada, cômodo e quintal: agora é
+      um único mapa isométrico, com todos os espaços abertos ao mesmo tempo.
+- **[x]** Os cômodos usam `plan_x/plan_y` persistidos e crescem fisicamente na
+      mesma planta conforme são desbloqueados.
+- **[x]** A câmera pode ser arrastada pelo lote inteiro no celular; a arte fica
+      em pixel real, sem encolher a casa crescente para caber.
+- **[x]** Divisórias internas baixas e portas como vãos reais; tocar um cômodo
+      no editor o seleciona sem trocar de cenário.
+- **[x]** Porta varanda ↔ quintal adicionada. Todos os animais calculam passeio
+      pelo grafo de portas; o ativo persiste o cômodo para os dois aparelhos.
+- **[x]** Conferido em 390×844: lote 2210×1250, arrasto nos dois eixos e zero
+      erro de navegador. Smoke: **863 verificações, 0 falha**; build aprovada.
+
+Detalhes no HANDOFF, seção 9.35.

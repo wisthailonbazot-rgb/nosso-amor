@@ -2,11 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { api } from '../api'
 import { DIRECOES_DE_PAREDE, NA_PAREDE } from '../render/furniture'
-import RoomCanvas from '../render/RoomCanvas'
 import { project, roomMetrics } from '../render/iso'
 import { WALL_HEIGHT } from '../render/room'
 import { criarPasseio, passearAte, pontosDeInteresse } from '../render/petWander'
-import PropertyCanvas from '../render/PropertyCanvas'
+import HouseLotCanvas from '../render/HouseLotCanvas'
 import ItemPreview from '../components/ItemPreview'
 import Icon from '../components/Icon'
 import { subscribe, useStore } from '../store'
@@ -30,16 +29,29 @@ export default function House() {
   const [selectedId, setSelectedId] = useState(null)
   const [hover, setHover] = useState(null)
   const [editing, setEditing] = useState(false)
-  // 'fora' = a casa vista de fora, com quintal e rua. 'dentro' = os comodos.
-  //
-  // Antes as duas coisas ficavam EMPILHADAS na mesma rolagem: a vista externa,
-  // a legenda, as abas de comodo, o comodo, a linha do bichinho e o editor, tudo
-  // de uma vez. Media 1.587 pixels de altura num visor de 918 — voce so via
-  // pedaco de cada coisa. Agora e um lugar de cada vez, e voce ENTRA na casa.
-  const [vista, setVista] = useState('fora')
   const [status, setStatus] = useState(null)
   const [saving, setSaving] = useState(false)
   const dragging = useRef(null)
+
+  // A varanda é a porta de verdade entre casa e quintal. O bichinho ativo
+  // atravessa sozinho quando os dois lugares estão disponíveis; a mudança é
+  // persistida, então o outro aparelho vê onde ele foi e recarregar não o
+  // teleporta de volta.
+  useEffect(() => {
+    if (!data?.pet?.chosen) return
+    const abertas = new Set(data.rooms.filter((r) => r.unlocked).map((r) => r.code))
+    const id = setInterval(async () => {
+      const atual = data.pet.room_code || 'sala'
+      const vizinhos = (data.doors || []).flatMap((d) => d.a === atual ? [d.b] : d.b === atual ? [d.a] : []).filter((code) => abertas.has(code))
+      if (!vizinhos.length) return
+      const destino = vizinhos[Math.floor(Math.random() * vizinhos.length)]
+      try {
+        const result = await api.post('/api/pet/move', { room_code: destino })
+        setData((old) => ({ ...old, pet: { ...old.pet, ...result.pet }, pets: (old.pets || []).map((p) => p.active ? { ...p, room_code: destino } : p) }))
+      } catch { /* se estiver offline, ele tenta no próximo passeio */ }
+    }, 18000)
+    return () => clearInterval(id)
+  }, [data?.pet?.chosen, data?.pet?.room_code, data?.rooms, data?.doors])
 
   async function load(keepDraft = false) {
     const next = await api.get('/api/house'); setData(next); setBalance(next.balance)
@@ -360,6 +372,13 @@ export default function House() {
   }
 
   function pick(tile,_event,moving) {
+    // Na planta única o toque traz também o cômodo. Em modo de decoração,
+    // tocar outro cômodo o seleciona; a câmera não troca de cenário nem volta
+    // para o começo — só muda qual acabamento/inventário o editor está mexendo.
+    if (tile.roomCode && tile.roomCode !== room.code) {
+      if (!moving) setRoomCode(tile.roomCode)
+      return
+    }
     if(!editing) { if(!moving) cutucarNoComodo(tile); return }
     if(!moving){ const hit=[...draft].reverse().find((i)=>tile.col>=i.col&&tile.col<i.col+i.w&&tile.row>=i.row&&tile.row<i.row+i.d); dragging.current=hit?.id||null; setSelectedId(hit?.id||null); return }
     const id=dragging.current; if(!id)return
@@ -397,56 +416,30 @@ export default function House() {
         <span className="pill mustard"><Icon name="heart" size={14}/>{data.balance}</span>
       </div>
 
-      {/* Duas abas, um lugar de cada vez. */}
-      <div className="vista-tabs">
-        <button className={vista === 'fora' ? 'active' : ''} onClick={() => setVista('fora')}>
-          Do lado de fora
-        </button>
-        <button className={vista === 'dentro' ? 'active' : ''} onClick={() => setVista('dentro')}>
-          Por dentro
-        </button>
-      </div>
-
       {status&&<p className={`notice ${status.kind}`}>{status.text}</p>}
+      <p className="property-caption">
+        Uma casa só: arraste o cenário para passear pelos cômodos e pelo quintal.
+      </p>
 
-      {vista === 'fora' ? (
-        <>
-          {/* A fachada inteira e clicavel: e o jeito natural de "entrar". */}
-          <div className="fachada" onClick={() => setVista('dentro')} role="button" tabIndex={0}
-               onKeyDown={(e) => e.key === 'Enter' && setVista('dentro')}>
-            <PropertyCanvas rooms={data.rooms}/>
-            <span className="fachada-porta">Entrar em casa</span>
-          </div>
-          <p className="property-caption">
-            Quintal, muro, portão, calçada e a rua em frente — o começo do bairro.
-          </p>
-          <div className="card">
-            <p className="card-title">Como está a casa</p>
-            <p className="muted small" style={{ margin: 0 }}>
-              {data.rooms.filter((r) => r.unlocked && !r.outdoor).length} de{' '}
-              {data.rooms.filter((r) => !r.outdoor).length} cômodos abertos
-              {data.rooms.some((r) => r.mess?.length)
-                ? ` · tem sujeira esperando em ${data.rooms.filter((r) => r.mess?.length).map((r) => r.name.toLowerCase()).join(', ')}`
-                : ' · tudo limpo por aqui'}
-              .
-            </p>
-          </div>
-        </>
-      ) : (
-        <>
-      <div className="room-tabs">{data.rooms.map((r)=><button key={r.code} className={roomCode===r.code?'active':''} onClick={()=>setRoomCode(r.code)}>{!r.unlocked&&<Icon name="lock" size={13}/>} {r.name}</button>)}</div>
-      {!room.unlocked ? <div className="card center"><Icon name="lock" size={36}/><h2>{room.name} está fechado</h2><p className="muted">Abrir custa {room.unlock_price} Corações.</p><button className="btn btn-primary" onClick={()=>unlock(room)}>Abrir cômodo</button></div> : <>
-
-      <div className="scene-frame">
-        <RoomCanvas
-          scene={scene}
+      {/* Não há mais "fora" e "dentro", nem um canvas por cômodo. Todos os
+          espaços abertos estão na mesma planta e compartilham as mesmas
+          coordenadas, paredes e portas. */}
+      <div className="scene-frame lot-frame">
+        <HouseLotCanvas
+          rooms={data.rooms.map((r) => r.code === room.code ? { ...r, items: draft } : r)}
+          doors={data.doors}
+          activeRoom={{ ...room, items: draft }}
           editing={editing}
           hover={hover}
           selectedId={selectedId}
+          pets={data.pets?.length ? data.pets : [{ ...data.pet, id: 0, active: true }]}
           onPickTile={pick}
           onReleaseTile={()=>{dragging.current=null;setHover(null)}}
         />
       </div>
+
+      <div className="room-tabs">{data.rooms.map((r)=><button key={r.code} className={roomCode===r.code?'active':''} onClick={()=>setRoomCode(r.code)}>{!r.unlocked&&<Icon name="lock" size={13}/>} {r.name}</button>)}</div>
+      {!room.unlocked ? <div className="card center"><Icon name="lock" size={36}/><h2>{room.name} está fechado</h2><p className="muted">Abrir custa {room.unlock_price} Corações.</p><button className="btn btn-primary" onClick={()=>unlock(room)}>Abrir cômodo</button></div> : <>
       {data.pet.chosen && (
         <div className="pet-at-home">
           <span>
@@ -468,8 +461,6 @@ export default function House() {
       </div>
       {editing&&<div className="house-editor card"><div className="finish-row"><label>Piso<select value={room.floor} onChange={(e)=>finish('floor',e.target.value)}>{data.floors.map((x)=><option key={x}>{x}</option>)}</select></label>{!room.outdoor&&<label>Parede<select value={room.wall} onChange={(e)=>finish('wall',e.target.value)}>{data.walls.map((x)=><option key={x}>{x}</option>)}</select></label>}</div>{selected&&<div className="selected-tools"><strong>{data.catalog.find((x)=>x.code===selected.code)?.name}</strong><button className="btn btn-sm" onClick={rotateSelected}>Girar</button><button className="btn btn-sm btn-danger" onClick={()=>{setDraft(draft.filter((i)=>i.id!==selected.id));setSelectedId(null)}}>Guardar</button></div>}<p className="card-title">Móveis de vocês</p><div className="furniture-tray">{data.catalog.filter((x)=>room.outdoor?x.subcategory==='quintal':x.subcategory!=='quintal').map((spec)=><button key={spec.code} onClick={()=>add(spec)}><ItemPreview item={{category:'house',metadata:{shape:spec.shape,width:spec.w,height:spec.d}}} scale={1}/><span>{spec.name}</span><small>{draft.filter((i)=>i.code===spec.code).length}/{spec.owned}</small></button>)}</div></div>}
       </>}
-        </>
-      )}
     </>
   )
 }

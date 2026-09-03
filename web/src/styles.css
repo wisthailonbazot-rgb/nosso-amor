@@ -624,6 +624,39 @@ label.field > span {
   box-shadow: 0 3px 0 var(--ink);
 }
 
+/* ----------------------------------------------------- lote contínuo da casa
+   O cenário inteiro é maior que o telefone de propósito. A casa cresce quando
+   um cômodo abre; a câmera não encolhe tudo para fingir que ainda cabe. */
+.lot-frame { margin-inline: -14px; border-radius: 16px; overflow: hidden; }
+.lot-wrap { position: relative; min-width: 0; background: #bfe0ef; }
+.lot-holder {
+  width: 100%;
+  height: min(58vh, 520px);
+  min-height: 360px;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  overscroll-behavior: contain;
+}
+.lot-holder:active { cursor: grabbing; }
+.lot-holder.editando { cursor: crosshair; }
+.lot-canvas { display: block; image-rendering: pixelated; max-width: none; }
+.lot-hint {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 20px);
+  padding: 5px 10px;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  background: rgba(255,248,238,.9);
+  font: 700 11px 'Baloo 2', sans-serif;
+  pointer-events: none;
+}
+
 .room-holder {
   width: 100%;
   /* NÃO é flex, e o motivo é o defeito que sobrou do zoom.

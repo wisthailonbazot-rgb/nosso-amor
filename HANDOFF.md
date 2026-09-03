@@ -4058,3 +4058,45 @@ no arquivo nem vindo de import. Ele **reprovou na primeira execução**, apontan
 as três funções que eu tinha acabado de apagar sem perceber.
 
 **Estado: 859 verificações, 0 falha.** Build Vite aprovada.
+
+### 9.35 A casa deixa de ser cinco telas e vira um lote contínuo (03/09/2026)
+
+Pedido do dono: a casa parecia composta por coisas soltas em cenários diferentes;
+ele queria os cômodos unidos como em The Sims, a câmera arrastável sobre tudo que
+foi desbloqueado, crescimento real da planta e os animais atravessando uma porta
+até o quintal.
+
+A inconsistência já estava no próprio código: `catalog.py` dizia “a casa é uma
+PLANTA, não uma tela por cômodo”, persistia `plan_x`, `plan_y` e quatro portas,
+mas `House.jsx` ignorava os três. Renderizava `RoomCanvas` somente para o cômodo
+selecionado e `PropertyCanvas` como uma ilustração separada; as abas trocavam o
+cenário inteiro. A fachada crescia, mas a casa jogável não.
+
+Nasceu `HouseLotCanvas.jsx`, uma grade isométrica global de 20×26. Sala, cozinha,
+quarto e varanda usam as coordenadas persistidas; o quintal encosta ao sul da
+planta. Somente cômodos abertos recebem piso, parede, móveis e área de toque — ao
+desbloquear, a casa existente ganha fisicamente aquele pedaço, sem diminuir a
+escala para fingir que ainda cabe. A câmera move o lote por gesto de ponteiro e
+o canvas mantém pixel real (2210×1250 de arte numa janela de 390×844).
+
+As divisórias internas usam “paredes baixas”: 1,15 unidade em vez das 3 unidades
+externas. A primeira montagem usou paredes cheias e a inspeção no iPhone mostrou
+que elas escondiam o piso vizinho; baixar só as internas preserva a leitura de
+cômodo sem transformar cada área numa caixa fechada. As portas são vãos reais na
+parede, não desenhos colados.
+
+Uma quinta ligação entrou em `DOORS`: varanda ↔ quintal, na borda y=16. Todos os
+bichinhos calculam caminhos pelo grafo de portas e atravessam a parede pela
+soleira (posição antes da porta → dentro do vão → posição depois). O ativo também
+persiste a mudança de cômodo a cada passeio, então o outro aparelho e o reload
+não o teleportam de volta.
+
+O editor continua salvando por cômodo, com a mesma revisão otimista e a mesma
+validação autoritativa do servidor. Na planta, tocar uma área muda o cômodo ativo
+sem trocar de cenário; fora da edição, arrastar move a câmera sobre a casa toda.
+
+Conferido no navegador em viewport 390×844: holder 366×490, lote 2210×1250,
+arrasto mudou a câmera de (774,91) para (924,231), sem erro no console. Bancada
+local `/lab-casa` existe apenas em `DEV`, com os cinco espaços e a porta externa.
+
+**Estado: 863 verificações, 0 falha.** Build Vite aprovada.

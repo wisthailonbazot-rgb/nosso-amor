@@ -143,6 +143,10 @@ DOORS = [
     {"a": "sala", "b": "quarto", "x": 4, "y": 8, "axis": "h"},
     {"a": "cozinha", "b": "varanda", "x": 14, "y": 8, "axis": "h"},
     {"a": "quarto", "b": "varanda", "x": 10, "y": 11, "axis": "v"},
+    # A porta dos bichinhos para o quintal. O quintal aparece logo depois da
+    # planta interna (y=16) no mapa continuo; a varanda e o comodo que faz a
+    # transicao entre dentro e fora, como numa casa de verdade.
+    {"a": "varanda", "b": "quintal", "x": 15, "y": 16, "axis": "h"},
 ]
 
 

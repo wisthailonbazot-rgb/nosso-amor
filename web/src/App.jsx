@@ -20,6 +20,7 @@ import Profile from './screens/Profile'
 import AvatarEditor from './screens/AvatarEditor'
 import Notifications from './screens/Notifications'
 import ShapeLab from './screens/ShapeLab'
+import HouseLotLab from './screens/HouseLotLab'
 
 const TABS = [
   { to: '/', icon: 'home', label: 'Início', end: true },
@@ -75,6 +76,10 @@ export default function App() {
   useEffect(() => {
     boot()
   }, [boot])
+
+  // Bancada sem sessão, somente no servidor de desenvolvimento. Serve para
+  // conferir a planta grande e o gesto num viewport de telefone.
+  if (import.meta.env.DEV && location.pathname === '/lab-casa') return <HouseLotLab />
 
   if (!ready) {
     return (
