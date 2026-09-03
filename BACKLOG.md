@@ -1617,3 +1617,19 @@ aparece na mão dele enquanto ele tá indo pegar."*
       erro de navegador. Smoke: **863 verificações, 0 falha**; build aprovada.
 
 Detalhes no HANDOFF, seção 9.35.
+
+### 03/09/2026 — Correção do lote após relato de bugs
+
+Pedido: quintal desconectado, parede frontal sobreposta/caída, portas e piso
+ausentes; usar a leitura de casa com paredes recortadas de The Sims como referência.
+
+- [x] Quintal ligado à sala desde a casa inicial, sem depender da varanda.
+- [x] Piso e paredes na mesma geometria; divisórias únicas e recorte frontal.
+- [x] Portas com abertura real, batentes e folha visível.
+- [x] Caminhos dos animais respeitando portas, móveis e sujeira.
+- [x] Enquadramento do lote, zoom e proteção do rascunho ao trocar de cômodo.
+- [x] Oito combinações de ampliação testadas; smoke 862/0 e build aprovada.
+- [ ] Conferência pelo usuário no iPhone físico (inspeção local em Chromium).
+
+Correção das limitações/afirmações anteriores: ver HANDOFF 9.36. Passeio animado
+é local, não sincronizado entre aparelhos; editor ainda salva por cômodo.

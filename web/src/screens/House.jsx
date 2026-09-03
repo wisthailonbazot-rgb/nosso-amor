@@ -33,25 +33,6 @@ export default function House() {
   const [saving, setSaving] = useState(false)
   const dragging = useRef(null)
 
-  // A varanda é a porta de verdade entre casa e quintal. O bichinho ativo
-  // atravessa sozinho quando os dois lugares estão disponíveis; a mudança é
-  // persistida, então o outro aparelho vê onde ele foi e recarregar não o
-  // teleporta de volta.
-  useEffect(() => {
-    if (!data?.pet?.chosen) return
-    const abertas = new Set(data.rooms.filter((r) => r.unlocked).map((r) => r.code))
-    const id = setInterval(async () => {
-      const atual = data.pet.room_code || 'sala'
-      const vizinhos = (data.doors || []).flatMap((d) => d.a === atual ? [d.b] : d.b === atual ? [d.a] : []).filter((code) => abertas.has(code))
-      if (!vizinhos.length) return
-      const destino = vizinhos[Math.floor(Math.random() * vizinhos.length)]
-      try {
-        const result = await api.post('/api/pet/move', { room_code: destino })
-        setData((old) => ({ ...old, pet: { ...old.pet, ...result.pet }, pets: (old.pets || []).map((p) => p.active ? { ...p, room_code: destino } : p) }))
-      } catch { /* se estiver offline, ele tenta no próximo passeio */ }
-    }, 18000)
-    return () => clearInterval(id)
-  }, [data?.pet?.chosen, data?.pet?.room_code, data?.rooms, data?.doors])
 
   async function load(keepDraft = false) {
     const next = await api.get('/api/house'); setData(next); setBalance(next.balance)
@@ -66,6 +47,7 @@ export default function House() {
   useEffect(() => { const room=data?.rooms.find((r)=>r.code===roomCode); if(room&&!editing) setDraft(room.items) },[roomCode,data,editing])
 
   const room = data?.rooms.find((r) => r.code === roomCode)
+  const lotRooms = useMemo(() => data?.rooms.map((r) => r.code === roomCode ? {...r,items:draft} : r) || [], [data?.rooms,roomCode,draft])
   // ------------------------------------------------------------------ o bicho
   // As celulas onde ele nao pode pisar. Recalculado quando a mobilia ou a
   // sujeira muda; o passeio em si NAO e refeito, pra ele nao teleportar toda
@@ -303,7 +285,7 @@ export default function House() {
     setDraft(draft.map((i)=>i.id===selected.id?turned:i)); setStatus(null)
   }
   async function bringPet() {
-    try { const result=await api.post('/api/pet/move',{room_code:room.code}); setData((old)=>({...old,pet:{...old.pet,...result.pet}})); setStatus({kind:'ok',text:`${result.pet.name} veio para ${room.name.toLowerCase()}.`}) }
+    try { const result=await api.post('/api/pet/move',{room_code:room.code}); setData((old)=>({...old,pet:{...old.pet,...result.pet},pets:old.pets?.map((p)=>p.active?{...p,...result.pet}:p)})); setStatus({kind:'ok',text:`${result.pet.name} veio para ${room.name.toLowerCase()}.`}) }
     catch(e){setStatus({kind:'error',text:e.message})}
   }
   /**
@@ -371,15 +353,23 @@ export default function House() {
     return true
   }
 
+  function selectRoom(code) {
+    if (editing && code !== roomCode) {
+      setStatus({kind:'warn',text:'Salve ou cancele a decoração deste cômodo antes de selecionar outro.'})
+      return
+    }
+    setRoomCode(code)
+  }
+
   function pick(tile,_event,moving) {
     // Na planta única o toque traz também o cômodo. Em modo de decoração,
     // tocar outro cômodo o seleciona; a câmera não troca de cenário nem volta
     // para o começo — só muda qual acabamento/inventário o editor está mexendo.
     if (tile.roomCode && tile.roomCode !== room.code) {
-      if (!moving) setRoomCode(tile.roomCode)
+      if (!moving) selectRoom(tile.roomCode)
       return
     }
-    if(!editing) { if(!moving) cutucarNoComodo(tile); return }
+    if(!editing) return
     if(!moving){ const hit=[...draft].reverse().find((i)=>tile.col>=i.col&&tile.col<i.col+i.w&&tile.row>=i.row&&tile.row<i.row+i.d); dragging.current=hit?.id||null; setSelectedId(hit?.id||null); return }
     const id=dragging.current; if(!id)return
     const item=draft.find((i)=>i.id===id); const others=draft.filter((i)=>i.id!==id)
@@ -426,19 +416,19 @@ export default function House() {
           coordenadas, paredes e portas. */}
       <div className="scene-frame lot-frame">
         <HouseLotCanvas
-          rooms={data.rooms.map((r) => r.code === room.code ? { ...r, items: draft } : r)}
+          rooms={lotRooms}
           doors={data.doors}
           activeRoom={{ ...room, items: draft }}
           editing={editing}
           hover={hover}
           selectedId={selectedId}
-          pets={data.pets?.length ? data.pets : [{ ...data.pet, id: 0, active: true }]}
+          pets={data.pets?.length ? data.pets.map((p)=>p.active?{...p,...data.pet,id:p.id,reaction:reacao}:p) : [{ ...data.pet, id: 0, active: true, reaction:reacao }]}
           onPickTile={pick}
           onReleaseTile={()=>{dragging.current=null;setHover(null)}}
         />
       </div>
 
-      <div className="room-tabs">{data.rooms.map((r)=><button key={r.code} className={roomCode===r.code?'active':''} onClick={()=>setRoomCode(r.code)}>{!r.unlocked&&<Icon name="lock" size={13}/>} {r.name}</button>)}</div>
+      <div className="room-tabs">{data.rooms.map((r)=><button key={r.code} className={roomCode===r.code?'active':''} onClick={()=>selectRoom(r.code)}>{!r.unlocked&&<Icon name="lock" size={13}/>} {r.name}</button>)}</div>
       {!room.unlocked ? <div className="card center"><Icon name="lock" size={36}/><h2>{room.name} está fechado</h2><p className="muted">Abrir custa {room.unlock_price} Corações.</p><button className="btn btn-primary" onClick={()=>unlock(room)}>Abrir cômodo</button></div> : <>
       {data.pet.chosen && (
         <div className="pet-at-home">

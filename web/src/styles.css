@@ -628,7 +628,7 @@ label.field > span {
    O cenário inteiro é maior que o telefone de propósito. A casa cresce quando
    um cômodo abre; a câmera não encolhe tudo para fingir que ainda cabe. */
 .lot-frame { margin-inline: -14px; border-radius: 16px; overflow: hidden; }
-.lot-wrap { position: relative; min-width: 0; background: #bfe0ef; }
+.lot-wrap { position: relative; min-width: 0; background: #dae4ce; }
 .lot-holder {
   width: 100%;
   height: min(58vh, 520px);
@@ -640,7 +640,10 @@ label.field > span {
 }
 .lot-holder:active { cursor: grabbing; }
 .lot-holder.editando { cursor: crosshair; }
-.lot-canvas { display: block; image-rendering: pixelated; max-width: none; }
+.lot-canvas { display: block; image-rendering: pixelated; max-width: none; margin: 0 auto; }
+.lot-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:6px; padding:8px; background:var(--paper); }
+.lot-toolbar button { border:1px solid var(--ink); border-radius:8px; background:var(--cream); padding:8px; min-width:36px; font:700 12px 'Baloo 2',sans-serif; }
+.lot-toolbar span { font:700 11px 'Baloo 2',sans-serif; }
 .lot-hint {
   position: absolute;
   z-index: 4;

@@ -1,6 +1,7 @@
 // Bancada local da planta contínua. Não usa API nem sessão: existe para abrir
 // a geometria real num telefone antes de publicar, inclusive portas e quintal.
 import HouseLotCanvas from '../render/HouseLotCanvas'
+import { useState } from 'react'
 
 const rooms = [
   { code:'sala', name:'Sala', x:0, y:0, w:10, h:8, unlocked:true, floor:'madeira', wall:'rosa', items:[{id:1,shape:'sofa',col:2,row:2,w:3,d:1,dir:0}], mess:[] },
@@ -17,5 +18,9 @@ const doors = [
 const pets = [{id:1,name:'Mimi',species:'gato',room_code:'varanda',stage:'adulto',growth:1,colors:['#f2a03d'],accessories:{},mood:'feliz'}]
 
 export default function HouseLotLab() {
-  return <main style={{maxWidth:520,margin:'0 auto',padding:12}}><h1>Nossa casa — bancada</h1><HouseLotCanvas rooms={rooms} doors={doors} activeRoom={rooms[0]} pets={pets}/></main>
+  const [stage,setStage]=useState(1)
+  const shown=rooms.map((r,i)=>({...r,unlocked:r.outdoor || i<stage}))
+  return <main style={{maxWidth:1100,margin:'0 auto',padding:12}}><h1>Nossa casa — bancada</h1>
+    <div className="room-tabs">{[1,2,4].map((n)=><button key={n} onClick={()=>setStage(n)}>{n===1?'Inicial':n===2?'Parcial':'Completa'}</button>)}</div>
+    <HouseLotCanvas rooms={shown} doors={doors} activeRoom={shown[0]} pets={pets.map((p)=>({...p,room_code:'sala'}))}/></main>
 }

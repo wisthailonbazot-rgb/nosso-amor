@@ -4100,3 +4100,35 @@ arrasto mudou a câmera de (774,91) para (924,231), sem erro no console. Bancada
 local `/lab-casa` existe apenas em `DEV`, com os cinco espaços e a porta externa.
 
 **Estado: 863 verificações, 0 falha.** Build Vite aprovada.
+
+### 9.36 Correção da geometria do lote e das portas (03/09/2026)
+
+Esta seção corrige as afirmações da 9.35: a ligação externa anterior não
+recortava a parede e deixava o quintal separado quando a segunda fileira estava
+trancada. A conferência anterior foi em Chromium com viewport de celular, NÃO
+em iPhone físico. Os antigos testes de nomes de funções não comprovavam caminhos.
+
+`housePlan.js` agora concentra células, paredes únicas, portas e navegação.
+O quintal fica a oeste, encostado à sala desde o início. As áreas não construídas
+do retângulo são gramado; os móveis mantêm suas coordenadas locais persistidas.
+Paredes compartilhadas não se duplicam. O modo padrão recorta paredes frontais
+e internas; as traseiras continuam altas. Há opção de paredes altas. Os vãos
+recebem batentes, verga, soleira e folha aberta, desenhados na fila de profundidade.
+Piso, objetos e toque usam a mesma origem isométrica.
+
+O lote enquadra inteiro ao abrir/desbloquear, com zoom e arrasto para explorar.
+Trocar de cômodo durante uma edição exige salvar/cancelar antes, para não perder
+o rascunho. O salvamento continua por cômodo; não há transferência de móveis
+entre cômodos por arrasto nesta versão.
+
+Animais percorrem caminhos célula a célula, respeitando paredes, portas, móveis
+e sujeira. O passeio é visual/local: não sincroniza posição animada entre aparelhos
+nem persiste cada passagem. Removido o timer antigo que mudava o cômodo salvo
+independentemente do desenho. “Chamar para cá” continua persistindo o cômodo.
+
+Verificação: `node web/test-house-plan.mjs` testa as oito combinações de ampliação,
+continuidade do piso, unicidade das paredes, correspondência porta/vão/cômodos,
+caminhos para cada ambiente e colisões. Integrado ao smoke, substituindo duas
+checagens textuais: **862 verificações, 0 falha**. Build Vite aprovada.
+Skill Browser usada para inspeção visual inicial/parcial/completa e zoom em
+Chromium 390×844; não equivale a validação de Safari/WebKit ou iPhone físico.

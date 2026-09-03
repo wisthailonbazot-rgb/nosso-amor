@@ -284,7 +284,7 @@ export function drawHousePet(p, pet, origin, t) {
   }
 }
 
-function drawMess(p, item, origin, t) {
+export function drawMess(p, item, origin, t) {
   const [x, y] = project(item.col + .5, item.row + .5, .03, origin)
   if (item.kind === 'puddle') {
     p.fillPoly([[x-8,y],[x-3,y-4],[x+7,y-2],[x+9,y+2],[x,y+4],[x-7,y+3]], '#c3aa69')
