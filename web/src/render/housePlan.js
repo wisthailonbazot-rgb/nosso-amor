@@ -4,34 +4,23 @@ export const edgeKey = (a, b) => [cellKey(...a), cellKey(...b)].sort().join('|')
 
 export function buildHousePlan(source, sourceDoors = []) {
   const yard = source.find((r) => r.outdoor && r.unlocked)
-  const offset = yard?.w || 0
-  // Quintal encostado à sala desde o primeiro desbloqueio, sem depender da
-  // segunda fileira da casa. Coordenadas locais dos móveis não são migradas.
-  const rooms = source.filter((r) => r.unlocked).map((r) => ({ ...r,
-    x: r.outdoor ? 0 : offset + r.x, y: r.outdoor ? 0 : r.y,
-  }))
+  const rooms = source.filter((r) => r.unlocked).map((r) => ({ ...r }))
   const byCode = new Map(rooms.map((r) => [r.code, r]))
-  const cols = Math.max(1, ...rooms.map((r) => r.x + r.w))
-  const rows = Math.max(1, ...rooms.map((r) => r.y + r.h))
+  // O lote é maior que a casa: há jardim nas quatro laterais e rua na frente.
+  // Cômodos continuam usando as coordenadas persistidas, sem offset secreto.
+  const cols = Math.max(36, ...rooms.map((r) => r.x + r.w + 4))
+  const rows = Math.max(32, ...rooms.map((r) => r.y + r.h + 6))
   const cells = new Map()
   const occupied = new Set()
-  for (const room of rooms) {
+  // Primeiro a paisagem; cômodos internos substituem a grama onde há casa.
+  if (yard) for(let y=0;y<rows-4;y++)for(let x=0;x<cols;x++) cells.set(cellKey(x,y),yard.code)
+  for (const room of [...rooms].sort((a,b)=>Number(b.outdoor)-Number(a.outdoor))) {
     for (let y = room.y; y < room.y + room.h; y++) for (let x = room.x; x < room.x + room.w; x++) cells.set(cellKey(x, y), room.code)
     for (const item of [...(room.items || []), ...(room.mess || []).map((m) => ({ ...m, w: 1, d: 1 }))]) {
       for (let y = 0; y < item.d; y++) for (let x = 0; x < item.w; x++) occupied.add(cellKey(room.x + item.col + x, room.y + item.row + y))
     }
   }
-  // Áreas ainda não construídas continuam sendo gramado do lote, não um
-  // buraco no mundo. Isso também atende desbloqueios fora da ordem sugerida.
-  if (yard) for(let y=0;y<rows;y++)for(let x=0;x<cols;x++) {
-    if(!cells.has(cellKey(x,y)))cells.set(cellKey(x,y),yard.code)
-  }
-  const doors = sourceDoors.filter((d) => ![d.a, d.b].includes(yard?.code) && byCode.has(d.a) && byCode.has(d.b)).map((d) => ({ ...d, x: offset + d.x }))
-  if (yard) for (const room of rooms.filter((r)=>!r.outdoor)) {
-    const y=room.y+Math.floor(room.h/2)
-    if(cells.get(cellKey(room.x-1,y))===yard.code)
-      doors.push({a:yard.code,b:room.code,x:room.x,y,axis:'v',exterior:true})
-  }
+  const doors = sourceDoors.filter((d) => byCode.has(d.a) && byCode.has(d.b)).map((d) => ({...d,exterior:[d.a,d.b].includes(yard?.code)}))
   for (const door of doors) {
     door.before = door.axis === 'v' ? [door.x - 1, door.y] : [door.x, door.y - 1]
     door.after = [door.x, door.y]
@@ -59,6 +48,18 @@ export function buildHousePlan(source, sourceDoors = []) {
   return { rooms, byCode, cells, occupied, doors, edges: [...edges.values()], portals,
     cols, rows,
   }
+}
+
+export function roomDoorCells(source, sourceDoors, code) {
+  const room=source.find((r)=>r.code===code)
+  if(!room)return new Set()
+  const inside=([x,y])=>x>=room.x&&x<room.x+room.w&&y>=room.y&&y<room.y+room.h
+  const cells=new Set()
+  for(const d of sourceDoors.filter((d)=>d.a===code||d.b===code)) {
+    const before=d.axis==='v'?[d.x-1,d.y]:[d.x,d.y-1], after=[d.x,d.y]
+    for(const cell of [before,after])if(inside(cell))cells.add(cellKey(cell[0]-room.x,cell[1]-room.y))
+  }
+  return cells
 }
 
 export function canStep(plan, a, b) {

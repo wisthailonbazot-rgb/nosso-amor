@@ -111,27 +111,28 @@ def _house(code, name, sub, price, w, h, shape, description=""):
 # Foi o que permitiu parede interna e, depois, o avatar andando de um comodo pro
 # outro sem trocar de tela.
 #
-#        x=0        x=10       x=20
-#   y=0  +----------+----------+
-#        |  sala    | cozinha  |
-#   y=8  +----------+----------+
-#        |  quarto  | varanda  |
-#   y=16 +----------+----------+
+#                 FUNDO / QUINTAL
+#        x=8        x=18       x=28
+#  y=10  +----------+----------+
+#        | cozinha  | varanda  |
+#  y=18  +----------+----------+
+#        |  sala    | quarto   |
+#  y=26  +----------+----------+
 #
 # `quintal` fica FORA (outdoor): sem teto nem parede, chao de grama, muro e a
 # calcada com a rua na frente. Ele nao entra no retangulo da casa — o cenario de
 # fora e desenhado em volta dela.
 ROOMS = [
     {"code": "sala", "name": "Sala", "width": 10, "height": 8, "unlock_price": 0,
-     "x": 0, "y": 0},
+     "x": 8, "y": 18},
     {"code": "cozinha", "name": "Cozinha", "width": 10, "height": 8, "unlock_price": 900,
-     "x": 10, "y": 0},
+     "x": 8, "y": 10},
     {"code": "quarto", "name": "Quarto", "width": 10, "height": 8, "unlock_price": 600,
-     "x": 0, "y": 8},
+     "x": 18, "y": 18},
     {"code": "varanda", "name": "Varanda", "width": 10, "height": 8, "unlock_price": 1400,
-     "x": 10, "y": 8},
+     "x": 18, "y": 10},
     {"code": "quintal", "name": "Quintal", "width": 14, "height": 10, "unlock_price": 0,
-     "x": 0, "y": 0, "outdoor": True},
+     "x": 8, "y": 0, "outdoor": True},
 ]
 
 # Portas: por onde se passa de um comodo pro outro. Cada porta e um par de
@@ -139,14 +140,19 @@ ROOMS = [
 # desenhada inteira MENOS esta celula — assim porta e buraco de verdade na
 # parede, e nao um adesivo desenhado por cima dela.
 DOORS = [
-    {"a": "sala", "b": "cozinha", "x": 10, "y": 3, "axis": "v"},
-    {"a": "sala", "b": "quarto", "x": 4, "y": 8, "axis": "h"},
-    {"a": "cozinha", "b": "varanda", "x": 14, "y": 8, "axis": "h"},
-    {"a": "quarto", "b": "varanda", "x": 10, "y": 11, "axis": "v"},
+    {"a": "sala", "b": "cozinha", "x": 12, "y": 18, "axis": "h"},
+    {"a": "sala", "b": "quarto", "x": 18, "y": 21, "axis": "v"},
+    {"a": "cozinha", "b": "varanda", "x": 18, "y": 13, "axis": "v"},
+    {"a": "quarto", "b": "varanda", "x": 22, "y": 18, "axis": "h"},
     # A porta dos bichinhos para o quintal. O quintal aparece logo depois da
     # planta interna (y=16) no mapa continuo; a varanda e o comodo que faz a
     # transicao entre dentro e fora, como numa casa de verdade.
-    {"a": "varanda", "b": "quintal", "x": 15, "y": 16, "axis": "h"},
+    {"a": "varanda", "b": "quintal", "x": 21, "y": 10, "axis": "h"},
+    # Entradas externas também ficam livres para circulação e dão acesso ao
+    # jardim mesmo antes de todos os cômodos internos serem desbloqueados.
+    {"a": "sala", "b": "quintal", "x": 8, "y": 22, "axis": "v"},
+    {"a": "cozinha", "b": "quintal", "x": 12, "y": 10, "axis": "h"},
+    {"a": "quarto", "b": "quintal", "x": 28, "y": 22, "axis": "v"},
 ]
 
 

@@ -4132,3 +4132,31 @@ caminhos para cada ambiente e colisões. Integrado ao smoke, substituindo duas
 checagens textuais: **862 verificações, 0 falha**. Build Vite aprovada.
 Skill Browser usada para inspeção visual inicial/parcial/completa e zoom em
 Chromium 390×844; não equivale a validação de Safari/WebKit ou iPhone físico.
+
+### 9.37 Casa compacta, cenário completo e editor estável (08/09/2026)
+
+O relato no aparelho mostrou que a 9.36 ainda estava errada visualmente: o
+quintal formava um corredor comprido, a casa parecia flutuar, rodapés entravam
+na fila de profundidade dos móveis e os nomes não correspondiam à leitura da
+planta. A geometria foi reorganizada sem trocar códigos nem inventário:
+
+- fundo: **Cozinha | Varanda**; frente: **Sala | Quarto**;
+- quintal atrás da cozinha/varanda, jardim ao redor, lago, canteiros, caminho,
+  calçada e rua frontal;
+- as coordenadas persistidas continuam sendo a fonte da planta; `seed.py`
+  atualiza as coordenadas do catálogo no boot;
+- oito portas reservam sua célula dos dois lados. O editor e o servidor recusam
+  móvel bloqueando porta, inclusive requisição adulterada;
+- paredes, portas e rodapés passaram para o fundo estático. Móveis e animais são
+  desenhados depois, portanto parede/rodapé não atravessam sofá, cama ou item em
+  arraste. Paredes frontais continuam recortadas;
+- o nome de cada cômodo é impresso discretamente no próprio piso;
+- o fundo estático não é mais reconstruído durante `pointermove`, e a câmera não
+  recentraliza ao arrastar. Só objetos e colisões móveis mudam por quadro;
+- ao abrir, a câmera enquadra a casa com 1,8× do zoom geral. “Ver lote” continua
+  mostrando toda a paisagem.
+
+Validação local: criação e arraste reais de uma mesa no editor; cena inicial e
+completa em Chromium 390×844; oito combinações de desbloqueio e caminhos; build
+Vite. Smoke ampliado com bloqueio de porta: **864 verificações, 0 falha**.
+Não foi testado em Safari/WebKit ou iPhone físico.

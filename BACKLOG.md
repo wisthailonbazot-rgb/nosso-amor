@@ -1633,3 +1633,19 @@ ausentes; usar a leitura de casa com paredes recortadas de The Sims como referê
 
 Correção das limitações/afirmações anteriores: ver HANDOFF 9.36. Passeio animado
 é local, não sincronizado entre aparelhos; editor ainda salva por cômodo.
+
+### 08/09/2026 — Parede sobre móveis, editor e cenário da casa
+
+Pedido: corrigir paredes e rodapés sobrepostos aos móveis, itens que não aparecem
+direito ao decorar, nomes trocados e o lote em forma de corredor, sem paisagem.
+
+- [x] Planta compacta 2×2 com nomes/posições coerentes e quintal ao fundo.
+- [x] Jardim completo com lago, canteiros, caminho, calçada e rua.
+- [x] Paredes, portas e rodapés no fundo estático, sem cortar os móveis.
+- [x] Portas reservadas no editor e validadas também pelo backend.
+- [x] Fundo e câmera estáveis durante o arraste; item criado e movido na tela real.
+- [x] Câmera abre focada na casa e mantém opção de ver o lote inteiro.
+- [x] Geometria, build e smoke aprovados (864/0).
+- [ ] Conferir o resultado no iPhone físico.
+
+Detalhes e limites: HANDOFF 9.37.

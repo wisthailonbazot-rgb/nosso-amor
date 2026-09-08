@@ -6,16 +6,17 @@ import { project, roomMetrics } from '../render/iso'
 import { WALL_HEIGHT } from '../render/room'
 import { criarPasseio, passearAte, pontosDeInteresse } from '../render/petWander'
 import HouseLotCanvas from '../render/HouseLotCanvas'
+import { roomDoorCells } from '../render/housePlan'
 import ItemPreview from '../components/ItemPreview'
 import Icon from '../components/Icon'
 import { subscribe, useStore } from '../store'
 
-function fits(item, col, row, room, others) {
+function fits(item, col, row, room, others, reserved=new Set()) {
   const { w, d } = item
   if (col < 0 || row < 0 || col + w > room.w || row + d > room.h) return false
   const dirty = new Set(room.mess.map((m) => `${m.col}:${m.row}`))
   for (let r=row;r<row+d;r++) for(let c=col;c<col+w;c++) {
-    if (dirty.has(`${c}:${r}`)) return false
+    if (dirty.has(`${c}:${r}`) || reserved.has(`${c}:${r}`)) return false
     if (others.some((o) => c >= o.col && c < o.col + o.w && r >= o.row && r < o.row + o.d)) return false
   }
   return true
@@ -48,6 +49,7 @@ export default function House() {
 
   const room = data?.rooms.find((r) => r.code === roomCode)
   const lotRooms = useMemo(() => data?.rooms.map((r) => r.code === roomCode ? {...r,items:draft} : r) || [], [data?.rooms,roomCode,draft])
+  const reserved = useMemo(() => roomDoorCells(data?.rooms || [],data?.doors || [],roomCode),[data?.rooms,data?.doors,roomCode])
   // ------------------------------------------------------------------ o bicho
   // As celulas onde ele nao pode pisar. Recalculado quando a mobilia ou a
   // sujeira muda; o passeio em si NAO e refeito, pra ele nao teleportar toda
@@ -268,7 +270,7 @@ export default function House() {
     if(draft.filter((i)=>i.code===spec.code).length>=spec.owned-elsewhere) {
       setStatus({kind:'error',text:`Vocês só têm ${spec.owned} de ${spec.name}. Para usar outro, compre na loja.`}); return
     }
-    for(let row=0;row<room.h;row++) for(let col=0;col<room.w;col++) if(fits({...spec,dir:0},col,row,room,draft)) { const id=`new-${Date.now()}`; setDraft([...draft,{...spec,id,col,row,dir:0}]); setSelectedId(id); return }
+    for(let row=0;row<room.h;row++) for(let col=0;col<room.w;col++) if(fits({...spec,dir:0},col,row,room,draft,reserved)) { const id=`new-${Date.now()}`; setDraft([...draft,{...spec,id,col,row,dir:0}]); setSelectedId(id); return }
     setStatus({kind:'error',text:'Não achei espaço livre para esse móvel.'})
   }
   function rotateSelected() {
@@ -281,7 +283,7 @@ export default function House() {
       : (selected.dir+1)%4
     const turned={...selected,dir,w:dir%2?spec.d:spec.w,d:dir%2?spec.w:spec.d}
     const others=draft.filter((i)=>i.id!==selected.id)
-    if(!fits(turned,turned.col,turned.row,room,others)) { setStatus({kind:'error',text:'Não dá para girar aqui: o móvel bateria em algo ou na parede.'}); return }
+    if(!fits(turned,turned.col,turned.row,room,others,reserved)) { setStatus({kind:'error',text:'Não dá para girar aqui: o móvel bateria em algo ou na parede.'}); return }
     setDraft(draft.map((i)=>i.id===selected.id?turned:i)); setStatus(null)
   }
   async function bringPet() {
@@ -373,7 +375,7 @@ export default function House() {
     if(!moving){ const hit=[...draft].reverse().find((i)=>tile.col>=i.col&&tile.col<i.col+i.w&&tile.row>=i.row&&tile.row<i.row+i.d); dragging.current=hit?.id||null; setSelectedId(hit?.id||null); return }
     const id=dragging.current; if(!id)return
     const item=draft.find((i)=>i.id===id); const others=draft.filter((i)=>i.id!==id)
-    const ok=fits(item,tile.col,tile.row,room,others); setHover({...tile,w:item.w,d:item.d,ok}); if(ok)setDraft(draft.map((i)=>i.id===id?{...i,col:tile.col,row:tile.row}:i))
+    const ok=fits(item,tile.col,tile.row,room,others,reserved); setHover({...tile,w:item.w,d:item.d,ok}); if(ok)setDraft(draft.map((i)=>i.id===id?{...i,col:tile.col,row:tile.row}:i))
   }
 
   // O que ele esta fazendo, em palavras. O estado ruim vem ANTES do movel

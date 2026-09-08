@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { drawItem } from './furniture'
-import { tileDiamond, unproject } from './iso'
+import { project, tileDiamond, unproject } from './iso'
 import { drawHousePet, drawMess } from './room'
 import { Painter } from './pixel'
 import { buildHousePlan, canStep, cellKey, findPath, freeCell } from './housePlan'
@@ -12,7 +12,11 @@ export default function HouseLotCanvas({ rooms, doors=[], activeRoom, editing=fa
   const [fitScale,setFitScale]=useState(.25)
   const plan=useMemo(()=>buildHousePlan(rooms,doors),[rooms,doors])
   const metrics=useMemo(()=>lotMetrics(plan),[plan.cols,plan.rows])
-  const floor=useMemo(()=>makeLotFloor(plan,metrics),[plan,metrics])
+  const geometryKey=plan.rooms.map((r)=>`${r.code}:${r.x}:${r.y}:${r.w}:${r.h}:${r.floor}:${r.wall}`).join('|')+plan.doors.map((d)=>d.key).join('|')
+  // Arrastar um móvel muda `plan.occupied`, mas não muda chão, paredes ou
+  // paisagem. Recriar um canvas de milhares de pixels a cada pointermove era
+  // a principal engasgada do editor.
+  const floor=useMemo(()=>makeLotFloor(plan,metrics,fullWalls),[geometryKey,metrics,fullWalls])
   const current=useRef(null)
   current.current={plan,metrics,floor,editing,hover,selectedId,activeRoom,pets,fullWalls}
 
@@ -20,12 +24,22 @@ export default function HouseLotCanvas({ rooms, doors=[], activeRoom, editing=fa
     const h=holderRef.current
     const measure=()=>{
       const fit=Math.min(1,h.clientWidth/metrics.width,h.clientHeight/metrics.height)
-      setFitScale(fit); setScale(fit); h.scrollLeft=0; h.scrollTop=0
+      const focus=Math.min(1,fit*1.8)
+      setFitScale(fit); setScale(focus)
+      requestAnimationFrame(()=>{
+        const inside=plan.rooms.filter((r)=>!r.outdoor)
+        const centers=inside.map((r)=>project(r.x+r.w/2,r.y+r.h/2,.7,metrics.origin))
+        const center=centers.length
+          ? [centers.reduce((sum,p)=>sum+p[0],0)/centers.length,centers.reduce((sum,p)=>sum+p[1],0)/centers.length]
+          : [metrics.width/2,metrics.height/2]
+        h.scrollLeft=Math.max(0,center[0]*focus-h.clientWidth/2)
+        h.scrollTop=Math.max(0,center[1]*focus-h.clientHeight/2)
+      })
     }
     measure()
     const observer=new ResizeObserver(measure); observer.observe(h)
     return ()=>observer.disconnect()
-  },[metrics.width,metrics.height])
+  },[metrics.width,metrics.height,geometryKey])
 
   function zoom(value) {
     const h=holderRef.current, next=Math.max(fitScale,Math.min(2,value))
@@ -47,7 +61,6 @@ export default function HouseLotCanvas({ rooms, doors=[], activeRoom, editing=fa
         for(const item of room.items || []) queue.push({...item,col:room.x+item.col,row:room.y+item.row,roomCode:room.code})
         for(const mess of room.mess || []) queue.push({...mess,col:room.x+mess.col,row:room.y+mess.row,w:1,d:1,mess:true})
       }
-      for(const edge of s.plan.edges) queue.push({edge,col:edge.x,row:edge.y,w:edge.axis==='v'?0:1,d:edge.axis==='v'?1:0})
       const live=new Set()
       for(const pet of s.pets.filter((p)=>p.species)) {
         live.add(pet.id)
@@ -83,8 +96,7 @@ export default function HouseLotCanvas({ rooms, doors=[], activeRoom, editing=fa
       // Paredes e portas dividem a fila de profundidade com os móveis.
       queue.sort((a,b)=>(a.col+a.row+(a.w+a.d)/2)-(b.col+b.row+(b.w+b.d)/2))
       for(const item of queue) {
-        if(item.edge) drawLotEdge(p,item.edge,metrics.origin,s.fullWalls)
-        else if(item._pet)drawHousePet(p,item,metrics.origin,t)
+        if(item._pet)drawHousePet(p,item,metrics.origin,t)
         else if(item.mess)drawMess(p,item,metrics.origin,t)
         else {
           if(s.editing && item.roomCode===s.activeRoom?.code && item.id===s.selectedId)
@@ -106,6 +118,7 @@ export default function HouseLotCanvas({ rooms, doors=[], activeRoom, editing=fa
     const x=(e.clientX-rect.left)*metrics.width/rect.width,y=(e.clientY-rect.top)*metrics.height/rect.height
     const [col,row]=unproject(x,y,metrics.origin), room=plan.byCode.get(plan.cells.get(cellKey(col,row)))
     if(!room)return null
+    if(room.outdoor&&(col<room.x||col>=room.x+room.w||row<room.y||row>=room.y+room.h))return null
     return {roomCode:room.code,col:col-room.x,row:row-room.y,x,y}
   }
   const drag=useRef(null)

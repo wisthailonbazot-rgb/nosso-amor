@@ -290,6 +290,15 @@ def save_layout(
             used_elsewhere[item["code"]] = used_elsewhere.get(item["code"], 0) + 1
 
     dirty = {(m.col, m.row) for m in pet_care.pending_mess(db, room.id)}
+    reserved: set[tuple[int, int]] = set()
+    for door in catalog.DOORS:
+        if room.code not in {door["a"], door["b"]}:
+            continue
+        before = (door["x"] - 1, door["y"]) if door["axis"] == "v" else (door["x"], door["y"] - 1)
+        after = (door["x"], door["y"])
+        for col, row in (before, after):
+            if room.plan_x <= col < room.plan_x + room.width and room.plan_y <= row < room.plan_y + room.height:
+                reserved.add((col - room.plan_x, row - room.plan_y))
     taken: dict[tuple[int, int], str] = {}
     here: dict[str, int] = {}
     saved = []
@@ -334,6 +343,11 @@ def save_layout(
                     raise HTTPException(
                         status.HTTP_400_BAD_REQUEST,
                         "Tem sujeira do bichinho aí. Limpa primeiro.",
+                    )
+                if (c, r) in reserved:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        f"{spec['name']} não pode bloquear uma porta.",
                     )
                 taken[(c, r)] = entry.code
 
