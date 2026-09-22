@@ -4208,9 +4208,10 @@ Agora:
   servidor pelo menos uma vez para instalar a casca e validar a sessão.
 
 O endereço principal ainda é `nossoamor.209.50.229.119.sslip.io`, somente IPv4.
-Um endereço alternativo `nip.io` será ligado no Coolify no mesmo deploy; domínio
-próprio continua sendo a solução definitiva caso uma operadora filtre DNS
-dinâmico. O domínio Wix existente não tem credencial DNS neste workspace.
+O alternativo `nossoamor.209.50.229.119.nip.io` foi ligado à mesma aplicação e
+recebeu HTTPS válido; domínio próprio continua sendo a solução definitiva caso
+uma operadora filtre os dois serviços de DNS dinâmico. O domínio Wix existente
+não tem credencial DNS neste workspace.
 
 #### Loja e inventário
 
@@ -4247,3 +4248,8 @@ peça enterrada; compra de segundo sofá pela interface (quantidade 1 → 2); ma
 bancada inspecionados no navegador. Smoke completo passou com **875 verificações,
 0 falha** após integrar o novo teste. Ainda é obrigatória a confirmação no iPhone
 físico em dados móveis; nenhuma bancada Chromium equivale a Safari + operadora.
+
+Publicado no Coolify pelo commit `cf98d67`. Os dois domínios devolveram HTTPS
+200 e `/api/health` 200; produção serviu os mesmos artefatos locais
+`index-CwbvShF9.js` e `index-fCPxlhnG.css`, contendo cidade, WAV, compra repetida
+e service worker `casal-v9`.

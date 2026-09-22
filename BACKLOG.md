@@ -1679,6 +1679,8 @@ ainda não existia.
       Shopping do Coração, praça e central de missões.
 - [x] Build Vite; testes unitários de áudio, cidade e móveis; navegação e compra
       repetida conferidas no navegador local.
+- [x] Publicado no commit `cf98d67`; URLs `sslip.io` e `nip.io` com HTTPS e saúde
+      200, servindo o mesmo bundle validado localmente.
 - [ ] Repetir no **iPhone físico em dados móveis**, porque Chromium local não
       reproduz Safari, operadora, DNS e rádio do aparelho.
 
