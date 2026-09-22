@@ -22,15 +22,12 @@
 
 import { api, apiUrl, getToken } from './api'
 import { entradasDeAudio, estadoDoMicrofone, ondeRoda, pedirMicrofone } from './lib/microfone'
-
-const FORMATOS = [
-  ['audio/webm;codecs=opus', 'webm'],
-  ['audio/webm', 'webm'],
-  ['audio/ogg;codecs=opus', 'ogg'],
-  ['audio/ogg', 'ogg'],
-  ['audio/mp4;codecs=mp4a.40.2', 'm4a'],
-  ['audio/mp4', 'm4a'],
-]
+import {
+  isIOSDevice,
+  prepareIOSAudioContext,
+  startVoiceCapture,
+  supportsVoiceRecording,
+} from './lib/audioRecorder'
 
 // `passos` é a lista do que fazer quando o passo falha e o conserto está fora
 // do app (o caso da permissão bloqueada). Vazia na maioria: quando o motivo já
@@ -62,21 +59,21 @@ export async function diagnosticarAudio(aoAndar = () => {}) {
 
   // 2. as APIs existem
   const temMD = !!navigator.mediaDevices?.getUserMedia
-  const temMR = typeof MediaRecorder !== 'undefined'
+  const temGravador = supportsVoiceRecording()
   if (!anda(passo(
-    temMD && temMR,
+    temMD && temGravador,
     'O navegador sabe gravar',
-    temMD && temMR ? '' : `mediaDevices: ${temMD ? 'sim' : 'não'}, MediaRecorder: ${temMR ? 'sim' : 'não'}`
+    temMD && temGravador ? '' : `mediaDevices: ${temMD ? 'sim' : 'não'}, gravador: ${temGravador ? 'sim' : 'não'}`
   ))) return linhas
 
-  // 3. formato
-  let formato = null
-  for (const [tipo, ext] of FORMATOS) {
-    try {
-      if (MediaRecorder.isTypeSupported?.(tipo)) { formato = { tipo, ext }; break }
-    } catch { /* sem isTypeSupported */ }
-  }
-  anda(passo(true, 'Formato de gravação', formato ? formato.tipo : 'nenhum reconhecido — vai no padrão do aparelho'))
+  // 3. caminho. No iPhone e WAV/PCM de proposito: nao depende do fechamento
+  // MP4 do Safari e toca igual no Android de quem recebe.
+  const preparedContext = prepareIOSAudioContext()
+  anda(passo(
+    true,
+    'Formato de gravação',
+    isIOSDevice() ? 'WAV PCM mono (compatível com iPhone e Android)' : 'WebM/Opus do navegador',
+  ))
 
   // 4. permissão + microfone
   //
@@ -91,6 +88,7 @@ export async function diagnosticarAudio(aoAndar = () => {}) {
   // nos ajustes) — e devolve o caminho de volta em passos, para ESTE aparelho.
   const pedido = await pedirMicrofone()
   if (!pedido.ok) {
+    try { await preparedContext?.close?.() } catch { /* sem efeito */ }
     const extra = pedido.depois?.length
       ? [`— ${pedido.tituloDepois}`, ...pedido.depois]
       : []
@@ -116,22 +114,13 @@ export async function diagnosticarAudio(aoAndar = () => {}) {
 
   // 6. grava 2 segundos de verdade
   let blob = null
+  let ext = 'webm'
   try {
-    const rec = formato?.tipo
-      ? new MediaRecorder(stream, { mimeType: formato.tipo })
-      : new MediaRecorder(stream)
-    const pedacos = []
-    rec.ondataavailable = (e) => e.data?.size && pedacos.push(e.data)
-    rec.start(250)
+    const capture = await startVoiceCapture(stream, { preparedContext })
     await new Promise((r) => setTimeout(r, 2000))
-    await new Promise((resolve) => {
-      let feito = false
-      const fim = () => { if (!feito) { feito = true; resolve() } }
-      rec.onstop = fim
-      setTimeout(fim, 1500)
-      try { rec.stop() } catch { fim() }
-    })
-    blob = new Blob(pedacos, { type: rec.mimeType || 'audio/webm' })
+    const result = await capture.stop()
+    blob = result.blob
+    ext = result.ext
   } catch (err) {
     anda(passo(false, 'Gravar 2 segundos', `o aparelho recusou: ${err?.name || err}`))
     stream.getTracks().forEach((t) => t.stop())
@@ -140,7 +129,7 @@ export async function diagnosticarAudio(aoAndar = () => {}) {
   stream.getTracks().forEach((t) => t.stop())
 
   if (!anda(passo(
-    blob.size > 0,
+    blob.size > (ext === 'wav' ? 44 : 0),
     'Gravar 2 segundos',
     blob.size > 0 ? `${(blob.size / 1024).toFixed(1)} KB` : 'saiu VAZIO — o navegador não entregou os dados'
   ))) return linhas
@@ -151,9 +140,9 @@ export async function diagnosticarAudio(aoAndar = () => {}) {
   // o servidor não reconhece apareceria — ele confere os primeiros BYTES, não o
   // que o navegador diz que é.
   const form = new FormData()
-  form.append('file', blob, `teste.${formato?.ext || 'webm'}`)
+  form.append('file', blob, `teste.${ext}`)
   try {
-    const r = await api.post('/api/chat/audio/teste', form)
+    const r = await api.post('/api/chat/audio/teste', form, { timeoutMs: 90000 })
     anda(passo(true, 'O servidor aceitou o arquivo', `reconhecido como ${r?.tipo || '?'}, ${r?.bytes || 0} bytes`))
   } catch (err) {
     anda(passo(false, 'O servidor aceitou o arquivo', `${err?.status || ''} ${err?.message || err}`))

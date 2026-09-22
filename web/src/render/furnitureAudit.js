@@ -26,7 +26,7 @@
 // quanto do bloco MENOR está enterrado: até um terço é acabamento; acima disso é
 // peça perdida dentro de outra, que é o que aparece como "bugado".
 
-import { SHAPES, comEspiao } from './furniture'
+import { SHAPES, comEspiao } from './furniture.js'
 
 /** Um pintor que não pinta: só anota as caixas que pediram pra desenhar. */
 function pintorDeMentira() {

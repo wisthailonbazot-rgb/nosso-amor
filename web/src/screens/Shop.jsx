@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 
 import { api } from '../api'
 import { useStore } from '../store'
@@ -19,17 +20,23 @@ const GROUP_LABEL = {
   moveis: 'Móveis',
   decoracao: 'Decoração',
   eletronicos: 'Eletrônicos',
+  bichinho: 'Cantinho do bichinho',
+  quintal: 'Jardim e quintal',
   geral: 'Geral',
   especie: 'Adotar outra espécie',
 }
 
 export default function Shop() {
+  const location = useLocation()
   const balance = useStore((s) => s.balance)
   const setBalance = useStore((s) => s.setBalance)
   const [data, setData] = useState(null)
   const [avatar, setAvatar] = useState(null)
   const [pet, setPet] = useState(null)
-  const [tab, setTab] = useState('avatar')
+  const [tab, setTab] = useState(() => {
+    const requested = new URLSearchParams(location.search).get('tab')
+    return ['avatar', 'house', 'pet'].includes(requested) ? requested : 'avatar'
+  })
   const [status, setStatus] = useState(null)
   const [busyCode, setBusyCode] = useState(null)
 
@@ -56,7 +63,12 @@ export default function Shop() {
     try {
       const result = await api.post('/api/shop/buy', { code: item.code })
       setBalance(result.balance)
-      setStatus({ kind: 'ok', text: `${item.name} é de vocês agora.` })
+      setStatus({
+        kind: 'ok',
+        text: item.repeatable && item.owned > 0
+          ? `Mais uma unidade de ${item.name} foi para o inventário.`
+          : `${item.name} é de vocês agora.`,
+      })
       await load()
     } catch (err) {
       setStatus({ kind: 'error', text: err.message })
@@ -123,19 +135,24 @@ export default function Shop() {
 
                   {item.subcategory==='especie'&&item.owned>0 ? (
                     <button className="btn-primary btn-sm" disabled={pet?.species===item.metadata.species} onClick={()=>adopt(item)}>{pet?.species===item.metadata.species?'Está na casa':'Escolher'}</button>
-                  ) : item.owned > 0 && !item.consumable ? (
+                  ) : item.owned > 0 && !item.repeatable ? (
                     <span className="pill sage" style={{ justifyContent: 'center' }}>
                       já é seu
                     </span>
                   ) : (
-                    <button
-                      className={affordable ? 'btn-accent btn-sm' : 'btn-ghost btn-sm'}
-                      onClick={() => buy(item)}
-                      disabled={busyCode === item.code || !affordable}
-                    >
-                      <Icon name="heart" size={13} filled /> {item.price}
-                      {item.owned > 0 && item.consumable ? ` · tem ${item.owned}` : ''}
-                    </button>
+                    <div className="shop-buy-stack">
+                      {item.owned > 0 && item.repeatable && (
+                        <span className="tiny muted center">no inventário: {item.owned}</span>
+                      )}
+                      <button
+                        className={affordable ? 'btn-accent btn-sm' : 'btn-ghost btn-sm'}
+                        onClick={() => buy(item)}
+                        disabled={busyCode === item.code || !affordable}
+                      >
+                        <Icon name="heart" size={13} filled />
+                        {item.owned > 0 && item.repeatable ? ' Comprar outro · ' : ' '}{item.price}
+                      </button>
+                    </div>
                   )}
                 </div>
               )

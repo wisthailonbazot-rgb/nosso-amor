@@ -8,7 +8,7 @@ export function buildHousePlan(source, sourceDoors = []) {
   const byCode = new Map(rooms.map((r) => [r.code, r]))
   // O lote é maior que a casa: há jardim nas quatro laterais e rua na frente.
   // Cômodos continuam usando as coordenadas persistidas, sem offset secreto.
-  const cols = Math.max(36, ...rooms.map((r) => r.x + r.w + 4))
+  const cols = Math.max(32, ...rooms.map((r) => r.x + r.w + 4))
   const rows = Math.max(32, ...rooms.map((r) => r.y + r.h + 6))
   const cells = new Map()
   const occupied = new Set()
@@ -39,7 +39,7 @@ export function buildHousePlan(source, sourceDoors = []) {
       edges.set(key, { key, axis, x, y, style: room.wall, door: portals.get(key),
         // Cutaway: só as paredes de trás permanecem altas. As da frente e
         // divisórias viram rodapé espesso, jamais um painel caído sobre o piso.
-        height: negative && !internal ? 2.4 : 0.18,
+        height: negative && !internal ? 2.4 : 0,
       })
     }
     for (let y = room.y; y < room.y + room.h; y++) { add('v', room.x, y, true); add('v', room.x + room.w, y, false) }

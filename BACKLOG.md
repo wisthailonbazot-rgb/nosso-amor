@@ -52,7 +52,7 @@ Legenda: **[ ]** a fazer · **[~]** em andamento · **[x]** pronto e testado
         conferência do cálculo do ciclo contra os números da literatura
   - [x] Bancada `/lab`: confere sozinha se toda peça de arte desenha algo
   - [ ] Blocos das Etapas 3 a 5, conforme forem sendo construídas
-- **[ ]** 23/08 — **Móveis e cenários personalizáveis**, loja pra comprar novos e
+- **[x]** 23/08 — **Móveis e cenários personalizáveis**, loja pra comprar novos e
       **progressão de verdade**. Mesma coisa pra **avatares** e **bichinhos**.
 - **[x]** 23/08 — Manter este backlog atualizado a cada pedido
 - **[x]** 23/08 — Criar HANDOFF com o mapa do projeto, pra continuar em outro chat
@@ -70,13 +70,13 @@ Legenda: **[ ]** a fazer · **[~]** em andamento · **[x]** pronto e testado
 - **[x]** **Várias espécies de bichinho** pra escolher — seis, com ritmo próprio
 - **[x]** **Casa com mais de um cômodo**, tudo personalizável
 - **[x]** **Terreno em volta da casa** e a **rua na frente**, também construídos
-- **[ ]** **PRÓXIMO PASSO — mapa 2,5D do bairro**: uma rua onde dá pra andar e
+- **[x]** **Mapa 2,5D do bairro**: uma rua onde dá pra andar e
       **entrar em lugares**, incluindo um **mercado onde se compra ração** e os
-      outros itens. A loja deixa de ser uma lista e vira um lugar.
+      outros itens. A primeira versão tem seis destinos; os interiores próprios
+      de cada prédio continuam sendo uma expansão futura.
 
 > Estes seis mudam o formato do jogo: ele deixa de ser "telas separadas" e vira um
-> mundinho. Cinco estão de pé; falta **o mapa do bairro**, que é a parte pesada —
-> está anotada no HANDOFF, seção 8, com o caminho técnico pensado.
+> mundinho. Os seis agora estão de pé; o mapa do bairro foi entregue em 21/09.
 
 ---
 
@@ -172,7 +172,7 @@ Legenda: **[ ]** a fazer · **[~]** em andamento · **[x]** pronto e testado
 - [x] Desbloqueio de cômodos por progressão
 - [x] Chat: corrigido recebimento em tempo real — `publish()` era chamado da worker
       thread e descartava o evento; agora agenda no loop dono do WebSocket
-- [x] Loja: 30/30 móveis com arte; smoke cruza catálogo Python com `SHAPES` JS
+- [x] Loja: 56/56 móveis com arte; smoke cruza catálogo Python com `SHAPES` JS
 
 ### 23/08/2026 — fechamento da Etapa 4: o que a revisão final encontrou
 
@@ -1649,3 +1649,37 @@ direito ao decorar, nomes trocados e o lote em forma de corredor, sem paisagem.
 - [ ] Conferir o resultado no iPhone físico.
 
 Detalhes e limites: HANDOFF 9.37.
+
+### 21/09/2026 — áudio do iPhone, dados móveis, loja, objetos e cidade
+
+Pedido: áudio ainda não enviava no iPhone; o app não abria usando dados móveis;
+móveis só podiam ser comprados uma vez; havia poucos objetos; a cidade prometida
+ainda não existia.
+
+- [x] **Gravador próprio do iPhone:** em vez de depender do MP4/AAC fragmentado
+      do Safari, o toque abre o microfone e captura voz em WAV PCM mono de 16 kHz.
+      O Android continua usando WebM/Opus em fatias. Chat e diagnóstico usam a
+      mesma implementação; upload tem prazo próprio de 90 segundos.
+- [x] **Abertura em rede móvel:** service worker v9 desiste de uma rede travada e
+      abre a casca em cache; a última sessão validada abre imediatamente e não é
+      apagada por falha de sinal. Só `401` real encerra a sessão. API e boot têm
+      prazos explícitos e mensagens diferentes para demora e falta de conexão.
+- [x] **Compras repetidas com quantidade real:** móveis, decoração,
+      eletrodomésticos e itens de quintal podem ser comprados novamente. A loja
+      mostra quantas unidades existem; a casa soma o inventário inteiro e recusa
+      uma cópia não paga. Roupa, piso e parede continuam desbloqueios únicos.
+- [x] **Catálogo 30 → 56 objetos:** 26 formas novas, incluindo poltrona, mesas,
+      escrivaninha, penteadeira, aquário, computador, máquina de lavar, vitrola,
+      fonte, piscina e jardim. Tamanhos reais estão numa fonte única.
+- [x] **Sobreposições corrigidas:** auditoria dos 56 desenhos encontrou defeitos
+      na penteadeira, relógio e aquário; os três foram redesenhados. O teste agora
+      reprova automaticamente se uma peça ficar enterrada dentro de outra.
+- [x] **Cidade jogável:** mapa isométrico 22×18, personagem caminhando por caminho
+      calculado, posição guardada e seis entradas: casa, fliperama, pet shop,
+      Shopping do Coração, praça e central de missões.
+- [x] Build Vite; testes unitários de áudio, cidade e móveis; navegação e compra
+      repetida conferidas no navegador local.
+- [ ] Repetir no **iPhone físico em dados móveis**, porque Chromium local não
+      reproduz Safari, operadora, DNS e rádio do aparelho.
+
+Detalhes: HANDOFF 9.38.

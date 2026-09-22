@@ -112,11 +112,11 @@ def _house(code, name, sub, price, w, h, shape, description=""):
 # outro sem trocar de tela.
 #
 #                 FUNDO / QUINTAL
-#        x=8        x=18       x=28
+#        x=6        x=16       x=26
 #  y=10  +----------+----------+
-#        | cozinha  | varanda  |
+#        |  sala    | cozinha  |
 #  y=18  +----------+----------+
-#        |  sala    | quarto   |
+#        | quarto   | varanda  |
 #  y=26  +----------+----------+
 #
 # `quintal` fica FORA (outdoor): sem teto nem parede, chao de grama, muro e a
@@ -124,15 +124,15 @@ def _house(code, name, sub, price, w, h, shape, description=""):
 # fora e desenhado em volta dela.
 ROOMS = [
     {"code": "sala", "name": "Sala", "width": 10, "height": 8, "unlock_price": 0,
-     "x": 8, "y": 18},
+     "x": 6, "y": 10},
     {"code": "cozinha", "name": "Cozinha", "width": 10, "height": 8, "unlock_price": 900,
-     "x": 8, "y": 10},
+     "x": 16, "y": 10},
     {"code": "quarto", "name": "Quarto", "width": 10, "height": 8, "unlock_price": 600,
-     "x": 18, "y": 18},
+     "x": 6, "y": 18},
     {"code": "varanda", "name": "Varanda", "width": 10, "height": 8, "unlock_price": 1400,
-     "x": 18, "y": 10},
+     "x": 16, "y": 18},
     {"code": "quintal", "name": "Quintal", "width": 14, "height": 10, "unlock_price": 0,
-     "x": 8, "y": 0, "outdoor": True},
+     "x": 9, "y": 0, "outdoor": True},
 ]
 
 # Portas: por onde se passa de um comodo pro outro. Cada porta e um par de
@@ -140,19 +140,19 @@ ROOMS = [
 # desenhada inteira MENOS esta celula — assim porta e buraco de verdade na
 # parede, e nao um adesivo desenhado por cima dela.
 DOORS = [
-    {"a": "sala", "b": "cozinha", "x": 12, "y": 18, "axis": "h"},
-    {"a": "sala", "b": "quarto", "x": 18, "y": 21, "axis": "v"},
-    {"a": "cozinha", "b": "varanda", "x": 18, "y": 13, "axis": "v"},
-    {"a": "quarto", "b": "varanda", "x": 22, "y": 18, "axis": "h"},
+    {"a": "sala", "b": "cozinha", "x": 16, "y": 13, "axis": "v"},
+    {"a": "sala", "b": "quarto", "x": 10, "y": 18, "axis": "h"},
+    {"a": "cozinha", "b": "varanda", "x": 20, "y": 18, "axis": "h"},
+    {"a": "quarto", "b": "varanda", "x": 16, "y": 21, "axis": "v"},
     # A porta dos bichinhos para o quintal. O quintal aparece logo depois da
     # planta interna (y=16) no mapa continuo; a varanda e o comodo que faz a
     # transicao entre dentro e fora, como numa casa de verdade.
-    {"a": "varanda", "b": "quintal", "x": 21, "y": 10, "axis": "h"},
+    {"a": "varanda", "b": "quintal", "x": 26, "y": 22, "axis": "v"},
     # Entradas externas também ficam livres para circulação e dão acesso ao
     # jardim mesmo antes de todos os cômodos internos serem desbloqueados.
-    {"a": "sala", "b": "quintal", "x": 8, "y": 22, "axis": "v"},
-    {"a": "cozinha", "b": "quintal", "x": 12, "y": 10, "axis": "h"},
-    {"a": "quarto", "b": "quintal", "x": 28, "y": 22, "axis": "v"},
+    {"a": "sala", "b": "quintal", "x": 10, "y": 10, "axis": "h"},
+    {"a": "cozinha", "b": "quintal", "x": 20, "y": 10, "axis": "h"},
+    {"a": "quarto", "b": "quintal", "x": 6, "y": 22, "axis": "v"},
 ]
 
 
@@ -278,6 +278,16 @@ SHOP_ITEMS = [
     _house("estante", "Estante", "moveis", 320, 2, 1, "shelf"),
     _house("armario", "Armário", "moveis", 340, 2, 1, "wardrobe"),
     _house("puff", "Puff", "moveis", 110, 1, 1, "puff"),
+    _house("poltrona", "Poltrona", "moveis", 220, 2, 1, "armchair", "Um lugar confortável só seu"),
+    _house("mesa_centro", "Mesa de centro", "moveis", 180, 2, 1, "coffee_table"),
+    _house("mesa_jantar", "Mesa de jantar", "moveis", 420, 3, 2, "dining_table", "Grande o bastante para receber"),
+    _house("escrivaninha", "Escrivaninha", "moveis", 290, 2, 1, "desk"),
+    _house("comoda", "Cômoda", "moveis", 310, 2, 1, "dresser"),
+    _house("criado_mudo", "Mesa de cabeceira", "moveis", 140, 1, 1, "nightstand"),
+    _house("penteadeira", "Penteadeira", "moveis", 360, 2, 1, "vanity"),
+    _house("banco", "Banco com encosto", "moveis", 210, 2, 1, "bench"),
+    _house("banqueta", "Banqueta", "moveis", 95, 1, 1, "stool"),
+    _house("estante_estreita", "Estante estreita", "moveis", 230, 1, 1, "bookcase_narrow"),
     # --- casa: decoracao
     _house("quadro", "Quadro", "decoracao", 130, 1, 1, "frame"),
     _house("quadro_casal", "Quadro do casal", "decoracao", 350, 2, 1, "frame_couple"),
@@ -286,12 +296,23 @@ SHOP_ITEMS = [
     _house("tapete", "Tapete", "decoracao", 190, 3, 2, "rug"),
     _house("luminaria", "Luminária", "decoracao", 160, 1, 1, "lamp"),
     _house("velas", "Velas", "decoracao", 90, 1, 1, "candles"),
+    _house("espelho", "Espelho", "decoracao", 170, 1, 1, "mirror"),
+    _house("relogio", "Relógio de parede", "decoracao", 145, 1, 1, "clock"),
+    _house("vaso", "Vaso de cerâmica", "decoracao", 105, 1, 1, "vase"),
+    _house("flores", "Vaso com flores", "decoracao", 155, 1, 1, "flowers"),
+    _house("aquario", "Aquário", "decoracao", 390, 2, 1, "aquarium", "Peixinhos que nadam de verdade"),
+    _house("almofada_chao", "Almofada de chão", "decoracao", 85, 1, 1, "floor_cushion"),
+    _house("caixa_brinquedos", "Caixa de brinquedos", "decoracao", 190, 2, 1, "toybox"),
     # --- casa: eletronicos
     _house("tv", "TV", "eletronicos", 420, 2, 1, "tv"),
     _house("som", "Caixa de som", "eletronicos", 250, 1, 1, "speaker"),
     _house("videogame", "Videogame", "eletronicos", 460, 1, 1, "console"),
     _house("geladeira", "Geladeira", "eletronicos", 480, 1, 2, "fridge"),
     _house("fogao", "Fogão", "eletronicos", 400, 2, 1, "stove"),
+    _house("computador", "Computador", "eletronicos", 520, 2, 1, "computer"),
+    _house("lavadora", "Máquina de lavar", "eletronicos", 430, 1, 1, "washer"),
+    _house("microondas", "Micro-ondas", "eletronicos", 280, 1, 1, "microwave"),
+    _house("vitrola", "Vitrola", "eletronicos", 330, 1, 1, "record_player", "O disco gira quando a casa está aberta"),
     # --- casa: coisas do bichinho (ficam no comodo, nao no inventario dele)
     _house("caminha_pet", "Caminha do bichinho", "bichinho", 200, 2, 2, "petbed"),
     _house("comedouro", "Comedouro", "bichinho", 130, 1, 1, "petbowl"),
@@ -305,6 +326,11 @@ SHOP_ITEMS = [
     _house("arvore", "Árvore", "quintal", 240, 2, 2, "tree"),
     _house("varal", "Varal", "quintal", 150, 3, 1, "clothesline"),
     _house("banquinho", "Banquinho de jardim", "quintal", 120, 1, 1, "gardenstool"),
+    _house("fonte", "Fonte de jardim", "quintal", 460, 2, 2, "fountain"),
+    _house("mesa_piquenique", "Mesa de piquenique", "quintal", 380, 3, 2, "picnic_table"),
+    _house("canteiro_flores", "Canteiro de flores", "quintal", 170, 2, 1, "flowerbed"),
+    _house("casa_passarinho", "Casinha de passarinho", "quintal", 210, 1, 1, "birdhouse"),
+    _house("piscina", "Piscina", "quintal", 650, 3, 2, "pool", "Água animada para o quintal"),
 ]
 
 

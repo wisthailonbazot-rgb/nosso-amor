@@ -11,9 +11,31 @@
 // A versao do cache SOBE a cada vez que a casca muda de forma. O `activate`
 // apaga tudo o que nao tem o nome atual, e e isso que destrava um aparelho que
 // ficou preso no fundo rosa com um index.html velho. v7: entrou o kit Kenney
-// (arquivos novos em /kenney-furniture) e a rede de seguranca do boot mudou.
-const CACHE = 'casal-v8'
+// v9 acrescenta prazo máximo de rede: em dados móveis a casca guardada assume
+// o controle em vez de o iPhone ficar eternamente no fundo rosa.
+const CACHE = 'casal-v9'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png']
+
+async function fetchWithTimeout(request, timeoutMs) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(request, { signal: controller.signal })
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+async function cachedShell() {
+  return (
+    (await caches.match('/index.html')) ||
+    (await caches.match('/')) ||
+    new Response(
+      '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Nosso app</title><body style="font:16px system-ui;background:#fff0f4;padding:32px;color:#49363d"><h1>Sem conexão</h1><p>Não consegui falar com o servidor. Confira os dados móveis e abra novamente.</p></body>',
+      { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+    )
+  )
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()))
@@ -44,7 +66,10 @@ self.addEventListener('fetch', (event) => {
     // agora manda `no-cache` nessa resposta; isto aqui e o cinto de seguranca,
     // e tambem o que destrava um aparelho que ja esta com o HTML velho preso.
     event.respondWith(
-      fetch(new Request(event.request.url, { cache: 'reload', credentials: 'same-origin' }))
+      fetchWithTimeout(
+        new Request(event.request.url, { cache: 'reload', credentials: 'same-origin' }),
+        6500
+      )
         .then((res) => {
           if (res.ok) {
             const copia = res.clone()
@@ -52,7 +77,7 @@ self.addEventListener('fetch', (event) => {
           }
           return res
         })
-        .catch(() => caches.match('/index.html'))
+        .catch(() => cachedShell())
     )
     return
   }
@@ -79,10 +104,10 @@ self.addEventListener('fetch', (event) => {
   // Resultado: o aparelho ficava preso no fundo rosa por tempo indeterminado, e
   // de fora tudo parecia certo. O mesmo `cache: 'reload'` que a navegação já
   // usava logo acima resolve: força ir na rede e ignora o que estiver guardado.
-  event.respondWith(fetch(new Request(event.request.url, {
+  event.respondWith(fetchWithTimeout(new Request(event.request.url, {
     cache: 'reload',
     credentials: 'same-origin',
-  })).then((res) => {
+  }), 9000).then((res) => {
     if (res.ok && url.origin === self.location.origin) {
       const copy = res.clone()
       caches.open(CACHE).then((c) => c.put(event.request, copy))

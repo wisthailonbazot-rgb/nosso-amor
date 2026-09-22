@@ -41,7 +41,22 @@ def owned_map(db: Session, user: User) -> dict[int, int]:
     return result
 
 
+def is_repeatable(item: ShopItem) -> bool:
+    """Itens que representam unidades fisicas podem ser comprados de novo.
+
+    Roupa, brinquedo permanente, acessorio e acabamento sao desbloqueios: uma
+    segunda compra so queimaria moeda. Mobilia/decoracao/eletrodomestico e uma
+    unidade na planta da casa; dois sofas exigem duas compras. Consumiveis ja
+    acumulavam quantidade e continuam assim.
+    """
+    return bool(
+        item.consumable
+        or (item.category == "house" and item.subcategory != "estrutural")
+    )
+
+
 def _item_out(item: ShopItem, owned: int) -> dict:
+    repeatable = is_repeatable(item)
     return {
         "id": item.id,
         "code": item.code,
@@ -53,8 +68,8 @@ def _item_out(item: ShopItem, owned: int) -> dict:
         "consumable": item.consumable,
         "metadata": item.item_metadata or {},
         "owned": owned,
-        # item que não é consumível só faz sentido comprar uma vez
-        "can_buy": item.consumable or owned == 0,
+        "repeatable": repeatable,
+        "can_buy": repeatable or owned == 0,
     }
 
 
@@ -143,9 +158,10 @@ def buy(payload: BuyIn, user: User = Depends(current_user), db: Session = Depend
         .first()
     )
 
-    quantity = payload.quantity if item.consumable else 1
-    if not item.consumable and existing is not None:
-        # comprar de novo uma roupa que já é sua seria só perder moeda
+    repeatable = is_repeatable(item)
+    quantity = payload.quantity if repeatable else 1
+    if not repeatable and existing is not None:
+        # comprar de novo um desbloqueio seria só perder moeda
         raise HTTPException(status.HTTP_409_CONFLICT, f"{item.name} já é de vocês.")
 
     total = item.price * quantity

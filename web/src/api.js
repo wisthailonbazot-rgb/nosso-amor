@@ -89,11 +89,34 @@ async function request(method, path, body, options = {}) {
     payload = JSON.stringify(body)
   }
 
+  // Rede móvel ruim pode deixar `fetch` pendurado por minutos sem dar erro.
+  // Um prazo explícito permite que a casca em cache assuma o controle e mostra
+  // uma mensagem útil. Uploads podem pedir um prazo maior por opção.
+  const { timeoutMs = 25000, signal: externalSignal, ...fetchOptions } = options
+  const controller = externalSignal ? null : new AbortController()
+  const timeout = controller
+    ? setTimeout(() => controller.abort('timeout'), timeoutMs)
+    : null
+
   let response
   try {
-    response = await fetch(apiUrl(path), { method, headers, body: payload, ...options })
-  } catch {
-    throw new ApiError(0, 'Sem conexao com o servidor')
+    response = await fetch(apiUrl(path), {
+      method,
+      headers,
+      body: payload,
+      ...fetchOptions,
+      signal: externalSignal || controller.signal,
+    })
+  } catch (error) {
+    const demorou = controller?.signal.aborted || error?.name === 'AbortError'
+    throw new ApiError(
+      0,
+      demorou
+        ? 'A conexão demorou demais. Confira os dados móveis e tente novamente.'
+        : 'Sem conexão com o servidor'
+    )
+  } finally {
+    if (timeout) clearTimeout(timeout)
   }
 
   if (response.status === 204) return null

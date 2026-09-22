@@ -19,7 +19,7 @@ export function makeLotFloor(plan, metrics, fullWalls=false) {
   for(let x=4;x<9;x++)p.fillPoly(tileDiamond(x,22,metrics.origin,.01),'#cfbea2')
   for(let y=22;y<28;y++)p.fillPoly(tileDiamond(7,y,metrics.origin,.01),'#cfbea2')
   for(let x=2;x<8;x++)for(let y=14;y<16;y++)p.fillPoly(tileDiamond(x,y,metrics.origin,.01),(x+y)%2?'#6f9255':'#789d5c')
-  for (const room of plan.rooms) {
+  for (const room of plan.rooms.filter((r)=>!r.outdoor)) {
     const [x,y] = project(room.x, room.y, 0, metrics.origin)
     drawFloor(p, room.w, room.h, {x,y}, room.floor || (room.outdoor ? 'grama' : 'padrao'))
   }
@@ -51,6 +51,9 @@ export function drawLotEdge(p, edge, origin, fullWalls=false) {
   const {x,y,axis,style,door} = edge, vertical = axis === 'v'
   const base = (WALL_STYLES[style] || WALL_STYLES.padrao).base
   const h = fullWalls ? 2.4 : edge.height
+  // No recorte, parede voltada para a câmera some por inteiro. Um rodapé baixo
+  // ainda cortava armário, cama e estante na casa cheia do usuário.
+  if(!fullWalls && h<=0)return
   if (!door) {
     block(p,origin,base, x-(vertical?.07:0),y-(vertical?0:.07),vertical?.14:1,vertical?1:.14,h)
     return

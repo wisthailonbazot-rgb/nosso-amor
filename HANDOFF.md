@@ -4160,3 +4160,90 @@ Validação local: criação e arraste reais de uma mesa no editor; cena inicial
 completa em Chromium 390×844; oito combinações de desbloqueio e caminhos; build
 Vite. Smoke ampliado com bloqueio de porta: **864 verificações, 0 falha**.
 Não foi testado em Safari/WebKit ou iPhone físico.
+
+### 9.38 Áudio do iPhone, abertura móvel, loja repetível, 56 objetos e cidade (21/09/2026)
+
+Pedido do dono: o áudio não saía no iPhone, o app não abria nos dados móveis,
+os produtos de decoração paravam depois da primeira compra, faltavam objetos e
+a cidade ainda não existia.
+
+#### Áudio: dois sistemas para dois navegadores diferentes
+
+O caminho único de `MediaRecorder` não era robusto nos dois lados. Chromium
+precisa das fatias curtas (`start(250)`) para não devolver blob final vazio; no
+iPhone o MP4/AAC depende de o Safari fechar corretamente um contêiner mais
+complexo, justamente a área com regressões recentes do WebKit.
+
+`web/src/lib/audioRecorder.js` agora é a fonte compartilhada pelo chat e pelo
+diagnóstico:
+
+- iPhone/iPad: Web Audio captura PCM, reduz para mono 16 kHz e escreve um WAV
+  RIFF/PCM16 completo, que Android e iPhone reproduzem sem transcodificação;
+- Android/Chromium: MediaRecorder continua preferindo WebM/Opus e recolhe blocos
+  de 250 ms;
+- o `AudioContext` do iPhone nasce sincronamente dentro do toque, antes do modal
+  de permissão, para não perder a ativação do usuário;
+- WAV de apenas 44 bytes (só cabeçalho, sem amostras) é tratado como vazio;
+- upload de voz usa prazo de 90 s, separado do prazo de requisição comum.
+
+`test-audio-recorder.mjs` confere RIFF/WAVE, PCM, mono, 16 kHz, 16 bits, tamanho
+do bloco e detecção de iPhone/iPad. O servidor declara `.wav` como `audio/wav`.
+
+#### Dados móveis: não confundir falha de rede com logout
+
+Havia duas esperas infinitas: a busca `/api/me` do boot e a estratégia
+network-first do service worker. Além disso, qualquer exceção — inclusive perda
+de sinal — apagava o token e jogava a pessoa para o login.
+
+Agora:
+
+- `api.js` cancela requisição comum após 25 s e `/api/me` após 10 s;
+- `store.js` guarda a última resposta validada de `/api/me`, abre a interface
+  imediatamente com ela e atualiza em segundo plano;
+- somente resposta HTTP 401 apaga token e sessão guardada; timeout ou falta de
+  rede mantêm a sessão e deixam o app em estado offline;
+- service worker `casal-v9` limita navegação a 6,5 s e JS/CSS a 9 s, então usa a
+  casca já guardada; existe ainda uma página offline mínima se não houver shell;
+- continua valendo: na primeira abertura absoluta o aparelho precisa chegar ao
+  servidor pelo menos uma vez para instalar a casca e validar a sessão.
+
+O endereço principal ainda é `nossoamor.209.50.229.119.sslip.io`, somente IPv4.
+Um endereço alternativo `nip.io` será ligado no Coolify no mesmo deploy; domínio
+próprio continua sendo a solução definitiva caso uma operadora filtre DNS
+dinâmico. O domínio Wix existente não tem credencial DNS neste workspace.
+
+#### Loja e inventário
+
+`shop.py` agora classifica como repetível todo item físico da casa que não seja
+acabamento estrutural. Comprar de novo soma `InventoryItem.quantity` e cobra cada
+unidade. A UI mantém o botão como “Comprar outro” e exibe a quantidade. Roupa,
+piso, parede e desbloqueios permanentes continuam únicos para não desperdiçar
+Corações. A validação da casa já contava quantidade no lote inteiro; a bateria
+agora prova 1 unidade recusada em dois lugares, 2 unidades aceitas e uma terceira
+cópia grátis recusada.
+
+#### Catálogo e cidade
+
+Entraram 26 desenhos isométricos próprios, levando o catálogo de 30 para 56:
+poltrona, mesa de centro/jantar, escrivaninha, cômoda, mesa de cabeceira,
+penteadeira, banco, banqueta, estante estreita, espelho, relógio, vasos, aquário,
+almofada, caixa de brinquedos, computador, lavadora, micro-ondas, vitrola, fonte,
+mesa de piquenique, canteiro, casinha de passarinho e piscina.
+
+A bancada visual encontrou três peças completamente enterradas (penteadeira,
+relógio e aquário). O aquário deixou de ser um cubo d'água sólido: ganhou
+superfície, painel e montantes, sem engolir peixe/pedras. A fonte única
+`furnitureSizes.js` alimenta bancada e `test-furniture-audit.mjs`; o smoke reprova
+qualquer sobreposição integral nos 56 objetos.
+
+A rota `/cidade` estreia um bairro isométrico 22×18. `cityMap.js` guarda ruas,
+prédios e busca de caminho; `CityCanvas.jsx` desenha terreno, prédios e cenário,
+move o avatar célula a célula e só entra após chegar à porta. São seis destinos:
+casa, fliperama, pet shop, Shopping do Coração, praça e central de missões. A
+posição fica em `localStorage`; cartões abaixo do mapa preservam acessibilidade.
+
+Validação local: build Vite; geração WAV; seis caminhos da cidade; 56 móveis sem
+peça enterrada; compra de segundo sofá pela interface (quantidade 1 → 2); mapa e
+bancada inspecionados no navegador. Smoke completo passou com **875 verificações,
+0 falha** após integrar o novo teste. Ainda é obrigatória a confirmação no iPhone
+físico em dados móveis; nenhuma bancada Chromium equivale a Safari + operadora.

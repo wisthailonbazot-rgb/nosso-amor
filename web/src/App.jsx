@@ -12,6 +12,7 @@ import Games from './screens/Games'
 import PetScreen from './screens/Pet'
 import More from './screens/More'
 import House from './screens/House'
+import City from './screens/City'
 import Shop from './screens/Shop'
 import Tasks from './screens/Tasks'
 import Moments from './screens/Moments'
@@ -106,6 +107,7 @@ export default function App() {
           <Route path="/pet" element={<PetScreen />} />
           <Route path="/mais" element={<More />} />
           <Route path="/casa" element={<House />} />
+          <Route path="/cidade" element={<City />} />
           <Route path="/loja" element={<Shop />} />
           <Route path="/tarefas" element={<Tasks />} />
           <Route path="/momentos" element={<Moments />} />

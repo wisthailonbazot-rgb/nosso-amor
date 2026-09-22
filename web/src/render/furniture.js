@@ -6,8 +6,8 @@
 // direções, e as que têm frente (sofá, cama, TV) recebem `dir` pra saber pra
 // onde olhar.
 
-import { FACE_LEFT, FACE_RIGHT, FACE_TOP, isoBox, project, groundShadow } from './iso'
-import { mix, shade } from './pixel'
+import { FACE_LEFT, FACE_RIGHT, FACE_TOP, isoBox, project, groundShadow } from './iso.js'
+import { mix, shade } from './pixel.js'
 
 const OUTLINE = '#33203a'
 
@@ -238,6 +238,9 @@ export const SHAPES = {
   shelf(p, item, origin) {
     const c = item.color || WOOD
     const k = tools(p, item, origin)
+    // Fundo opaco: sem ele, a emenda/contorno da parede aparecia por dentro
+    // dos vãos e parecia atravessar a estante (captura real de 08/09).
+    k.box(0.18, 0.08, k.W - 0.36, 0.09, 0.02, 1.38, shade(c, -0.18))
     k.box(0.08, 0.08, 0.14, k.D - 0.16, 0, 1.5, shade(c, -0.25)) // laterais
     k.box(k.W - 0.22, 0.08, 0.14, k.D - 0.16, 0, 1.5, shade(c, -0.25))
     for (const z of [0.02, 0.5, 0.98, 1.4]) {
@@ -641,6 +644,243 @@ export const SHAPES = {
   tree(p,item,origin){ const k=tools(p,item,origin); k.box(k.W/2-.16,k.D/2-.16,.32,.32,0,1.35,'#6b4a2f'); k.box(.05,.05,k.W-.1,k.D-.1,1.2,.48,'#4f8745'); k.box(.27,.27,k.W-.54,k.D-.54,1.68,.4,'#68a354'); k.box(.48,.48,k.W-.96,k.D-.96,2.08,.25,'#7eb660') },
   clothesline(p,item,origin,t){ const k=tools(p,item,origin); k.box(.05,.43,.12,.14,0,1.4,WOOD_DARK); k.box(k.W-.17,.43,.12,.14,0,1.4,WOOD_DARK); const a=k.screen(.1,.5,1.4),b=k.screen(k.W-.1,.5,1.4);p.line(...a,...b,'#ddd4c7');['#e8879b','#5bb9e8','#f2c53d'].forEach((c,i)=>{const f=(i+1)/4,x=a[0]+(b[0]-a[0])*f,y=a[1]+(b[1]-a[1])*f;p.rect(x-4,y+1,8,10,c)}) },
   gardenstool(p,item,origin){ const k=tools(p,item,origin); for(const [x,y] of [[.25,.25],[.62,.25],[.25,.62],[.62,.62]])k.box(x,y,.1,.1,0,.4,WOOD_DARK); k.box(.16,.16,.68,.68,.4,.1,'#9c7b62') },
+
+  // ------------------------------------------------ coleção ampliada da casa
+  armchair(p, item, origin) {
+    const k = tools(p, item, origin), c = item.color || '#d98fa6'
+    k.box(.12,.12,k.W-.24,k.D-.24,0,.18,shade(c,-.42))
+    k.box(.15,.12,k.W-.3,.28,.18,.82,c)
+    k.box(.15,.4,.28,k.D-.55,.3,.42,shade(c,-.12))
+    k.box(k.W-.43,.4,.28,k.D-.55,.3,.42,shade(c,-.12))
+    k.box(.43,.42,k.W-.86,k.D-.57,.3,.22,shade(c,.18))
+  },
+
+  coffee_table(p, item, origin) {
+    const k = tools(p, item, origin), c = item.color || '#9c7048'
+    for (const [x,y] of [[.14,.18],[k.W-.27,.18],[.14,k.D-.31],[k.W-.27,k.D-.31]]) k.box(x,y,.13,.13,0,.3,shade(c,-.35))
+    k.box(.06,.08,k.W-.12,k.D-.16,.3,.1,c)
+    k.flat(.2,.22,k.W-.4,k.D-.44,.405,'#d9f0f2')
+  },
+
+  dining_table(p, item, origin) {
+    const k = tools(p, item, origin), c = item.color || '#b78355'
+    for (const [x,y] of [[.16,.16],[k.W-.32,.16],[.16,k.D-.32],[k.W-.32,k.D-.32]]) k.box(x,y,.16,.16,0,.64,shade(c,-.35))
+    k.box(.05,.05,k.W-.1,k.D-.1,.64,.11,c)
+    for (let x=.55; x<k.W-.3; x+=.7) k.box(x,k.D/2-.1,.22,.2,.75,.07,'#f7efe2')
+  },
+
+  desk(p, item, origin) {
+    const k = tools(p, item, origin), c = item.color || '#a8784e'
+    k.box(.08,.08,.18,k.D-.16,0,.68,shade(c,-.3))
+    k.box(k.W-.26,.08,.18,k.D-.16,0,.68,shade(c,-.3))
+    k.box(.04,.04,k.W-.08,k.D-.08,.68,.1,c)
+    k.box(k.W-.62,.18,.44,k.D-.36,.08,.22,shade(c,-.12))
+    k.box(k.W-.57,k.D-.16,.34,.05,.14,.08,'#d8c4a6')
+  },
+
+  dresser(p, item, origin) {
+    const k = tools(p, item, origin), c = item.color || '#a97954'
+    k.box(.06,.08,k.W-.12,k.D-.16,0,1.05,c)
+    const face = k.D-.11
+    for (let i=0;i<3;i++) {
+      k.box(.14,face,k.W-.28,.07,.13+i*.29,.23,shade(c,i%2 ? -.08 : .06))
+      k.box(k.W/2-.05,face+.05,.1,.06,.22+i*.29,.06,'#e4b557')
+    }
+    k.box(.03,.05,k.W-.06,k.D-.1,1.05,.08,shade(c,.12))
+  },
+
+  nightstand(p, item, origin) {
+    const k = tools(p, item, origin), c = item.color || '#b8895e'
+    k.box(.12,.12,k.W-.24,k.D-.24,0,.62,c)
+    k.box(.08,.08,k.W-.16,k.D-.16,.62,.08,shade(c,.14))
+    k.box(.2,k.D-.15,k.W-.4,.07,.34,.18,shade(c,-.1))
+    k.box(k.W/2-.04,k.D-.1,.08,.06,.4,.06,'#e4b557')
+  },
+
+  vanity(p, item, origin) {
+    const k = tools(p, item, origin), c = item.color || '#d7a6b8'
+    for (const x of [.14,k.W-.28]) k.box(x,.16,.14,.14,0,.58,shade(c,-.25))
+    k.box(.06,.08,k.W-.12,k.D-.16,.58,.1,c)
+    k.box(.25,.08,k.W-.5,.08,.68,1.02,shade(c,-.18))
+    // O vidro sai alguns centésimos da moldura. Inteiro dentro do bloco de trás
+    // ele produzia duas faces no mesmo plano, o risco preto que parecia bugado.
+    k.box(.34,.145,k.W-.68,.04,.8,.74,'#bde0e5')
+    k.box(k.W/2-.12,.28,.24,.2,.68,.16,'#f2c4d0')
+  },
+
+  bench(p, item, origin) {
+    const k = tools(p, item, origin), c = item.color || '#9b7049'
+    for (const x of [.16,k.W-.3]) k.box(x,.18,.14,k.D-.36,0,.42,shade(c,-.32))
+    k.box(.06,.08,k.W-.12,k.D-.16,.42,.12,c)
+    k.box(.1,.08,k.W-.2,.14,.54,.52,shade(c,-.08))
+  },
+
+  stool(p, item, origin) {
+    const k = tools(p, item, origin), c = item.color || '#c18d5e'
+    for (const [x,y] of [[.22,.22],[k.W-.34,.22],[.22,k.D-.34],[k.W-.34,k.D-.34]]) k.box(x,y,.12,.12,0,.52,shade(c,-.3))
+    k.box(.12,.12,k.W-.24,k.D-.24,.52,.12,c)
+  },
+
+  bookcase_narrow(p, item, origin) {
+    const k = tools(p, item, origin), c = item.color || '#8f6544'
+    k.box(.08,.08,.12,k.D-.16,0,1.65,shade(c,-.25))
+    k.box(k.W-.2,.08,.12,k.D-.16,0,1.65,shade(c,-.25))
+    k.box(.18,.08,k.W-.36,.08,.04,1.5,shade(c,-.18))
+    for (const z of [.06,.52,.98,1.52]) k.box(.08,.1,k.W-.16,k.D-.2,z,.08,c)
+    for (let i=0;i<4;i++) k.box(.24+i*.13,.3,.09,.2,.6,.3+(i%2)*.1,['#de7892','#6fa0bd','#d7ad4f','#73a96d'][i])
+  },
+
+  mirror(p, item, origin) {
+    const k = tools(p, item, origin), c = '#8b684d'
+    k.box(.14,.06,k.W-.28,.07,.95,.08,c)
+    k.box(.14,.06,k.W-.28,.07,1.82,.08,c)
+    k.box(.14,.06,.09,.07,1.03,.79,c)
+    k.box(k.W-.23,.06,.09,.07,1.03,.79,c)
+    k.box(.23,.08,k.W-.46,.04,1.03,.79,'#b8dce3')
+    k.box(.3,.1,.08,.03,1.55,.18,'#e8f7fa')
+  },
+
+  clock(p, item, origin, t) {
+    const k = tools(p, item, origin)
+    k.box(.18,.06,k.W-.36,.08,1.18,.64,'#f4e8cf')
+    k.box(.23,.125,k.W-.46,.04,1.23,.54,'#fffaf0')
+    const q = k.screen(k.W/2,.13,1.5)
+    const angle = ((t || 0) / 60000) % (Math.PI * 2)
+    p.line(q[0],q[1],q[0]+Math.sin(angle)*10,q[1]-Math.cos(angle)*5,'#3f3444')
+    p.line(q[0],q[1],q[0]-6,q[1]-1,'#3f3444')
+  },
+
+  vase(p, item, origin) {
+    const k = tools(p, item, origin), c = item.color || '#739fc1'
+    k.box(.3,.3,k.W-.6,k.D-.6,0,.42,c)
+    k.box(.38,.38,k.W-.76,k.D-.76,.42,.28,shade(c,.12))
+    k.box(.32,.32,k.W-.64,k.D-.64,.7,.08,shade(c,-.18))
+  },
+
+  flowers(p, item, origin, t) {
+    const k = tools(p, item, origin), sway=Math.sin((t||0)/900)*.03
+    k.box(.28,.28,k.W-.56,k.D-.56,0,.32,'#c67854')
+    for (const [x,y,c,z] of [[.38,.42,'#e8879b',.72],[.58,.36,'#f2c53d',.82],[.48,.58,'#b98ad1',.9]]) {
+      k.box(x+sway,y,.06,.06,.3,z-.3,'#5f934f')
+      k.box(x-.08+sway,y-.08,.22,.22,z,.1,c)
+    }
+  },
+
+  aquarium(p, item, origin, t) {
+    const k = tools(p, item, origin)
+    k.box(.08,.08,k.W-.16,k.D-.16,0,.22,'#624b3b')
+    // Água não é um cubo sólido: um cubo engolia peixe e pedras e deixava os
+    // contornos brigando. Superfície + painel traseiro dão profundidade sem
+    // pôr nenhum objeto dentro de outro.
+    k.flat(.14,.14,k.W-.28,k.D-.28,.25,'#69b8cb')
+    k.box(.12,.12,k.W-.24,.04,.22,.58,'#7bc4d2')
+    for (const [x,y] of [[.12,.12],[k.W-.17,.12],[.12,k.D-.17],[k.W-.17,k.D-.17]]) {
+      k.box(x,y,.05,.05,.22,.58,'#8dd2dc')
+    }
+    k.box(.08,.08,k.W-.16,k.D-.16,.8,.08,'#4b3a32')
+    k.box(.24,.22,.16,.14,.28,.12,'#d0b27a')
+    const swim=((t||0)/700)%Math.max(.3,k.W-.8)
+    k.box(.35+swim,.28,.22,.12,.54,.1,'#f2c53d')
+  },
+
+  floor_cushion(p, item, origin) {
+    const k = tools(p, item, origin), c=item.color||'#8ab8a0'
+    k.box(.14,.14,k.W-.28,k.D-.28,0,.22,c)
+    k.box(.23,.23,k.W-.46,k.D-.46,.22,.08,shade(c,.2))
+  },
+
+  toybox(p, item, origin) {
+    const k = tools(p, item, origin), c=item.color||'#cf8a55'
+    k.box(.08,.1,k.W-.16,k.D-.2,0,.58,c)
+    k.box(.04,.06,k.W-.08,k.D-.12,.58,.11,shade(c,.15))
+    k.box(k.W/2-.2,k.D-.13,.4,.07,.22,.18,'#f2c53d')
+    k.box(k.W/2-.06,k.D-.08,.12,.06,.28,.08,'#e8879b')
+  },
+
+  computer(p, item, origin, t) {
+    const k=tools(p,item,origin)
+    k.box(.1,.12,k.W-.2,k.D-.24,0,.62,'#9a7652')
+    k.box(.08,.08,k.W-.16,k.D-.16,.62,.09,'#b98d5e')
+    k.box(.38,.14,k.W-.76,.16,.71,.72,'#343344')
+    k.box(.45,.1,k.W-.9,.04,.82,.49,Math.sin((t||0)/900)>0?'#77a8c9':'#648eb0')
+    k.box(k.W/2-.08,.22,.16,.14,.71,.18,'#4c4858')
+    k.box(.35,.55,k.W-.7,.22,.71,.05,'#ded9d0')
+  },
+
+  washer(p, item, origin, t) {
+    const k=tools(p,item,origin), face=k.D-.1
+    k.box(.08,.08,k.W-.16,k.D-.16,0,1.02,'#e7e4de')
+    k.box(.12,face,k.W-.24,.08,.16,.54,'#a7c4ca')
+    k.box(.22,face+.04,k.W-.44,.07,.27,.32,Math.sin((t||0)/400)>.4?'#668d96':'#729da6')
+    k.box(.16,face+.04,.14,.07,.82,.1,'#7b7778')
+    k.box(.38,face+.04,.1,.07,.82,.1,'#d06f83')
+  },
+
+  microwave(p, item, origin) {
+    const k=tools(p,item,origin), face=k.D-.12
+    k.box(.1,.14,k.W-.2,k.D-.28,0,.55,'#d7d3cd')
+    k.box(.16,face,k.W-.48,.08,.1,.34,'#403c43')
+    k.box(k.W-.27,face+.04,.08,.07,.14,.08,'#77b39b')
+    k.box(k.W-.27,face+.04,.08,.07,.29,.08,'#8a8582')
+  },
+
+  record_player(p, item, origin, t) {
+    const k=tools(p,item,origin)
+    k.box(.12,.12,k.W-.24,k.D-.24,0,.28,'#7c5940')
+    k.box(.16,.16,k.W-.32,k.D-.32,.28,.06,'#a97954')
+    const q=k.screen(k.W/2,k.D/2,.35), pulse=Math.sin((t||0)/240)
+    p.ctx.fillStyle='#2e2935';p.ctx.beginPath();p.ctx.arc(q[0],q[1],Math.max(4,9+pulse),0,Math.PI*2);p.ctx.fill()
+    k.box(k.W-.32,.24,.07,.36,.34,.06,'#d8c78b')
+  },
+
+  fountain(p, item, origin, t) {
+    const k=tools(p,item,origin), water=Math.sin((t||0)/350)*.04
+    k.box(.06,.06,k.W-.12,k.D-.12,0,.22,'#9a958e')
+    k.box(.16,.16,k.W-.32,k.D-.32,.22,.08,'#69b9cf')
+    k.box(k.W/2-.16,k.D/2-.16,.32,.32,.3,.75,'#8d8983')
+    k.box(k.W/2-.32,k.D/2-.32,.64,.64,1.05,.12,'#aaa59d')
+    k.box(k.W/2-.08,k.D/2-.08,.16,.16,1.17,.25+water,'#8bd4e3')
+  },
+
+  picnic_table(p, item, origin) {
+    const k=tools(p,item,origin), c='#9a7048'
+    for (const x of [.65,k.W-.8]) k.box(x,.48,.15,k.D-.96,0,.65,shade(c,-.3))
+    k.box(.35,.28,k.W-.7,k.D-.56,.65,.1,c)
+    k.box(.06,.06,.28,k.D-.12,.36,.11,shade(c,.06))
+    k.box(k.W-.34,.06,.28,k.D-.12,.36,.11,shade(c,.06))
+  },
+
+  flowerbed(p, item, origin) {
+    const k=tools(p,item,origin)
+    k.box(.04,.04,k.W-.08,k.D-.08,0,.16,'#9a7048')
+    k.box(.12,.12,k.W-.24,k.D-.24,.16,.05,'#65462e')
+    const colors=['#e8879b','#f2c53d','#9d83cf','#fff0df']
+    for (let i=0;i<4;i++) {
+      const x=.3+i*(Math.max(.2,(k.W-.6)/4))
+      k.box(x,.38,.05,.05,.21,.32,'#57914c')
+      k.box(x-.07,.31,.19,.19,.53,.08,colors[i])
+    }
+  },
+
+  birdhouse(p, item, origin, t) {
+    const k=tools(p,item,origin), c=item.color||'#d78d59'
+    k.box(k.W/2-.07,k.D/2-.07,.14,.14,0,1.05,'#755337')
+    k.box(.25,.25,k.W-.5,k.D-.5,1.05,.55,c)
+    k.box(.17,.17,k.W-.34,k.D-.34,1.6,.12,'#9d4d48')
+    k.box(k.W/2-.1,k.D-.28,.2,.07,1.24,.2,'#342a31')
+    k.box(k.W/2-.03,k.D-.2,.06,.12,1.12,.05,'#755337')
+    if (Math.sin((t||0)/1200)>.65) k.box(k.W/2+.1,k.D-.18,.12,.12,1.28,.1,'#f2c53d')
+  },
+
+  pool(p, item, origin, t) {
+    const k=tools(p,item,origin)
+    k.flat(.02,.02,k.W-.04,k.D-.04,.01,'#ded7ca')
+    k.flat(.18,.18,k.W-.36,k.D-.36,.02,'#65bcd4')
+    const wave=.05+Math.sin((t||0)/450)*.03
+    for (let y=.45;y<k.D-.25;y+=.45) k.flat(.35,y,k.W-.7,.03,.03,'rgba(235,252,255,.8)')
+    k.box(.14,.14,.08,.45,.04,.38,'#b9b7b0')
+    k.box(.14,.14+wave,.38,.08,.04,.08,'#d2d0ca')
+  },
 }
 
 /**
@@ -659,7 +899,7 @@ export const SHAPES = {
  * `at()` (em `tools`) manda o fundo local para a menor linha na direção 0 e
  * para a menor coluna na direção 3 — são essas as duas.
  */
-export const NA_PAREDE = new Set(['frame', 'frame_couple'])
+export const NA_PAREDE = new Set(['frame', 'frame_couple', 'mirror', 'clock'])
 export const DIRECOES_DE_PAREDE = [0, 3]
 
 /** Formas que não são móveis: acabamento do cômodo. */

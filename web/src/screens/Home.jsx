@@ -9,10 +9,12 @@ import Icon from '../components/Icon'
 import LoveTaps from '../components/LoveTaps'
 
 const SHORTCUTS = [
+  { to: '/cidade', icon: 'map', label: 'Nossa cidade' },
   { to: '/casa', icon: 'sofa', label: 'Nossa casa' },
   { to: '/loja', icon: 'bag', label: 'Loja' },
   { to: '/tarefas', icon: 'check', label: 'Tarefas' },
   { to: '/momentos', icon: 'camera', label: 'Momentos' },
+  { to: '/datas', icon: 'calendar', label: 'Nossas datas' },
 ]
 
 function CheckinCard() {

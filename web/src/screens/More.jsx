@@ -4,6 +4,7 @@ import { useStore } from '../store'
 import Icon from '../components/Icon'
 
 const LINKS = [
+  { to: '/cidade', icon: 'map', label: 'Cidade do casal', hint: 'Andar pelas ruas e visitar cada lugar' },
   { to: '/casa', icon: 'sofa', label: 'Nossa casa', hint: 'Decorar o cômodo juntos' },
   { to: '/loja', icon: 'bag', label: 'Loja', hint: 'Roupas, móveis e coisas do bichinho' },
   { to: '/tarefas', icon: 'check', label: 'Tarefas', hint: 'Missões que valem corações' },

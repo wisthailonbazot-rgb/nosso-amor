@@ -22,6 +22,44 @@ const SILENCIO_LIMITE = 65000
 // buraco, e o que chegou nele precisa ser buscado).
 let jaConectou = false
 const listeners = new Map()
+const ME_CACHE_KEY = 'casal.me.v1'
+
+function loadCachedMe() {
+  try {
+    const value = JSON.parse(localStorage.getItem(ME_CACHE_KEY) || 'null')
+    return value?.user?.id ? value : null
+  } catch {
+    return null
+  }
+}
+
+function saveCachedMe(me) {
+  try {
+    localStorage.setItem(ME_CACHE_KEY, JSON.stringify(me))
+  } catch {
+    /* Safari privado pode negar armazenamento; a sessão em memória continua */
+  }
+}
+
+function clearCachedMe() {
+  try {
+    localStorage.removeItem(ME_CACHE_KEY)
+  } catch {
+    /* sem efeito */
+  }
+}
+
+function meState(me) {
+  return {
+    user: me.user,
+    partner: me.partner,
+    balance: me.balance,
+    couple: me.couple,
+    cyclePrivacy: me.cycle_privacy,
+    pushEnabled: me.push_enabled,
+    vapidKey: me.vapid_public_key,
+  }
+}
 
 /**
  * O numerinho vermelho no icone do app.
@@ -79,6 +117,10 @@ export const useStore = create((set, get) => ({
       set({ ready: true, user: null })
       return
     }
+    const cached = loadCachedMe()
+    // Abre imediatamente com a última sessão confirmada. A atualização roda
+    // abaixo; assim uma operadora lenta não deixa apenas o fundo rosa na tela.
+    if (cached) set({ ...meState(cached), ready: true, connection: 'conectando' })
     try {
       await get().refreshMe()
       get().connect()
@@ -86,25 +128,26 @@ export const useStore = create((set, get) => ({
       // Abriu o app: a bandeja do celular nao pode continuar com a pilha de
       // avisos que a pessoa acabou de vir ler.
       limparAvisos()
-    } catch {
-      setToken('')
-      set({ user: null })
+    } catch (error) {
+      // Falha de rede não significa senha inválida. Só um 401 do servidor pode
+      // apagar uma sessão e o retrato local usado na abertura sem internet.
+      if (error?.status === 401) {
+        setToken('')
+        clearCachedMe()
+        set({ user: null, partner: null })
+      } else if (!cached) {
+        set({ user: null })
+      }
+      set({ connection: 'offline' })
     } finally {
       set({ ready: true })
     }
   },
 
   async refreshMe() {
-    const me = await api.get('/api/me')
-    set({
-      user: me.user,
-      partner: me.partner,
-      balance: me.balance,
-      couple: me.couple,
-      cyclePrivacy: me.cycle_privacy,
-      pushEnabled: me.push_enabled,
-      vapidKey: me.vapid_public_key,
-    })
+    const me = await api.get('/api/me', { timeoutMs: 10000 })
+    saveCachedMe(me)
+    set(meState(me))
     // Reconfere o endereco de push deste aparelho. Ver `sincronizarPush`: o
     // iPhone troca a assinatura sozinho com o app fechado, e sem isto o
     // servidor continuava mandando pro endereco morto — a notificacao parava
@@ -140,6 +183,7 @@ export const useStore = create((set, get) => ({
 
   logout() {
     setToken('')
+    clearCachedMe()
     jaConectou = false
     get().disconnect()
     set({ user: null, partner: null, balance: 0, online: [], unread: 0, naoLidas: 0 })

@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Painter } from '../render/pixel'
 import { auditarTudo } from '../render/furnitureAudit'
 import { SHAPES, drawItem } from '../render/furniture'
+import { FURNITURE_SIZES } from '../render/furnitureSizes'
 import { roomMetrics } from '../render/iso'
 import { drawScene, FLOOR_STYLES, WALL_STYLES } from '../render/room'
 import { AVATAR_H, AVATAR_W, STYLE_LISTS, drawAvatar } from '../render/avatar'
@@ -68,15 +69,7 @@ const LAB_MOODS = ['feliz', 'triste', 'faminto', 'doente']
 
 const MIN_PIXELS = 20 // abaixo disso, considera que a peça não desenhou nada
 
-const SIZES = {
-  sofa: [3, 1], bed: [3, 2], table: [2, 2], chair: [1, 1], shelf: [2, 1],
-  wardrobe: [2, 1], puff: [1, 1], rug: [3, 2], tv: [2, 1], speaker: [1, 1],
-  console: [1, 1], fridge: [1, 2], plant: [1, 1], plant_big: [1, 1],
-  lamp: [1, 1], candles: [1, 1], frame: [1, 1], frame_couple: [2, 1],
-  stove:[2,1], petbed:[2,2], petbowl:[1,1], scratchpost:[1,1], pethouse:[2,2],
-  hammock:[3,1], grill:[2,1], garden:[2,2], swing:[2,2], tree:[2,2],
-  clothesline:[3,1], gardenstool:[1,1],
-}
+const SIZES = FURNITURE_SIZES
 
 /** Conta quantos pixels uma função de desenho pinta. É o teste automático. */
 function countPainted(width, height, paint) {

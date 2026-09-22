@@ -37,6 +37,113 @@
   --r-pill: 999px;
 }
 
+/* ------------------------------------------------------- cidade isometrica */
+.city-intro,
+.city-help {
+  margin-bottom: 12px;
+}
+
+.city-map {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 390 / 520;
+  overflow: hidden;
+  border: 3px solid var(--ink);
+  border-radius: 18px;
+  background: #a8d879;
+  box-shadow: 5px 6px 0 rgba(75, 55, 62, 0.18);
+}
+
+.city-map canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.city-map canvas:last-child {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.city-map-status {
+  min-height: 20px;
+  margin: 10px 2px 0;
+  text-align: center;
+}
+
+.city-places {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 14px;
+}
+
+.city-place,
+.city-place-card {
+  min-height: 68px;
+  padding: 10px;
+  border: 2px solid var(--line);
+  border-radius: 13px;
+  background: var(--paper);
+  color: inherit;
+  text-align: left;
+}
+
+.city-place-card {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-decoration: none;
+  box-shadow: 2px 3px 0 rgba(75, 55, 62, 0.12);
+}
+
+.city-place-card:active {
+  transform: translateY(1px);
+  box-shadow: 1px 1px 0 rgba(75, 55, 62, 0.12);
+}
+
+.city-place-card small {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-soft);
+  line-height: 1.2;
+}
+
+.city-place-icon {
+  display: grid;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--rose-pale);
+}
+
+.city-place strong,
+.city-place span {
+  display: block;
+}
+
+.shop-buy-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.shop-buy-stack .btn-sm {
+  width: 100%;
+  justify-content: center;
+}
+
+@media (max-width: 360px) {
+  .city-places {
+    grid-template-columns: 1fr;
+  }
+}
+
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
