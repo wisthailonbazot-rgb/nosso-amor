@@ -1711,6 +1711,8 @@ a cidade mais viva e usar sons reais/diferentes nos animais e no caminhar.
 - [x] Créditos, autores, licenças e transformações estão versionados; smoke
       reprova arquivo ausente ou sem crédito. Service worker avançou para v10.
 - [x] Build, testes de cidade/móveis e smoke completos aprovados (894/0).
+- [x] Publicado no Coolify pelo commit `0634ae3`; os dois domínios responderam
+      saúde 200 e serviram bundle `index-CKdUG0qm.js`, cache v10 e sons reais.
 - [ ] Confirmar **iPhone físico → Android físico** com um vídeo novo da câmera;
       a bancada validou um MOV realista, mas não substitui câmera e codec dos
       aparelhos de vocês.

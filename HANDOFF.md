@@ -4316,3 +4316,8 @@ de móveis aprovadas; vídeos e gravações reais carregaram no navegador sem er
 Smoke completo: **894 verificações, 0 falha**. Falta apenas repetir o envio com
 um vídeo gravado por iPhone físico e abrir no Android físico, porque Chromium e
 um MOV de teste não reproduzem câmera/codec/rádio reais dos dois aparelhos.
+
+Publicado no Coolify pelo commit `0634ae3` (deploy
+`p9r9xck2jgefsl4rn2zfnzd7`). Os domínios `sslip.io` e `nip.io` devolveram saúde
+200 e serviram o bundle validado `index-CKdUG0qm.js`, service worker
+`casal-v10`, gravação real com `audio/ogg` e o novo caminho de vídeo.
