@@ -14,13 +14,16 @@ Duas travas que valem repetir, porque sao do tipo que some sem ninguem ver:
 
 from __future__ import annotations
 
+import time
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from .. import catalog, economy, missions, pet_care, push
 from ..clock import today, utcnow
-from ..db import get_db
+from ..db import IS_SQLITE, get_db
 from ..models import HouseMess, Pet, PetInteraction, Room, ShopItem, User
 from ..realtime import publish
 from ..schemas import moment_iso
@@ -262,27 +265,47 @@ def species_list() -> dict:
 
 @router.get("")
 def read(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
-    pet = get_pet(db)
-    report = pet_care.apply_decay(db, pet)
-    # Os OUTROS tambem envelhecem. Se so o ativo caisse, bastaria trocar de
-    # bichinho pra congelar o faminto — e o cuidado deixaria de custar.
-    for outro in pet_care.all_pets(db):
-        if outro.id != pet.id:
-            pet_care.apply_decay(db, outro)
-    db.commit()
-    body = pet_out(db, pet)
-    if report["mess_born"]:
-        # o outro precisa ver a sujeira aparecer sem recarregar
-        publish("pet", body)
-    return {"pet": body, "since": report, "pets": pets_resumo(db)}
+    # Na primeira abertura da tela, o WebSocket atualiza `last_seen_at` quase no
+    # mesmo instante. Em SQLite, uma transacao que ja leu o Pet nao consegue ser
+    # promovida a escritora se outra conexao gravou nesse intervalo: ela falha
+    # imediatamente com SQLITE_BUSY, mesmo com `busy_timeout`. Refazemos a
+    # transacao inteira; repetir apenas o commit manteria o snapshot vencido.
+    for attempt in range(5):
+        try:
+            pet = get_pet(db)
+            report = pet_care.apply_decay(db, pet)
+            # Os OUTROS tambem envelhecem. Se so o ativo caisse, bastaria trocar
+            # de bichinho pra congelar o faminto — e o cuidado deixaria de custar.
+            for outro in pet_care.all_pets(db):
+                if outro.id != pet.id:
+                    pet_care.apply_decay(db, outro)
+            db.commit()
+            body = pet_out(db, pet)
+            response = {"pet": body, "since": report, "pets": pets_resumo(db)}
+            if report["mess_born"]:
+                # o outro precisa ver a sujeira aparecer sem recarregar
+                publish("pet", body)
+            return response
+        except OperationalError as exc:
+            db.rollback()
+            locked = "database is locked" in str(exc).lower()
+            if not IS_SQLITE or not locked or attempt == 4:
+                raise
+            time.sleep(0.05 * (attempt + 1))
+
+    raise RuntimeError("tentativas de leitura do bichinho esgotadas")
 
 
 @router.get("/items")
 def items(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     """O que voces tem pra cuidar dele. A tela nao inventa: a lista vem daqui."""
     pet = get_pet(db)
-    pet_care.apply_decay(db, pet)
-    db.commit()
+    # Esta rota abre junto com `GET /api/pet`. Ela só precisa de inventário e
+    # cooldowns absolutos; não usa fome, higiene ou sujeira. Envelhecer e gravar
+    # aqui fazia as duas requisições lerem e tentarem atualizar o mesmo Pet ao
+    # mesmo tempo. No SQLite, duas transações que tentam promover leitura para
+    # escrita entram em deadlock (`database is locked`) e a tela inteira dava
+    # 500. O endpoint principal continua sendo a única fonte do decay.
     rows = (
         db.query(ShopItem)
         .filter(ShopItem.category == "pet", ShopItem.active.is_(True))

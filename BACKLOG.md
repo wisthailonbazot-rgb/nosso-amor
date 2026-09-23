@@ -1718,3 +1718,29 @@ a cidade mais viva e usar sons reais/diferentes nos animais e no caminhar.
       aparelhos de vocês.
 
 Detalhes: HANDOFF 9.39.
+
+### 23/09/2026 — cidade que sumia e revisão integral
+
+Pedido: a cidade abria animada, durava alguns segundos e sumia; revisar o
+projeto inteiro e corrigir os erros encontrados.
+
+- [x] Reproduzida a queda real da cidade no navegador: coordenada fracionária
+      do avatar virava índice inválido de `ImageData` e encerrava o quadro.
+- [x] Origem e leitura de pixels do avatar agora são inteiras e protegidas por
+      limite; regressão automatizada usa a mesma fração que causava a falha.
+- [x] O laço da cidade continua no quadro seguinte se um ator falhar, sem criar
+      laço órfão ao trocar de tela.
+- [x] Movimento comprovado por capturas separadas por 7 s (73.362 bytes mudaram).
+- [x] Corrigido 500 intermitente na primeira abertura do bichinho: lista de
+      itens é somente leitura e o decay refaz a transação se o SQLite disputar
+      a escrita com o WebSocket. O aviso de erro antigo também é limpo.
+- [x] Corrigida a casa branca descoberta na auditoria: layouts-padrão agora são
+      persistidos para todos os cômodos antes da resposta e a disputa curta de
+      escrita é refeita com uma transação nova.
+- [x] Auditadas 16 rotas no navegador; casa repetida 5 vezes e bichinho 6 vezes,
+      todas com conteúdo e respostas 200 depois das correções.
+- [x] Cinco testes Node, `compileall`, build e auditoria de dependências passaram;
+      `npm audit` encontrou 0 vulnerabilidades e o smoke fechou em **899/0**.
+- [x] Service worker atualizado para v11.
+
+Detalhes: HANDOFF 9.40.

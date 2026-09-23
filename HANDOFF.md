@@ -4321,3 +4321,54 @@ Publicado no Coolify pelo commit `0634ae3` (deploy
 `p9r9xck2jgefsl4rn2zfnzd7`). Os domínios `sslip.io` e `nip.io` devolveram saúde
 200 e serviram o bundle validado `index-CKdUG0qm.js`, service worker
 `casal-v10`, gravação real com `audio/ogg` e o novo caminho de vídeo.
+
+### 9.40 Cidade que sumia e auditoria completa das telas (23/09/2026)
+
+Pedido do dono: a cidade aparecia com os objetos animados por poucos segundos e
+depois sumia; revisar o projeto inteiro à procura de outros erros.
+
+#### Causa exata da cidade
+
+O movimento usa coordenadas fracionárias entre uma célula e outra. O avatar
+recebia esse `x/y` fracionário e `vincoDoBusto`, em `render/avatar.js`, calculava
+um índice de `ImageData` subtraindo dois números de ponto flutuante. Um deslocamento
+que deveria ser `2` virava `1.9999999999999982`; TypedArray não reconhece esse
+índice, devolvia `undefined`, e o desenho chamava `.toString()` nele. A exceção
+interrompia o callback antes de agendar o próximo `requestAnimationFrame`, por
+isso a cidade parecia funcionar e morria alguns segundos depois.
+
+O avatar agora arredonda sua origem uma única vez, e a leitura do vinco usa
+somente deslocamentos inteiros, com limite explícito do buffer. A cidade também
+mantém o laço de animação vivo se um ator isolado falhar, registra apenas o
+primeiro erro e cancela corretamente o quadro ao desmontar a tela. Um primeiro
+quadro síncrono evita uma camada móvel vazia em navegadores que suspendem abas.
+
+`test-avatar-fractional.mjs` reproduz exatamente a coordenada quebrada e exige
+índices inteiros. No navegador, duas capturas separadas por 7 segundos tiveram
+**73.362 bytes diferentes**, provando que a animação continuou rodando.
+
+#### Erros adicionais encontrados na varredura
+
+A auditoria das 16 rotas encontrou duas falhas 500 silenciosas na primeira
+abertura, ambas específicas da bancada SQLite quando o WebSocket atualizava a
+presença ao mesmo tempo:
+
+- `GET /api/pet` promovia uma leitura antiga para escrita durante o decaimento;
+  agora refaz a transação completa ao receber `database is locked`. A lista
+  `/api/pet/items` virou leitura pura e a tela limpa o erro antigo ao tentar de
+  novo. Seis recargas completas, com reconexão do WebSocket, responderam 200.
+- `GET /api/house` criava layouts-padrão depois do commit. Eles eram desfeitos
+  ao fechar a sessão, então toda abertura tentava inseri-los de novo e podia
+  perder a disputa para o WebSocket, deixando a casa inteiramente branca. A
+  inicialização de todos os cômodos agora é gravada junto do decaimento e a
+  transação também é refeita no SQLite. Cinco aberturas completas responderam
+  200; o teste prova que há um layout persistido para cada cômodo.
+
+Foram abertos no navegador: início, ciclo, chat, jogos, bichinho, mais, casa,
+cidade, loja, tarefas, momentos, datas, avisos, perfil, editor de avatar e
+bancada. Todas renderizaram conteúdo; a casa e o bichinho foram repetidos sob a
+reconexão que provocava o defeito. Os cinco testes Node passaram, `compileall`
+passou, `npm audit --omit=dev` encontrou **0 vulnerabilidades**, build Vite gerou
+`index-GHRDRhyy.js` e o smoke completo terminou com **899 verificações, 0
+falha**. O service worker avançou para `casal-v11` para retirar a casca anterior
+dos aparelhos.

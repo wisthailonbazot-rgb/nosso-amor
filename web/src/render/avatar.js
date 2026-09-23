@@ -7,7 +7,7 @@
 // Tamanho da arte: 32 x 48 pixels. A ordem de desenho é a de `AVATAR_LAYERS` no
 // catálogo do servidor — base, baixo, cima, calçado, cabelo, rosto, cabeça, extra.
 
-import { Painter, shade } from './pixel'
+import { Painter, shade } from './pixel.js'
 
 export const AVATAR_W = 32
 export const AVATAR_H = 48
@@ -591,34 +591,41 @@ function moldarCorpo(p, o, c) {
 function vincoDoBusto(p, o, c) {
   if (c.corpo !== 'curvas') return
   const ctx = p.ctx
-  const y = o.y + 28
+  // `drawAvatar` também é usado no mapa, onde x/y vêm de uma interpolação e
+  // portanto são fracionários. A versão antiga subtraía esses floats para
+  // descobrir o índice no ImageData. Em alguns quadros, 2 virava
+  // 1.9999999999999982; TypedArray não arredonda esse índice e devolvia
+  // `undefined`, derrubando todo o requestAnimationFrame da cidade.
+  const origemX = Math.round(o.x) + 9
+  const origemY = Math.round(o.y) + 28
   const marcas = [
-    [o.x + 11, y], [o.x + 12, y + 1], [o.x + 13, y + 1],
-    [o.x + 18, y + 1], [o.x + 19, y + 1], [o.x + 20, y],
+    [2, 0], [3, 1], [4, 1],
+    [9, 1], [10, 1], [11, 0],
   ]
   let dados
   try {
-    dados = ctx.getImageData(o.x + 9, y, 14, 2)
+    dados = ctx.getImageData(origemX, origemY, 14, 2)
   } catch {
     return // canvas "sujo" por imagem de outra origem: melhor sem o vinco
   }
-  for (const [mx, my] of marcas) {
-    const ix = mx - (o.x + 9)
-    const iy = my - y
+  for (const [ix, iy] of marcas) {
     const at = (iy * 14 + ix) * 4
+    if (at + 3 >= dados.data.length) continue
     const alfa = dados.data[at + 3]
     if (alfa < 200) continue // fora do corpo: nao inventa pixel no ar
     const hex = `#${[0, 1, 2]
       .map((k) => dados.data[at + k].toString(16).padStart(2, '0'))
       .join('')}`
-    p.rect(mx, my, 1, 1, shade(hex, -0.24))
+    p.rect(origemX + ix, origemY + iy, 1, 1, shade(hex, -0.24))
   }
 }
 
 // ------------------------------------------------------------------ tudo junto
 export function drawAvatar(p, config, x = 0, y = 0) {
   const c = { ...config }
-  const o = { x, y }
+  // Pixel art precisa cair em pixel inteiro. Além de evitar borrão, isto deixa
+  // qualquer leitor de ImageData abaixo imune a índices fracionários.
+  const o = { x: Math.round(x), y: Math.round(y) }
 
   drawBase(p, o, c)
 

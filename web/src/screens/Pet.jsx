@@ -80,13 +80,16 @@ export default function Pet() {
   const [status, setStatus] = useState(null)
 
   async function load() {
-    // /pet e /items aplicam decaimento e portanto gravam `last_decay_at`.
-    // No SQLite da bancada, abrir os dois em paralelo pode disputar a trava de
-    // escrita; primeiro envelhece o pet, depois busca as listas em paralelo.
+    setStatus(null)
+    // Só /pet aplica o decaimento e grava `last_decay_at`; as listas são
+    // somente leitura. Buscar o estado primeiro também garante que o retrato
+    // nunca seja montado com inventário novo e estado antigo.
     const state = await api.get('/api/pet')
     const [kinds, owned] = await Promise.all([api.get('/api/pet/species'), api.get('/api/pet/items')])
     setPet(state.pet); setPets(state.pets || []); setSpecies(kinds.species); setItems(owned.items)
-    if (state.since?.mess_born) setStatus({ kind: 'warn', text: `${state.since.mess_born} sujeira nova apareceu na casa.` })
+    setStatus(state.since?.mess_born
+      ? { kind: 'warn', text: `${state.since.mess_born} sujeira nova apareceu na casa.` }
+      : null)
   }
   useEffect(() => { load().catch((e) => setStatus({ kind: 'error', text: e.message })); return subscribe('pet', (next) => setPet(next)) }, [])
   // O item que ele esta usando AGORA, so pro desenho. Some sozinho depois da

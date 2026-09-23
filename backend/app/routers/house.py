@@ -19,13 +19,16 @@ progressao em silencio:
 
 from __future__ import annotations
 
+import time
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from .. import catalog, economy, missions, pet_care, push
 from ..clock import utcnow
-from ..db import get_db
+from ..db import IS_SQLITE, get_db
 from ..models import InventoryItem, Room, RoomLayout, ShopItem, User
 from ..realtime import publish
 from ..schemas import moment_iso
@@ -153,12 +156,33 @@ def _room_out(db: Session, room: Room, mess_by_room: dict[int, list]) -> dict:
 
 @router.get("")
 def read(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
-    # O bichinho envelhece mesmo quando quem abriu foi a tela da casa: e aqui
-    # que a sujeira dele aparece, entao ela precisa estar em dia.
-    pet = get_pet(db)
-    # todos envelhecem, nao so o que esta na tela (ver `pet_care.decay_all`)
-    pet_care.decay_all(db)
-    db.commit()
+    user_id = user.id
+    # Esta leitura tem duas inicializacoes que realmente gravam: o decaimento
+    # dos bichinhos e o layout-padrao de qualquer comodo antigo que ainda nao o
+    # tenha. Os layouts antes eram criados DEPOIS do commit e acabavam desfeitos
+    # ao fechar a sessao; por isso toda abertura tentava inseri-los novamente.
+    #
+    # O WebSocket registra presenca no mesmo instante da primeira abertura. No
+    # SQLite da bancada, se ele ganhar a escrita entre nossa leitura e o flush,
+    # e preciso refazer a transacao inteira com um snapshot novo.
+    for attempt in range(5):
+        try:
+            pet = get_pet(db)
+            # todos envelhecem, nao so o que esta na tela
+            pet_care.decay_all(db)
+            rooms = db.query(Room).order_by(Room.sort_order, Room.id).all()
+            for room in rooms:
+                _layout_of(db, room)
+            db.commit()
+            break
+        except OperationalError as exc:
+            db.rollback()
+            locked = "database is locked" in str(exc).lower()
+            if not IS_SQLITE or not locked or attempt == 4:
+                raise
+            time.sleep(0.05 * (attempt + 1))
+    else:
+        raise RuntimeError("tentativas de abertura da casa esgotadas")
 
     mess_by_room: dict[int, list] = {}
     for m in pet_care.pending_mess(db):
@@ -166,7 +190,6 @@ def read(user: User = Depends(current_user), db: Session = Depends(get_db)) -> d
             {"id": m.id, "col": m.col, "row": m.row, "kind": m.kind}
         )
 
-    rooms = db.query(Room).order_by(Room.sort_order, Room.id).all()
     counts = _owned_counts(db)
     placeable = _placeable(db)
     placed: dict[str, int] = {}
@@ -176,7 +199,7 @@ def read(user: User = Depends(current_user), db: Session = Depends(get_db)) -> d
     return {
         "rooms": [_room_out(db, room, mess_by_room) for room in rooms],
         "doors": catalog.DOORS,
-        "balance": economy.balance(db, user.id),
+        "balance": economy.balance(db, user_id),
         "floors": _styles_owned(db, "floor"),
         "walls": _styles_owned(db, "wall"),
         "catalog": [

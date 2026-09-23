@@ -205,8 +205,10 @@ export default function CityCanvas({ avatar, partnerAvatar, partnerName='' }) {
   useEffect(()=>{
     const canvas=movingRef.current
     const p=new Painter(canvas);p.resize(WIDTH,HEIGHT)
-    let frame=0
+    let frame=0, alive=true, reported=false
     const render=(now)=>{
+      if(!alive)return
+      try {
       const state=stateRef.current
       if(state.path.length>1 && state.step<state.path.length-1){
         if(!state.from){state.from=state.path[state.step];state.to=state.path[state.step+1];state.started=now}
@@ -256,11 +258,18 @@ export default function CityCanvas({ avatar, partnerAvatar, partnerName='' }) {
         else { p.rect(x-7,y-30,14,25,'#e8879b');p.rect(x-9,y-40,18,14,'#f0c8ad') }
       }})
       actors.sort((a,b)=>a.depth-b.depth).forEach((actor)=>actor.draw())
-      frame=requestAnimationFrame(render)
+      } catch (error) {
+        // Um ator nunca pode matar a cidade inteira. O primeiro erro continua
+        // visível no console para diagnóstico, mas o quadro seguinte acontece.
+        if(!reported){reported=true;console.error('Falha ao desenhar a cidade',error)}
+      }
+      if(alive)frame=requestAnimationFrame(render)
     }
-    frame=requestAnimationFrame(render)
-    return()=>cancelAnimationFrame(frame)
-  },[avatar,navigate])
+    // Há navegadores que suspendem requestAnimationFrame fora da aba. Um quadro
+    // síncrono impede a camada móvel de nascer vazia até o próximo foco.
+    render(performance.now())
+    return()=>{alive=false;cancelAnimationFrame(frame)}
+  },[avatar,partnerAvatar,partnerName,navigate])
 
   function walkTo(target, route='') {
     const current=nearestCityWalkable(Math.round(stateRef.current.position[0]),Math.round(stateRef.current.position[1]))

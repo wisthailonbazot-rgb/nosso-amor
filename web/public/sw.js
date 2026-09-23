@@ -12,8 +12,9 @@
 // apaga tudo o que nao tem o nome atual, e e isso que destrava um aparelho que
 // ficou preso no fundo rosa com um index.html velho. v7: entrou o kit Kenney.
 // v9 acrescentou prazo máximo de rede em dados móveis. v10 renova a casca para
-// entregar chat com vídeo, cidade viva e as novas gravações dos bichinhos.
-const CACHE = 'casal-v10'
+// entregar chat com vídeo, cidade viva e as novas gravações dos bichinhos. v11
+// corrige o quadro animado da cidade e a abertura inicial da tela do bichinho.
+const CACHE = 'casal-v11'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png']
 
 async function fetchWithTimeout(request, timeoutMs) {
