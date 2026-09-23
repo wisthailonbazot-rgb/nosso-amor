@@ -1742,5 +1742,7 @@ projeto inteiro e corrigir os erros encontrados.
 - [x] Cinco testes Node, `compileall`, build e auditoria de dependências passaram;
       `npm audit` encontrou 0 vulnerabilidades e o smoke fechou em **899/0**.
 - [x] Service worker atualizado para v11.
+- [x] Publicado no commit `fe6dec4`, deploy `rxyc4zg65hhher368pddpd2l` saudável;
+      os dois domínios servem o bundle `index-GHRDRhyy.js` e o cache v11.
 
 Detalhes: HANDOFF 9.40.

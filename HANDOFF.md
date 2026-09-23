@@ -4372,3 +4372,9 @@ passou, `npm audit --omit=dev` encontrou **0 vulnerabilidades**, build Vite gero
 `index-GHRDRhyy.js` e o smoke completo terminou com **899 verificações, 0
 falha**. O service worker avançou para `casal-v11` para retirar a casca anterior
 dos aparelhos.
+
+Publicado no Coolify pelo commit `fe6dec4` (deploy
+`rxyc4zg65hhher368pddpd2l`). O rolling update terminou saudável. Os domínios
+`sslip.io` e `nip.io` devolveram HTTPS 200 em `/`, no bundle e em `/api/health`,
+e ambos serviram `index-GHRDRhyy.js`, a proteção do laço da cidade e o service
+worker `casal-v11`.
