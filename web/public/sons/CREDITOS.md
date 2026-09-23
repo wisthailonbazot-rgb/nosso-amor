@@ -22,6 +22,17 @@ O que dava pra medir, foi medido — ver a nota dos jingles abaixo.
 | Arquivo | O que é | Fonte | Autor | Licença |
 |---|---|---|---|---|
 | `gato-miado.ogg` | miado de gato, 0,8 s | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Meow.ogg) | Dan Crosby | **CC BY-SA 3.0** |
+| `bichos/cachorro-1.ogg`, `cachorro-2.ogg`, `cachorro-3.ogg` | três latidos recortados, volume normalizado | [Wikimedia Commons — Ladrido perro](https://commons.wikimedia.org/wiki/File:Ladrido_perro.ogg) | Edo.pt2 | **CC0 1.0** |
+| `bichos/passaro-1.ogg`, `passaro-2.ogg` | cantos de periquito recortados, volume normalizado | [Wikimedia Commons — Budgerigar chirping](https://commons.wikimedia.org/wiki/File:Budgerigar_chirping.ogg) | mary905 | **Domínio público** |
+| `bichos/coelho-1.ogg`, `coelho-2.ogg` | grunhidos e guinchos de coelho recortados, mono 32 kHz | [Wikimedia Commons — Rabbit oinks and squeaks](https://commons.wikimedia.org/wiki/File:Rabbit_oinks_and_squeaks.wav) | kessir | **CC0 1.0** |
+| `bichos/capivara-1.ogg`, `capivara-2.ogg` | vocalizações de capivara recortadas de vídeo, mono 32 kHz | [Wikimedia Commons — Capivara nadando e vocalizando](https://commons.wikimedia.org/wiki/File:Capivara_nadando_e_vocalizando.ogv) | Sávio Freire Bruno | **CC BY-SA 4.0** |
+| `bichos/dragao-1.ogg`, `dragao-2.ogg` | silvos reais de jacaré usados no dragão, recortados | [Wikimedia Commons — Alligatorhiss](https://commons.wikimedia.org/wiki/File:Alligatorhiss.ogg) | U.S. Fish and Wildlife Service | **Domínio público (obra do governo dos EUA)** |
+| `bichos/passo-1.ogg`, `passo-2.ogg`, `passo-3.ogg`, `passo-4.ogg` | quatro impactos curtos usados como passos, com volume reduzido | `footstep00`, `footstep02`, `footstep06`, `footstep09` de [Kenney — RPG Audio](https://kenney.nl/assets/rpg-audio) | Kenney | **CC0** |
+
+As faixas novas foram recortadas, convertidas para Ogg Vorbis mono em 32 kHz,
+normalizadas e receberam fades curtos. A capivara é uma adaptação sob CC BY-SA
+4.0; os arquivos derivados `capivara-1.ogg` e `capivara-2.ogg` permanecem sob a
+mesma licença. Os demais recortes mantêm as licenças indicadas na tabela.
 
 ## Batalha naval
 
@@ -87,7 +98,7 @@ num alto-falante de celular — e este app é um PWA que a pessoa baixa pelo 4G.
 **CC0** é domínio público: não pede nada. O crédito acima é cortesia, e fica
 porque saber de onde veio cada arquivo tem valor mesmo quando não é obrigatório.
 
-**CC BY-SA 3.0** (só o miado) pede duas coisas: dar o crédito (é a tabela) e
+**CC BY-SA 3.0/4.0** (miado e capivara) pede duas coisas: dar o crédito (é a tabela) e
 manter o arquivo sob a mesma licença se ele for repassado. Ela vale sobre o SOM,
 não sobre o app. Este app é privado, para duas pessoas, e não é distribuído — na
 prática só a primeira obrigação se aplica, e está cumprida. Se um dia ele virar

@@ -2,21 +2,21 @@ import assert from 'node:assert/strict'
 import {buildHousePlan, canStep, cellKey, findPath, freeCell, roomDoorCells} from './src/render/housePlan.js'
 
 const rooms = [
-  {code:'sala',name:'Sala',x:8,y:18,w:10,h:8},
-  {code:'cozinha',name:'Cozinha',x:8,y:10,w:10,h:8},
-  {code:'quarto',name:'Quarto',x:18,y:18,w:10,h:8},
-  {code:'varanda',name:'Varanda',x:18,y:10,w:10,h:8},
-  {code:'quintal',name:'Quintal',x:8,y:0,w:14,h:10,outdoor:true},
+  {code:'sala',name:'Sala',x:6,y:10,w:10,h:8},
+  {code:'cozinha',name:'Cozinha',x:16,y:10,w:10,h:8},
+  {code:'quarto',name:'Quarto',x:6,y:18,w:10,h:8},
+  {code:'varanda',name:'Varanda',x:16,y:18,w:10,h:8},
+  {code:'quintal',name:'Quintal',x:9,y:0,w:14,h:10,outdoor:true},
 ]
 const doors = [
-  {a:'sala',b:'cozinha',x:12,y:18,axis:'h'},
-  {a:'sala',b:'quarto',x:18,y:21,axis:'v'},
-  {a:'cozinha',b:'varanda',x:18,y:13,axis:'v'},
-  {a:'quarto',b:'varanda',x:22,y:18,axis:'h'},
-  {a:'varanda',b:'quintal',x:21,y:10,axis:'h'},
-  {a:'sala',b:'quintal',x:8,y:22,axis:'v'},
-  {a:'cozinha',b:'quintal',x:12,y:10,axis:'h'},
-  {a:'quarto',b:'quintal',x:28,y:22,axis:'v'},
+  {a:'sala',b:'cozinha',x:16,y:13,axis:'v'},
+  {a:'sala',b:'quarto',x:10,y:18,axis:'h'},
+  {a:'cozinha',b:'varanda',x:20,y:18,axis:'h'},
+  {a:'quarto',b:'varanda',x:16,y:21,axis:'v'},
+  {a:'varanda',b:'quintal',x:26,y:22,axis:'v'},
+  {a:'sala',b:'quintal',x:10,y:10,axis:'h'},
+  {a:'cozinha',b:'quintal',x:20,y:10,axis:'h'},
+  {a:'quarto',b:'quintal',x:6,y:22,axis:'v'},
 ]
 for(let mask=0;mask<8;mask++) {
   const source=rooms.map((r,i)=>({...r,unlocked:i===0||i===4||!!(mask&(1<<(i-1)))}))
@@ -46,5 +46,5 @@ const path=findPath(p,[sala.x,sala.y+2],[sala.x+6,sala.y+2])
 assert.ok(path.length>7,'nao desviou do movel')
 assert.ok(path.every(c=>!p.occupied.has(cellKey(...c))))
 assert.equal(canStep(p,[sala.x,sala.y],[sala.x+1,sala.y+1]),false,'passo diagonal')
-assert.ok(roomDoorCells(rooms,doors,'sala').has('0:4'),'entrada da sala não foi reservada')
+assert.ok(roomDoorCells(rooms,doors,'sala').has('4:0'),'entrada da sala não foi reservada')
 console.log('Geometria OK: 8 combinacoes de ampliacao, pisos, paredes, portas, caminhos e colisao.')

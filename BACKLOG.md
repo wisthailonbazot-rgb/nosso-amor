@@ -1685,3 +1685,34 @@ ainda não existia.
       reproduz Safari, operadora, DNS e rádio do aparelho.
 
 Detalhes: HANDOFF 9.38.
+
+### 23/09/2026 — rotações, vídeo, cidade viva e sons dos bichinhos
+
+Pedido: revisar objetos que quebravam ao girar, permitir vídeo no chat, deixar
+a cidade mais viva e usar sons reais/diferentes nos animais e no caminhar.
+
+- [x] Corrigida a ordem de profundidade dos componentes **depois** da rotação,
+      em vez de manter a ordem fixa de 0°.
+- [x] Auditoria cobre 56 objetos em 0°, 90°, 180° e 270°: 224 poses sem peça
+      enterrada, fora da área ou com tamanho divergente do catálogo.
+- [x] Chat grava ou escolhe vídeo; upload em fluxo com limites de 80 MB/120 s.
+- [x] MOV/HEVC do iPhone e demais entradas são normalizados para MP4 H.264/AAC
+      com capa, `faststart`, `playsInline` e MIME declarado para o Android.
+- [x] Corrigida a corrida entre resposta HTTP, SQLite e WebSocket que fazia o
+      primeiro envio real terminar em 500 mesmo depois de gravar o vídeo.
+- [x] Fluxo completo repetido no navegador: resposta 200, player novo no chat,
+      capa 200, MP4 206 e nenhum erro no console.
+- [x] Cidade ganhou nuvens, pássaros, folhas, fonte, carros, pedestres e avatar
+      do parceiro em movimento, mantendo as rotas dentro das ruas.
+- [x] Cachorro, coelho, pássaro, capivara e dragão ganharam gravações reais com
+      variações; gato mantém o miado real já aprovado.
+- [x] Caminhada toca quatro impactos reais na chegada de cada célula, com ritmo
+      e peso discretos por espécie e síntese somente como reserva.
+- [x] Créditos, autores, licenças e transformações estão versionados; smoke
+      reprova arquivo ausente ou sem crédito. Service worker avançou para v10.
+- [x] Build, testes de cidade/móveis e smoke completos aprovados (894/0).
+- [ ] Confirmar **iPhone físico → Android físico** com um vídeo novo da câmera;
+      a bancada validou um MOV realista, mas não substitui câmera e codec dos
+      aparelhos de vocês.
+
+Detalhes: HANDOFF 9.39.

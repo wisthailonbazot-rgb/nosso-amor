@@ -1157,6 +1157,17 @@ button:disabled,
   border: 1.5px solid var(--ink);
 }
 
+.msg-video {
+  display: block;
+  width: min(260px, 68vw);
+  max-height: 360px;
+  border: 1.5px solid var(--ink);
+  border-radius: 10px;
+  background: #211d24;
+  object-fit: contain;
+  cursor: default;
+}
+
 .msg-meta {
   font-size: 10px;
   color: var(--ink-faint);
@@ -1292,6 +1303,20 @@ button:disabled,
   border-radius: 50%;
   background: var(--danger);
   animation: pulsa 1s ease-in-out infinite;
+}
+
+.chat-upload-status {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  margin: 0 4px 8px;
+  padding: 7px 10px;
+  border-radius: 12px;
+  background: var(--rose-pale);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 @keyframes pulsa {
@@ -2533,11 +2558,11 @@ button:disabled,
 .lab-vozes { grid-template-columns: repeat(2, 1fr); }
 .lab-vozes .lab-tile { cursor: pointer; text-align: center; }
 
-/* ------------------------------------------------- escolher foto: câmera x galeria
+/* ----------------------------------------- escolher foto/vídeo: câmera x galeria
    O Android 13+ atende `<input accept="image/*">` com o seletor de fotos do
    sistema, que só mostra o que já foi tirado — o botão de câmera sumiu de lá.
    Quem devolve a câmera é o atributo `capture`, que é exclusivo (com ele, só
-   fotografa; sem ele, só escolhe). Por isso o ícone abre estas duas opções. */
+   fotografa/grava; sem ele, só escolhe). Por isso o ícone abre as quatro opções. */
 .foto-escolha { position: relative; display: flex; align-items: center; }
 .foto-menu {
   position: absolute;

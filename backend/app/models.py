@@ -441,11 +441,11 @@ class Message(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     sender_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     content: Mapped[str] = mapped_column(Text, default="")
-    # text | image | audio | sticker
+    # text | image | audio | video | sticker
     type: Mapped[str] = mapped_column(String(10), default="text")
     media_path: Mapped[str] = mapped_column(String(200), default="")
     media_thumb: Mapped[str] = mapped_column(String(200), default="")
-    duration_ms: Mapped[int] = mapped_column(Integer, default=0)  # so pra audio
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0)  # áudio ou vídeo
     sticker: Mapped[str] = mapped_column(String(40), default="")
     reply_to: Mapped[int | None] = mapped_column(
         ForeignKey("messages.id", ondelete="SET NULL"), nullable=True

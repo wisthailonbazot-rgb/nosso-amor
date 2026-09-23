@@ -26,22 +26,50 @@
 //
 // Os arquivos têm dono, e o crédito mora em `public/sons/CREDITOS.md` — não num
 // comentário que some. O miado é de Dan Crosby, CC BY-SA 3.0, do Wikimedia
-// Commons.
+// Commons. As outras espécies usam gravações CC0/domínio público ou CC BY-SA;
+// fonte, autor, recortes e licença ficam no mesmo arquivo de créditos.
 
 /**
- * Que espécie tem gravação, e qual arquivo.
- *
- * Só o gato por enquanto: foi dele que o dono reclamou, e é uma gravação por
- * vez — cada uma tem licença própria pra conferir antes de entrar.
+ * Cada espécie tem gravações próprias. Mais de uma variação impede que todo
+ * carinho pareça apertar exatamente o mesmo botão de brinquedo.
  */
 export const GRAVACOES = {
-  gato: '/sons/gato-miado.ogg',
+  gato: ['/sons/gato-miado.ogg'],
+  cachorro: [
+    '/sons/bichos/cachorro-1.ogg',
+    '/sons/bichos/cachorro-2.ogg',
+    '/sons/bichos/cachorro-3.ogg',
+  ],
+  coelho: ['/sons/bichos/coelho-1.ogg', '/sons/bichos/coelho-2.ogg'],
+  passaro: ['/sons/bichos/passaro-1.ogg', '/sons/bichos/passaro-2.ogg'],
+  capivara: ['/sons/bichos/capivara-1.ogg', '/sons/bichos/capivara-2.ogg'],
+  // Dragão não existe para ser gravado: o silvo de jacaré dá uma voz animal
+  // real, grave e reptiliana, sem voltar ao oscilador artificial.
+  dragao: ['/sons/bichos/dragao-1.ogg', '/sons/bichos/dragao-2.ogg'],
 }
+
+export const PASSOS = [1, 2, 3, 4].map((n) => `/sons/bichos/passo-${n}.ogg`)
 
 // O áudio já decodificado, por espécie. Decodificar custa; tocar não.
 const prontos = new Map()
+const carregando = new Map()
 // Quem já falhou não é tentado de novo a cada carinho.
 const desistidos = new Set()
+let passosProntos = []
+let passosCarregando = null
+const ultimoIndice = new Map()
+
+function decodificar(ctx, caminho) {
+  return fetch(caminho, { cache: 'force-cache' })
+    .then((resposta) => {
+      if (!resposta.ok) throw new Error(String(resposta.status))
+      return resposta.arrayBuffer()
+    })
+    .then((bytes) => new Promise((resolve, reject) => {
+      const r = ctx.decodeAudioData(bytes, resolve, reject)
+      if (r && typeof r.then === 'function') r.then(resolve, reject)
+    }))
+}
 
 /**
  * Carrega e decodifica a gravação de uma espécie, uma vez só.
@@ -51,26 +79,41 @@ const desistidos = new Set()
  * formato. Quem chama trata `null` como "usa a síntese".
  */
 export async function carregarVoz(ctx, especie) {
-  const caminho = GRAVACOES[especie]
-  if (!caminho || !ctx || desistidos.has(especie)) return null
+  const caminhos = GRAVACOES[especie]
+  if (!caminhos || !ctx || desistidos.has(especie)) return null
   if (prontos.has(especie)) return prontos.get(especie)
+  if (carregando.has(especie)) return carregando.get(especie)
 
-  try {
-    const resposta = await fetch(caminho, { cache: 'force-cache' })
-    if (!resposta.ok) throw new Error(String(resposta.status))
-    const bytes = await resposta.arrayBuffer()
-    // `decodeAudioData` com Promise não existe no Safari antigo; a forma com
-    // callback funciona nos dois.
-    const audio = await new Promise((resolve, reject) => {
-      const r = ctx.decodeAudioData(bytes, resolve, reject)
-      if (r && typeof r.then === 'function') r.then(resolve, reject)
+  const promessa = Promise.allSettled(caminhos.map((caminho) => decodificar(ctx, caminho)))
+    .then((resultados) => resultados.filter((r) => r.status === 'fulfilled').map((r) => r.value))
+    .then((audios) => {
+      if (!audios.length) { desistidos.add(especie); return null }
+      prontos.set(especie, audios)
+      return audios
     })
-    prontos.set(especie, audio)
-    return audio
-  } catch {
-    desistidos.add(especie)
-    return null
-  }
+    .finally(() => carregando.delete(especie))
+  carregando.set(especie, promessa)
+  return promessa
+}
+
+export async function carregarPassos(ctx) {
+  if (!ctx) return []
+  if (passosProntos.length) return passosProntos
+  if (passosCarregando) return passosCarregando
+  passosCarregando = Promise.allSettled(PASSOS.map((caminho) => decodificar(ctx, caminho)))
+    .then((resultados) => resultados.filter((r) => r.status === 'fulfilled').map((r) => r.value))
+    .then((audios) => { passosProntos = audios; return audios })
+    .finally(() => { passosCarregando = null })
+  return passosCarregando
+}
+
+function escolher(lista, chave) {
+  if (!lista?.length) return null
+  const anterior = ultimoIndice.get(chave) ?? -1
+  let indice = Math.floor(Math.random() * lista.length)
+  if (lista.length > 1 && indice === anterior) indice = (indice + 1) % lista.length
+  ultimoIndice.set(chave, indice)
+  return lista[indice]
 }
 
 /**
@@ -85,7 +128,7 @@ export async function carregarVoz(ctx, especie) {
  * justamente o defeito de que se está fugindo.
  */
 export function tocarGravacao(ctx, especie, { humor = 'normal', volume = 1, destino = null } = {}) {
-  const audio = prontos.get(especie)
+  const audio = escolher(prontos.get(especie), `voz:${especie}`)
   if (!ctx || !audio) return false
 
   const ritmo = humor === 'doente' ? 0.78
@@ -96,7 +139,8 @@ export function tocarGravacao(ctx, especie, { humor = 'normal', volume = 1, dest
 
   const fonte = ctx.createBufferSource()
   fonte.buffer = audio
-  fonte.playbackRate.value = ritmo
+  // Variação mínima preserva a identidade do animal e evita repetição mecânica.
+  fonte.playbackRate.value = ritmo * (0.975 + Math.random() * 0.05)
   const ganho = ctx.createGain()
   ganho.gain.value = forca * volume
 
@@ -111,7 +155,25 @@ export function tocarGravacao(ctx, especie, { humor = 'normal', volume = 1, dest
   return true
 }
 
+/** Passo curto e baixo; espécie muda peso/altura sem inventar outra gravação. */
+export function tocarPasso(ctx, especie, { volume = 1, destino = null } = {}) {
+  const audio = escolher(passosProntos, 'passo')
+  if (!ctx || !audio) return false
+  const fonte = ctx.createBufferSource()
+  fonte.buffer = audio
+  fonte.playbackRate.value = especie === 'passaro' ? 1.55
+    : especie === 'coelho' ? 1.35
+      : especie === 'capivara' ? 0.82
+        : especie === 'dragao' ? 0.68
+          : especie === 'gato' ? 1.12 : 1
+  const ganho = ctx.createGain()
+  ganho.gain.value = (especie === 'dragao' ? 0.13 : especie === 'capivara' ? 0.1 : 0.075) * volume
+  fonte.connect(ganho).connect(destino || ctx.destination)
+  fonte.start()
+  return true
+}
+
 /** Já existe gravação pronta pra esta espécie? (a bancada usa pra comparar) */
 export function temGravacao(especie) {
-  return prontos.has(especie)
+  return (prontos.get(especie)?.length || 0) > 0
 }

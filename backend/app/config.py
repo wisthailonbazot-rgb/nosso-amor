@@ -42,6 +42,11 @@ COUPLE_START_DATE = os.getenv("COUPLE_START_DATE", "").strip()
 STORAGE_DIR = os.getenv("STORAGE_DIR", os.path.join(os.path.dirname(__file__), "..", "media"))
 STORAGE_DIR = os.path.abspath(STORAGE_DIR)
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "12"))
+# Vídeo tem limite próprio: uma gravação curta de iPhone ultrapassa 12 MB com
+# facilidade. O servidor reduz tudo para 720p/H.264 antes de guardar, portanto o
+# limite maior vale apenas para a entrada temporária.
+MAX_VIDEO_UPLOAD_MB = int(os.getenv("MAX_VIDEO_UPLOAD_MB", "80"))
+MAX_VIDEO_SECONDS = int(os.getenv("MAX_VIDEO_SECONDS", "120"))
 
 # Web Push (VAPID). Gere o par uma vez com: python -m app.vapid_keys
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "").strip()

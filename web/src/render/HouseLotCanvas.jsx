@@ -68,7 +68,7 @@ export default function HouseLotCanvas({ rooms, doors=[], activeRoom, editing=fa
         if(!walk || walk.sourceRoom!==pet.room_code || !s.plan.cells.has(cellKey(...walk.cell)) || s.plan.occupied.has(cellKey(...walk.cell))) {
           const cell=freeCell(s.plan,pet.room_code)
           if(!cell) continue
-          walk={cell,pos:[...cell],path:[],wait:t+500,step:0,sourceRoom:pet.room_code};walkers.current.set(pet.id,walk)
+          walk={cell,pos:[...cell],path:[],wait:t+500,step:0,lastSound:0,sourceRoom:pet.room_code};walkers.current.set(pet.id,walk)
         }
         const frozen=pet.sick || pet.mood==='sonolento' || pet.reaction
         if(!frozen) {
@@ -85,7 +85,13 @@ export default function HouseLotCanvas({ rooms, doors=[], activeRoom, editing=fa
           }
           if(walk.path.length) {
             const target=walk.path[0], dx=target[0]-walk.pos[0],dy=target[1]-walk.pos[1],dist=Math.hypot(dx,dy),step=dt*1.6
-            if(dist<=step) {walk.cell=[...target];walk.pos=[...target];walk.path.shift();if(!walk.path.length)walk.wait=t+2200}
+            if(dist<=step) {
+              walk.cell=[...target];walk.pos=[...target];walk.path.shift()
+              // Som acompanha distância percorrida, não o número de quadros.
+              // Assim celular rápido e lento ouvem a mesma quantidade de passos.
+              if(t-walk.lastSound>360){window.casalSound?.('pet-step',pet.species);walk.lastSound=t}
+              if(!walk.path.length)walk.wait=t+2200
+            }
             else {walk.pos[0]+=dx/dist*step;walk.pos[1]+=dy/dist*step}
             walk.facing=dx-dy>=0?'direita':'esquerda'
           }

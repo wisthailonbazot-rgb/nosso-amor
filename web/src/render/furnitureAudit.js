@@ -77,6 +77,7 @@ export function caixasDe(nome, { w = 2, d = 1 } = {}) {
     flat: () => {},
     outlineFlat: () => {},
     screen: () => [0, 0],
+    overlay: () => {},
   }
   try {
     comEspiao(espiao, () => {

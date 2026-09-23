@@ -16,8 +16,12 @@ const PLACE_ICON = {
 }
 
 export default function City() {
-  const [avatar,setAvatar]=useState(null)
-  useEffect(()=>{ api.get('/api/avatar').then((data)=>setAvatar(data.config)).catch(()=>{}) },[])
+  const [avatars,setAvatars]=useState({mine:null,partner:null,partnerName:''})
+  useEffect(()=>{ api.get('/api/avatar').then((data)=>setAvatars({
+    mine:data.config,
+    partner:data.partner?.config || null,
+    partnerName:data.partner?.name || '',
+  })).catch(()=>{}) },[])
   return (
     <>
       <div className="row between" style={{marginBottom:8}}>
@@ -25,10 +29,10 @@ export default function City() {
           <div className="muted tiny">nosso mundinho</div>
           <h1 className="screen-title" style={{margin:0}}>Cidade do casal</h1>
         </div>
-        <span className="pill sage">6 lugares</span>
+        <span className="pill sage">6 lugares · cidade viva</span>
       </div>
       <p className="muted small city-help">Toque na rua para caminhar. Toque em um prédio para ir até a porta e entrar.</p>
-      <CityCanvas avatar={avatar}/>
+      <CityCanvas avatar={avatars.mine} partnerAvatar={avatars.partner} partnerName={avatars.partnerName}/>
       <div className="city-places">
         {CITY_PLACES.map((place)=>(
           <Link key={place.code} to={place.route} className="city-place-card">

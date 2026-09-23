@@ -6,7 +6,7 @@ from .. import media_store, missions, push
 from ..clock import utcnow
 from ..db import get_db
 from ..models import Message, User
-from ..realtime import hub, publish, publish_por_pessoa
+from ..realtime import hub, publish
 from ..schemas import moment_iso
 from ..security import create_media_token, current_user, partner_of
 
@@ -70,15 +70,21 @@ def _publicar_mensagem(db: Session, row: Message, evento: str = "chat") -> None:
     """
     from ..models import User as _User
 
-    cache: dict[int, str] = {}
-
-    def montar(user_id: int) -> dict:
-        if user_id not in cache:
-            pessoa = db.get(_User, user_id)
-            cache[user_id] = create_media_token(pessoa) if pessoa else ""
-        return {"message": _out(row, cache[user_id])}
-
-    publish_por_pessoa(evento, montar)
+    # IMPORTANTE: tudo que toca SQLAlchemy precisa acontecer AQUI, na thread da
+    # rota. A versão anterior entregava ao loop assíncrono uma função `montar`
+    # que ainda capturava `db` e `row`. Enquanto ela lia a sessão numa thread,
+    # esta rota montava a resposta em outra; no SQLite isso apareceu como
+    # `bad parameter or other API misuse` depois de um vídeo real ser enviado.
+    # Em produção/PostgreSQL a mesma sessão cruzando threads continuava sendo
+    # incorreta, só era mais difícil de enxergar.
+    #
+    # Há só duas pessoas e só quem está online precisa do evento. Montar os dois
+    # payloads agora é barato, deixa a sessão confinada e agenda para o loop
+    # apenas dicionários prontos, sem ORM ou conexão pendurada.
+    for user_id in hub.online_users():
+        pessoa = db.get(_User, user_id)
+        token = create_media_token(pessoa) if pessoa else ""
+        publish(evento, {"message": _out(row, token)}, to_user=user_id)
 
 
 def nao_lidas(db: Session, user_id: int) -> int:
@@ -236,6 +242,37 @@ def send_audio(
     db.add(row)
     db.flush()
     _notify(db, user, "mandou um áudio", row.id)
+    db.commit()
+
+    token = create_media_token(user)
+    _publicar_mensagem(db, row)
+    return _out(row, token)
+
+
+@router.post("/video")
+def send_video(
+    file: UploadFile = File(...),
+    caption: str = Form(default=""),
+    reply_to: int | None = Form(default=None),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Recebe vídeo da câmera/galeria e publica a versão móvel normalizada."""
+    if reply_to is not None and db.get(Message, reply_to) is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "A mensagem respondida não existe mais")
+    saved = media_store.save_video(file)
+    row = Message(
+        sender_id=user.id,
+        type="video",
+        content=caption.strip()[:500],
+        media_path=saved["path"],
+        media_thumb=saved["thumb"],
+        duration_ms=saved["duration_ms"],
+        reply_to=reply_to,
+    )
+    db.add(row)
+    db.flush()
+    _notify(db, user, "mandou um vídeo", row.id)
     db.commit()
 
     token = create_media_token(user)

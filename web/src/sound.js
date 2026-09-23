@@ -4,7 +4,7 @@
 // harmônica + ruído + formantes), e não cabia aqui no meio dos bipes de
 // interface. Aqui ficou o que é interface mesmo.
 // O AudioContext só nasce no primeiro toque, exatamente como Safari/iOS exige.
-import { GRAVACOES, carregarVoz, tocarGravacao } from './petAudio'
+import { GRAVACOES, carregarPassos, carregarVoz, tocarGravacao, tocarPasso } from './petAudio'
 import { vocalizar } from './petVoz'
 import { EFEITOS, estaMudo, tocarEfeito, usarContexto } from './jogoAudio'
 
@@ -63,6 +63,16 @@ export function playSound(kind,detail=''){
     carregarVoz(ctx,especie)
     return
   }
+  if(kind==='pet-step'){
+    if(tocarPasso(ctx,String(detail||'')))return
+    // Primeiro passeio antes do arquivo terminar de carregar: um impacto curto
+    // e baixo confirma o passo sem segurar a animação esperando a rede.
+    const especie=String(detail||'')
+    const grave=especie==='dragao'?95:especie==='capivara'?130:especie==='passaro'?420:220
+    tone(grave,.035,'triangle',.008)
+    carregarPassos(ctx)
+    return
+  }
   if(kind==='coin'){tone(740,.08,'square',.025);tone(990,.12,'square',.02,.07);return}
   if(kind==='success'){tone(440,.1,'triangle');tone(660,.1,'triangle',.035,.08);tone(880,.16,'triangle',.03,.16);return}
   if(kind==='game'){tone(240,.06,'square',.025);tone(360,.08,'square',.018,.04);return}
@@ -77,7 +87,10 @@ export function installSounds(){
     usarContexto(ctx)
     // Assim que o navegador libera o áudio (primeiro toque), as gravações já
     // vão sendo buscadas — assim nem o primeiro carinho sai sintetizado.
-    if(ctx)for(const especie of Object.keys(GRAVACOES))carregarVoz(ctx,especie)
+    if(ctx){
+      for(const especie of Object.keys(GRAVACOES))carregarVoz(ctx,especie)
+      carregarPassos(ctx)
+    }
   }
   window.addEventListener('pointerdown',unlock,{passive:true})
   document.addEventListener('click',(e)=>{

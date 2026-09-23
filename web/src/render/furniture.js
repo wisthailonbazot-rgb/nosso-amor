@@ -28,6 +28,7 @@ export function faces(base) {
 // e ele só existe durante a chamada de `comEspiao`, que é síncrona.
 // Ver `furnitureAudit.js`.
 let ESPIAO = null
+let FILA_DE_DESENHO = null
 
 export function comEspiao(espiao, executar) {
   ESPIAO = espiao
@@ -38,83 +39,107 @@ export function comEspiao(espiao, executar) {
   }
 }
 
-/** Ferramentas que toda forma recebe, já amarradas à posição do item. */
-function tools(p, item, origin) {
-  if (ESPIAO) return ESPIAO
-  const { col, row, w, d, dir = 0 } = item
-  // Girar 90°: o que era largura vira profundidade. Assim uma forma só atende
-  // as quatro direções sem desenho novo.
+/** Transforma um retângulo local na área absoluta ocupada após a rotação. */
+export function retanguloGirado(item, lx, ly, lw, ld) {
+  const { col = 0, row = 0, w, d, dir = 0 } = item
   const rotated = dir % 2 === 1
   const W = rotated ? d : w
   const D = rotated ? w : d
-
-  /** Coordenadas locais (0..W, 0..D) -> absolutas, já respeitando a rotação. */
-  const at = (lx, ly) => {
-    switch (dir % 4) {
-      case 1:
-        return [col + (D - ly), row + lx]
-      case 2:
-        return [col + (W - lx), row + (D - ly)]
-      case 3:
-        return [col + ly, row + (W - lx)]
-      default:
-        return [col + lx, row + ly]
+  const at = (x, y) => {
+    switch ((dir % 4 + 4) % 4) {
+      case 1: return [col + (D - y), row + x]
+      case 2: return [col + (W - x), row + (D - y)]
+      case 3: return [col + y, row + (W - x)]
+      default: return [col + x, row + y]
     }
+  }
+  // Quatro cantos tornam a transformação auditável e não dependem do palpite
+  // de que dois cantos opostos continuarão sendo mínimo e máximo.
+  const points = [at(lx, ly), at(lx + lw, ly), at(lx + lw, ly + ld), at(lx, ly + ld)]
+  const xs = points.map((point) => point[0]), ys = points.map((point) => point[1])
+  const minX = Math.min(...xs), maxX = Math.max(...xs)
+  const minY = Math.min(...ys), maxY = Math.max(...ys)
+  return { col: minX, row: minY, w: maxX - minX, d: maxY - minY, points, W, D, at }
+}
+
+const cruzaNoChao = (a, b) =>
+  Math.min(a.col + a.w, b.col + b.w) - Math.max(a.col, b.col) > 0.003 &&
+  Math.min(a.row + a.d, b.row + b.d) - Math.max(a.row, b.row) > 0.003
+
+/**
+ * Ordena as peças internas depois da rotação.
+ *
+ * Antes a ordem era a ordem escrita na função da forma, portanto só era certa
+ * a 0°. Ao virar o sofá, o encosto mudava do fundo para a frente, mas ainda era
+ * pintado antes do assento. Partes empilhadas mantêm a dependência vertical;
+ * no mesmo nível, a profundidade já rotacionada decide.
+ */
+function ordenarOperacoes(operacoes) {
+  const comuns = operacoes.filter((op) => op.kind !== 'overlay')
+  const overlays = operacoes.filter((op) => op.kind === 'overlay')
+  const antes = new Map(comuns.map((op) => [op, new Set()]))
+  const EPS = 0.004
+  for (let i = 0; i < comuns.length; i++) for (let j = i + 1; j < comuns.length; j++) {
+    const a = comuns[i], b = comuns[j]
+    if (!cruzaNoChao(a, b)) continue
+    const topoA = a.z + a.h, topoB = b.z + b.h
+    if (topoA <= b.z + EPS && b.z > a.z + EPS) antes.get(b).add(a)
+    else if (topoB <= a.z + EPS && a.z > b.z + EPS) antes.get(a).add(b)
+  }
+  const restantes = new Set(comuns), saida = []
+  while (restantes.size) {
+    let livres = [...restantes].filter((op) =>
+      [...antes.get(op)].every((dependencia) => !restantes.has(dependencia))
+    )
+    // Sobreposição artística pode formar ciclo. Preserve a ordem original como
+    // desempate em vez de deixar o móvel sem desenho.
+    if (!livres.length) livres = [[...restantes].sort((a, b) => a.order - b.order)[0]]
+    livres.sort((a, b) => a.depth - b.depth || a.z - b.z || a.order - b.order)
+    for (const op of livres) if (restantes.delete(op)) saida.push(op)
+  }
+  return [...saida, ...overlays.sort((a, b) => a.order - b.order)]
+}
+
+/** Ferramentas que toda forma recebe, já amarradas à posição do item. */
+function tools(p, item, origin) {
+  if (ESPIAO) return ESPIAO
+  const { w, d, dir = 0 } = item
+  const rotated = dir % 2 === 1
+  const W = rotated ? d : w
+  const D = rotated ? w : d
+  const at = (lx, ly) => retanguloGirado(item, lx, ly, 0, 0).at(lx, ly)
+  const guardar = (kind, area, z, h, draw) => {
+    if (!FILA_DE_DESENHO) { draw(); return }
+    FILA_DE_DESENHO.push({
+      kind, ...area, z, h,
+      depth: area.col + area.row + area.w + area.d,
+      order: FILA_DE_DESENHO.length,
+      draw,
+    })
   }
 
   return {
     W,
     D,
-    /** Bloco em coordenada local. lw/ld são medidas, por isso passam pela rotação. */
     box(lx, ly, lw, ld, z, h, color) {
-      const [ax, ay] = at(lx, ly)
-      const [bx, by] = at(lx + lw, ly + ld)
-      isoBox(
-        p,
-        faces(color),
-        {
-          col: Math.min(ax, bx),
-          row: Math.min(ay, by),
-          w: Math.abs(bx - ax),
-          d: Math.abs(by - ay),
-          z,
-          h,
-        },
-        origin,
-        OUTLINE
-      )
+      const area = retanguloGirado(item, lx, ly, lw, ld)
+      guardar('box', area, z, h, () => isoBox(p, faces(color), { ...area, z, h }, origin, OUTLINE))
     },
-    /** Painel plano (tapete, tela, quadro deitado): bloco de altura zero. */
     flat(lx, ly, lw, ld, z, color) {
-      const [ax, ay] = at(lx, ly)
-      const [bx, by] = at(lx + lw, ly + ld)
-      p.fillPoly(
-        [
-          project(Math.min(ax, bx), Math.min(ay, by), z, origin),
-          project(Math.max(ax, bx), Math.min(ay, by), z, origin),
-          project(Math.max(ax, bx), Math.max(ay, by), z, origin),
-          project(Math.min(ax, bx), Math.max(ay, by), z, origin),
-        ],
-        color
-      )
+      const area = retanguloGirado(item, lx, ly, lw, ld)
+      guardar('flat', area, z, 0, () => p.fillPoly(area.points.map(([x, y]) => project(x, y, z, origin)), color))
     },
     outlineFlat(lx, ly, lw, ld, z, color) {
-      const [ax, ay] = at(lx, ly)
-      const [bx, by] = at(lx + lw, ly + ld)
-      p.strokePoly(
-        [
-          project(Math.min(ax, bx), Math.min(ay, by), z, origin),
-          project(Math.max(ax, bx), Math.min(ay, by), z, origin),
-          project(Math.max(ax, bx), Math.max(ay, by), z, origin),
-          project(Math.min(ax, bx), Math.max(ay, by), z, origin),
-        ],
-        color
-      )
+      const area = retanguloGirado(item, lx, ly, lw, ld)
+      guardar('outline', area, z, 0, () => p.strokePoly(area.points.map(([x, y]) => project(x, y, z, origin)), color))
     },
-    /** Ponto na tela a partir de coordenada local — pra detalhe solto. */
     screen(lx, ly, z) {
       const [ax, ay] = at(lx, ly)
       return project(ax, ay, z, origin)
+    },
+    overlay(draw) {
+      if (!FILA_DE_DESENHO) { draw(); return }
+      FILA_DE_DESENHO.push({ kind: 'overlay', order: FILA_DE_DESENHO.length, draw })
     },
   }
 }
@@ -417,13 +442,15 @@ export const SHAPES = {
     // o brilho do abajur, desenhado como halo transparente
     const [sx, sy] = k.screen(k.W / 2, k.D / 2, 1.55)
     const pulse = 26 + Math.sin((t || 0) / 800) * 3
-    const g = p.ctx.createRadialGradient(sx, sy, 2, sx, sy, pulse)
-    g.addColorStop(0, 'rgba(255,224,163,0.42)')
-    g.addColorStop(1, 'rgba(255,224,163,0)')
-    p.ctx.fillStyle = g
-    p.ctx.beginPath()
-    p.ctx.arc(sx, sy, pulse, 0, Math.PI * 2)
-    p.ctx.fill()
+    k.overlay(() => {
+      const g = p.ctx.createRadialGradient(sx, sy, 2, sx, sy, pulse)
+      g.addColorStop(0, 'rgba(255,224,163,0.42)')
+      g.addColorStop(1, 'rgba(255,224,163,0)')
+      p.ctx.fillStyle = g
+      p.ctx.beginPath()
+      p.ctx.arc(sx, sy, pulse, 0, Math.PI * 2)
+      p.ctx.fill()
+    })
   },
 
   candles(p, item, origin, t) {
@@ -639,10 +666,10 @@ export const SHAPES = {
     k.box(k.W / 2 - 0.06, k.D / 2 - 0.06, 0.12, 0.12, 1.2 + sobe * 0.06, 0.1, '#cfc9c2') // fumaça
   },
 
-  garden(p,item,origin){ const k=tools(p,item,origin); k.box(.04,.04,k.W-.08,k.D-.08,0,.16,WOOD); k.box(.12,.12,k.W-.24,k.D-.24,.14,.05,'#6b4a2f'); for(let x=.3;x<k.W;x+=.5)for(let y=.3;y<k.D;y+=.5){const q=k.screen(x,y,.2);p.rect(q[0],q[1]-5,1,5,'#4c7c3d');p.rect(q[0]-2,q[1]-6,5,2,'#7ead52')} },
-  swing(p,item,origin,t){ const k=tools(p,item,origin); for(const x of [.08,k.W-.2])for(const y of [.15,k.D-.27])k.box(x,y,.12,.12,0,1.5,WOOD_DARK); k.box(.05,.4,k.W-.1,.1,1.5,.1,WOOD); const q=k.screen(k.W/2,.45,1.5),s=Math.sin((t||0)/600)*2;p.rect(q[0]-7+s,q[1],1,22,'#665b50');p.rect(q[0]+7+s,q[1],1,22,'#665b50');p.rect(q[0]-10+s,q[1]+22,21,4,'#c98a4b') },
+  garden(p,item,origin){ const k=tools(p,item,origin); k.box(.04,.04,k.W-.08,k.D-.08,0,.16,WOOD); k.box(.12,.12,k.W-.24,k.D-.24,.14,.05,'#6b4a2f'); for(let x=.3;x<k.W;x+=.5)for(let y=.3;y<k.D;y+=.5){const q=k.screen(x,y,.2);k.overlay(()=>{p.rect(q[0],q[1]-5,1,5,'#4c7c3d');p.rect(q[0]-2,q[1]-6,5,2,'#7ead52')})} },
+  swing(p,item,origin,t){ const k=tools(p,item,origin); for(const x of [.08,k.W-.2])for(const y of [.15,k.D-.27])k.box(x,y,.12,.12,0,1.5,WOOD_DARK); k.box(.05,.4,k.W-.1,.1,1.5,.1,WOOD); const q=k.screen(k.W/2,.45,1.5),s=Math.sin((t||0)/600)*2;k.overlay(()=>{p.rect(q[0]-7+s,q[1],1,22,'#665b50');p.rect(q[0]+7+s,q[1],1,22,'#665b50');p.rect(q[0]-10+s,q[1]+22,21,4,'#c98a4b')}) },
   tree(p,item,origin){ const k=tools(p,item,origin); k.box(k.W/2-.16,k.D/2-.16,.32,.32,0,1.35,'#6b4a2f'); k.box(.05,.05,k.W-.1,k.D-.1,1.2,.48,'#4f8745'); k.box(.27,.27,k.W-.54,k.D-.54,1.68,.4,'#68a354'); k.box(.48,.48,k.W-.96,k.D-.96,2.08,.25,'#7eb660') },
-  clothesline(p,item,origin,t){ const k=tools(p,item,origin); k.box(.05,.43,.12,.14,0,1.4,WOOD_DARK); k.box(k.W-.17,.43,.12,.14,0,1.4,WOOD_DARK); const a=k.screen(.1,.5,1.4),b=k.screen(k.W-.1,.5,1.4);p.line(...a,...b,'#ddd4c7');['#e8879b','#5bb9e8','#f2c53d'].forEach((c,i)=>{const f=(i+1)/4,x=a[0]+(b[0]-a[0])*f,y=a[1]+(b[1]-a[1])*f;p.rect(x-4,y+1,8,10,c)}) },
+  clothesline(p,item,origin,t){ const k=tools(p,item,origin); k.box(.05,.43,.12,.14,0,1.4,WOOD_DARK); k.box(k.W-.17,.43,.12,.14,0,1.4,WOOD_DARK); const a=k.screen(.1,.5,1.4),b=k.screen(k.W-.1,.5,1.4);k.overlay(()=>{p.line(...a,...b,'#ddd4c7');['#e8879b','#5bb9e8','#f2c53d'].forEach((c,i)=>{const f=(i+1)/4,x=a[0]+(b[0]-a[0])*f,y=a[1]+(b[1]-a[1])*f;p.rect(x-4,y+1,8,10,c)})}) },
   gardenstool(p,item,origin){ const k=tools(p,item,origin); for(const [x,y] of [[.25,.25],[.62,.25],[.25,.62],[.62,.62]])k.box(x,y,.1,.1,0,.4,WOOD_DARK); k.box(.16,.16,.68,.68,.4,.1,'#9c7b62') },
 
   // ------------------------------------------------ coleção ampliada da casa
@@ -746,8 +773,10 @@ export const SHAPES = {
     k.box(.23,.125,k.W-.46,.04,1.23,.54,'#fffaf0')
     const q = k.screen(k.W/2,.13,1.5)
     const angle = ((t || 0) / 60000) % (Math.PI * 2)
-    p.line(q[0],q[1],q[0]+Math.sin(angle)*10,q[1]-Math.cos(angle)*5,'#3f3444')
-    p.line(q[0],q[1],q[0]-6,q[1]-1,'#3f3444')
+    k.overlay(() => {
+      p.line(q[0],q[1],q[0]+Math.sin(angle)*10,q[1]-Math.cos(angle)*5,'#3f3444')
+      p.line(q[0],q[1],q[0]-6,q[1]-1,'#3f3444')
+    })
   },
 
   vase(p, item, origin) {
@@ -829,7 +858,7 @@ export const SHAPES = {
     k.box(.12,.12,k.W-.24,k.D-.24,0,.28,'#7c5940')
     k.box(.16,.16,k.W-.32,k.D-.32,.28,.06,'#a97954')
     const q=k.screen(k.W/2,k.D/2,.35), pulse=Math.sin((t||0)/240)
-    p.ctx.fillStyle='#2e2935';p.ctx.beginPath();p.ctx.arc(q[0],q[1],Math.max(4,9+pulse),0,Math.PI*2);p.ctx.fill()
+    k.overlay(()=>{p.ctx.fillStyle='#2e2935';p.ctx.beginPath();p.ctx.arc(q[0],q[1],Math.max(4,9+pulse),0,Math.PI*2);p.ctx.fill()})
     k.box(k.W-.32,.24,.07,.36,.34,.06,'#d8c78b')
   },
 
@@ -924,7 +953,15 @@ export function drawItem(p, item, origin, t) {
   const shape = SHAPES[item.shape]
   if (!shape) return false
   groundShadow(p, { col: item.col, row: item.row, w: item.w, d: item.d }, origin)
-  shape(p, item, origin, t)
+  const anterior = FILA_DE_DESENHO
+  const operacoes = []
+  FILA_DE_DESENHO = operacoes
+  try {
+    shape(p, item, origin, t)
+  } finally {
+    FILA_DE_DESENHO = anterior
+  }
+  for (const operacao of ordenarOperacoes(operacoes)) operacao.draw()
   return true
 }
 

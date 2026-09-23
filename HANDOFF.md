@@ -4253,3 +4253,66 @@ Publicado no Coolify pelo commit `cf98d67`. Os dois domínios devolveram HTTPS
 200 e `/api/health` 200; produção serviu os mesmos artefatos locais
 `index-CwbvShF9.js` e `index-fCPxlhnG.css`, contendo cidade, WAV, compra repetida
 e service worker `casal-v9`.
+
+### 9.39 Rotações, vídeo no chat, cidade viva e bichos com som real (23/09/2026)
+
+Pedido do dono: objetos ainda se desmontavam ao girar; o chat não enviava
+vídeo; a cidade parecia parada; bichos caminhavam em silêncio e as espécies
+soavam artificiais/iguais.
+
+#### Móveis: profundidade depois da rotação
+
+O defeito não era falta de pixels. Cada móvel era composto por blocos corretos,
+mas esses blocos eram pintados sempre na ordem pensada para 0°. Ao girar 90°,
+180° ou 270°, o que ficava atrás podia ser desenhado por cima do que estava na
+frente. `render/furniture.js` agora guarda as operações geométricas, transforma
+seus quatro cantos para a direção atual, monta dependências entre volumes que se
+cruzam e só então pinta por profundidade. Detalhes 2D (folhas, cordas, roupas,
+ponteiros e discos) ficam numa camada final explícita.
+
+`test-furniture-audit.mjs` deixou de validar apenas a pose inicial: são **56
+objetos × 4 rotações**, conferindo peças enterradas, partes para fora da área e
+as dimensões finais contra o catálogo. A bancada `/lab` foi inspecionada nas
+quatro direções; sofá, cama, cadeira, estantes e os objetos das fileiras de baixo
+continuaram legíveis e sem inversão de faces.
+
+#### Vídeo: iPhone entra, Android toca
+
+O chat ganhou quatro ações separadas: tirar foto, escolher foto, gravar vídeo e
+escolher vídeo. O servidor não confia na extensão: `ffprobe` confirma que há uma
+faixa de vídeo, limita a 120 s e o upload é copiado em fluxo com teto de 80 MB.
+`ffmpeg` normaliza MOV/HEVC e demais entradas para MP4 H.264 Main, `yuv420p`, até
+1280 px/30 fps, áudio AAC e `faststart`; também cria uma capa JPEG. A imagem de
+produção instala `ffmpeg`. O chat usa `<video controls playsInline>` com capa,
+legenda, resposta e token de mídia do destinatário.
+
+O teste real pela interface encontrou uma corrida que a chamada isolada não
+mostrava: a conversão e o `commit` davam certo, mas o WebSocket recebia uma
+função que ainda capturava a mesma sessão SQLAlchemy em outra thread. No SQLite
+isso terminava em 500 depois de já gravar o vídeo. `_publicar_mensagem` agora
+monta os payloads por usuário ainda na thread da rota e agenda somente
+dicionários prontos. Novo envio completo pela interface respondeu 200, apareceu
+imediatamente no chat, buscou capa com 200 e MP4 com 206, sem erro no console.
+
+#### Cidade e bichinhos
+
+`CityCanvas.jsx` preserva o fundo em cache, mas agora tem uma camada animada:
+nuvens, pássaros, folhas, água da fonte, dois carros, três pedestres, o avatar do
+parceiro percorrendo uma rota e o avatar atual andando com balanço. Os atores do
+chão são ordenados por profundidade e todas as rotas permanecem na rua
+caminhável; o mapa continua leve no celular.
+
+As seis espécies usam gravações próprias: gato, cachorro, coelho, pássaro,
+capivara e dragão (silvos reais de jacaré para a espécie fantástica). Há duas ou
+três variações onde o material permitiu, sem repetir imediatamente. O passeio
+dispara quatro gravações curtas de passo quando o animal realmente chega a uma
+célula — não por quadro — com peso/altura discretos por espécie e limite de
+frequência. Síntese continua somente como reserva enquanto o arquivo carrega ou
+se o navegador não o decodificar. Fonte, autor, licença e transformação estão
+em `web/public/sons/CREDITOS.md`; todos os arquivos finais são Ogg mono 32 kHz.
+
+Service worker avançou para `casal-v10`. Build Vite aprovada; cidade e 224 poses
+de móveis aprovadas; vídeos e gravações reais carregaram no navegador sem erro.
+Smoke completo: **894 verificações, 0 falha**. Falta apenas repetir o envio com
+um vídeo gravado por iPhone físico e abrir no Android físico, porque Chromium e
+um MOV de teste não reproduzem câmera/codec/rádio reais dos dois aparelhos.

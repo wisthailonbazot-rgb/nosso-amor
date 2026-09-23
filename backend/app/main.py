@@ -191,7 +191,7 @@ def media(name: str, token: str = "", db: Session = Depends(get_db)):
     # normpath + prefixo: impede que "../../etc/passwd" saia da pasta de midia
     if not candidate.startswith(STORAGE_DIR) or not os.path.isfile(candidate):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Arquivo nao encontrado")
-    return FileResponse(candidate)
+    return FileResponse(candidate, media_type=_tipo_do_arquivo(candidate))
 
 
 # ------------------------------------------------- o tipo do arquivo servido
@@ -211,6 +211,8 @@ TIPOS = {
     ".m4a": "audio/mp4",
     ".wav": "audio/wav",
     ".webm": "audio/webm",
+    ".mp4": "video/mp4",
+    ".mov": "video/quicktime",
     ".webp": "image/webp",
     ".png": "image/png",
     ".jpg": "image/jpeg",

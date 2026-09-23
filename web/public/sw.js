@@ -10,10 +10,10 @@
 
 // A versao do cache SOBE a cada vez que a casca muda de forma. O `activate`
 // apaga tudo o que nao tem o nome atual, e e isso que destrava um aparelho que
-// ficou preso no fundo rosa com um index.html velho. v7: entrou o kit Kenney
-// v9 acrescenta prazo máximo de rede: em dados móveis a casca guardada assume
-// o controle em vez de o iPhone ficar eternamente no fundo rosa.
-const CACHE = 'casal-v9'
+// ficou preso no fundo rosa com um index.html velho. v7: entrou o kit Kenney.
+// v9 acrescentou prazo máximo de rede em dados móveis. v10 renova a casca para
+// entregar chat com vídeo, cidade viva e as novas gravações dos bichinhos.
+const CACHE = 'casal-v10'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png']
 
 async function fetchWithTimeout(request, timeoutMs) {

@@ -388,7 +388,8 @@ function Bolha({ msg, minha, citada, autorCitado, marcada, onMarcar, onResponder
 
   const resumo = msg.type === 'sticker' ? 'figurinha'
     : msg.type === 'image' ? 'foto'
-      : msg.type === 'audio' ? 'áudio' : msg.content
+      : msg.type === 'audio' ? 'áudio'
+        : msg.type === 'video' ? 'vídeo' : msg.content
 
   return (
     <div
@@ -418,6 +419,8 @@ function Bolha({ msg, minha, citada, autorCitado, marcada, onMarcar, onResponder
                 ? 'foto'
                 : citada.type === 'audio'
                   ? 'áudio'
+                  : citada.type === 'video'
+                    ? 'vídeo'
                   : citada.content}
           </div>
         )}
@@ -431,6 +434,19 @@ function Bolha({ msg, minha, citada, autorCitado, marcada, onMarcar, onResponder
         )}
 
         {msg.type === 'audio' && <Audio src={mediaUrl(msg.media)} duration={msg.duration_ms} />}
+
+        {msg.type === 'video' && (
+          <video
+            className="msg-video"
+            src={mediaUrl(msg.media)}
+            poster={mediaUrl(msg.thumb)}
+            controls
+            playsInline
+            preload="metadata"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          />
+        )}
 
         {msg.content && <div className="msg-text">{msg.content}</div>}
 
@@ -470,6 +486,7 @@ export default function Chat() {
     setErroPassos(passos)
   }
   const [enviando, setEnviando] = useState(false)
+  const [envioLabel, setEnvioLabel] = useState('')
   // Câmera x galeria: o Android não oferece mais as duas num pedido só.
   const [menuFoto, setMenuFoto] = useState(false)
   const fimRef = useRef(null)
@@ -623,6 +640,37 @@ export default function Chat() {
     setEnviando(false)
   }
 
+  async function enviarVideo(arquivo) {
+    if (!arquivo || enviando) return
+    // A tentativa anterior pode ter falhado depois de o servidor já ter
+    // convertido o arquivo. A nova tentativa começa limpa para não exibir um
+    // erro velho ao lado de um vídeo que acabou de chegar corretamente.
+    setErro('')
+    if (arquivo.size > 80 * 1024 * 1024) {
+      setErro('Esse vídeo passa de 80 MB. Grave ou escolha um trecho menor.')
+      return
+    }
+    setEnviando(true)
+    setEnvioLabel('Preparando o vídeo para funcionar no iPhone e no Android…')
+    const form = new FormData()
+    form.append('file', arquivo)
+    const legenda = texto.trim()
+    if (legenda) form.append('caption', legenda)
+    if (respondendo?.id) form.append('reply_to', String(respondendo.id))
+    try {
+      // O upload e a conversão para H.264 acontecem na mesma chamada. Em 4G um
+      // vídeo precisa de mais tempo que foto/áudio, mas ainda termina em erro
+      // legível em vez de ficar pendurado para sempre.
+      await api.post('/api/chat/video', form, { timeoutMs: 240000 })
+      if (legenda) setTexto('')
+      setRespondendo(null)
+    } catch (e) {
+      setErro(e.message)
+    }
+    setEnvioLabel('')
+    setEnviando(false)
+  }
+
   async function pararEEnviarAudio() {
     const resultado = await gravador.parar()
     // Nada aqui volta a falhar em silencio. Antes, `parar()` devolvendo nada e
@@ -759,7 +807,8 @@ export default function Chat() {
             <b>respondendo</b> {respondendo.content
               || (respondendo.type === 'sticker' ? 'figurinha'
                 : respondendo.type === 'image' ? 'foto'
-                  : respondendo.type === 'audio' ? 'áudio' : '')}
+                  : respondendo.type === 'audio' ? 'áudio'
+                    : respondendo.type === 'video' ? 'vídeo' : '')}
           </div>
           <button className="btn-plain" onClick={() => setRespondendo(null)} aria-label="Cancelar">
             <Icon name="close" size={16} />
@@ -784,6 +833,8 @@ export default function Chat() {
           ))}
         </div>
       )}
+
+      {envioLabel && <div className="chat-upload-status"><span className="rec-dot" /> {envioLabel}</div>}
 
       <div className="chat-bar">
         {gravador.gravando ? (
@@ -839,7 +890,7 @@ export default function Chat() {
               <button
                 type="button"
                 className="btn-plain"
-                aria-label="Foto"
+                aria-label="Foto ou vídeo"
                 onClick={() => setMenuFoto((v) => !v)}
               >
                 <Icon name="camera" size={22} />
@@ -863,6 +914,25 @@ export default function Chat() {
                       accept="image/*"
                       hidden
                       onChange={(e) => { setMenuFoto(false); enviarFoto(e.target.files?.[0]) }}
+                    />
+                  </label>
+                  <label>
+                    <span aria-hidden="true">🎥</span> Gravar vídeo agora
+                    <input
+                      type="file"
+                      accept="video/*"
+                      capture="environment"
+                      hidden
+                      onChange={(e) => { setMenuFoto(false); enviarVideo(e.target.files?.[0]); e.target.value = '' }}
+                    />
+                  </label>
+                  <label>
+                    <span aria-hidden="true">▶</span> Escolher vídeo
+                    <input
+                      type="file"
+                      accept="video/*"
+                      hidden
+                      onChange={(e) => { setMenuFoto(false); enviarVideo(e.target.files?.[0]); e.target.value = '' }}
                     />
                   </label>
                 </div>
